@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
+	"strings"
 	"sync"
 
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
@@ -20,9 +20,24 @@ type Plugin struct {
 	configuration *configuration
 }
 
-// ServeHTTP demonstrates a plugin that handles HTTP requests by greeting the world.
-func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "Hello, world!")
+// See https://developers.mattermost.com/extend/plugins/server/reference/
+func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
+	configuration := p.getConfiguration()
+
+	if configuration.ConvertToTextEmojies {
+		newMessage := strings.ReplaceAll(post.Message, ":)", ":\u200b)")
+		newMessage = strings.ReplaceAll(newMessage, ":D", ":\u200bD")
+
+		post.Message = newMessage
+	}
+
+	return post, ""
 }
 
-// See https://developers.mattermost.com/extend/plugins/server/reference/
+func (p *Plugin) MessageWillBePosted(_ *plugin.Context, post *model.Post) (*model.Post, string) {
+	return p.FilterPost(post)
+}
+
+func (p *Plugin) MessageWillBeUpdated(_ *plugin.Context, newPost *model.Post, _ *model.Post) (*model.Post, string) {
+	return p.FilterPost(newPost)
+}

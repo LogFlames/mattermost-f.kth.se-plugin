@@ -21,6 +21,13 @@
     "settings_schema": {
         "header": "",
         "footer": "",
-        "settings": []
+        "settings": [
+            {
+                "key": "ConvertToTextEmojies",
+                "display_name": "Convert To Text Emojies",
+                "type": "bool",
+                "help_text": "Insert a zero-width space between : and )D to create normal emojies."
+            }
+        ]
     }
 }
