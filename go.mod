@@ -1,4 +1,4 @@
-module github.com/mattermost/mattermost-plugin-starter-template
+module github.com/logflames/mattermost-f.kth.se-plugin
 
 go 1.21
 
