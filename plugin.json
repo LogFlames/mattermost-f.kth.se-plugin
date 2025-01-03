@@ -26,7 +26,7 @@
                 "key": "ConvertToTextEmojies",
                 "display_name": "Convert To Text Emojies",
                 "type": "bool",
-                "help_text": "Insert a zero-width space between : and )D to create normal emojies."
+                "help_text": "Insert a zero-width space between : and )Dp( to create normal emojies."
             }
         ]
     }

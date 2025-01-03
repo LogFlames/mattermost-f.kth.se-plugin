@@ -26,12 +26,12 @@ func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
 
 	if configuration.ConvertToTextEmojies {
 		newMessage := strings.ReplaceAll(post.Message, ":)", ":\u200b)")
-		newMessage =  strings.ReplaceAll(newMessage, ":D", ":\u200bD")
-		newMessage =  strings.ReplaceAll(newMessage, ":p", ":\u200bp")
-		newMessage =  strings.ReplaceAll(newMessage, ":(", ":\u200b(")
-		newMessage =  strings.ReplaceAll(newMessage, ":o", ":\u200bo")
-		newMessage =  strings.ReplaceAll(newMessage, ":O", ":\u200bO")
-		newMessage =  strings.ReplaceAll(newMessage, ";)", ";\u200b)")
+		newMessage = strings.ReplaceAll(newMessage, ":D", ":\u200bD")
+		newMessage = strings.ReplaceAll(newMessage, ":p", ":\u200bp")
+		newMessage = strings.ReplaceAll(newMessage, ":(", ":\u200b(")
+		newMessage = strings.ReplaceAll(newMessage, ":o", ":\u200bo")
+		newMessage = strings.ReplaceAll(newMessage, ":O", ":\u200bO")
+		newMessage = strings.ReplaceAll(newMessage, ";)", ";\u200b)")
 
 		post.Message = newMessage
 	}
