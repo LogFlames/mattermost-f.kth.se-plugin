@@ -37,7 +37,7 @@ export default class ChannelsInput extends React.PureComponent {
             const team = this.props.actions.getTeam(option.team_id);
             return (
                 <React.Fragment>
-                    { `${team.display_name}/${option.display_name}`}
+                    { `${team.data.display_name}/${option.display_name}`}
                 </React.Fragment>
             );
         }
