@@ -44,20 +44,22 @@ export default class AbstractAddAttribute extends React.Component {
         });
     };
 
-    onInput = ({is_active, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels}) => {
-        this.setState({is_active, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels, error: false});
+    onInput = ({id, is_active, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels}) => {
+        this.setState({id, is_active, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels, error: false});
     };
 
     handleSave = () => {
-        const usersEmpty = !this.state.users || !this.state.users.length;
-        const teamEmpty = !this.state.team || this.state.team.trim() === '';
-        const teamsEmpty = !this.state.teams || !this.state.teams.length;
-        const groupsEmpty = !this.state.groups || this.state.groups.trim() === '';
-        const channelsEmpty = !this.state.channels || !this.state.channels.length;
-
-        this.props.onChange({id: this.props.id, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
         this.setState({
             collapsed: true,
+            is_active: null,
+            string1: null,
+            string2: null,
+            string3: null,
+            string4: null,
+            string5: null,
+            bool: null,
+            int: null,
             users: null,
             team: null,
             teams: null,
