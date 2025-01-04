@@ -55,9 +55,6 @@ export default class AbstractSettings extends React.Component {
         }
 
         return Array.from(this.state.attributes, ([key, value]) => {
-            console.log('key', key);
-            console.log('value', value);
-            console.log('this.state.attributes', this.state.attributes);
             return (
                 <AbstractAttribute
                     key={key}
