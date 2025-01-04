@@ -27,6 +27,7 @@ export default class AbstractAttribute extends React.Component {
         actions: PropTypes.shape({
             getProfilesByIds: PropTypes.func.isRequired,
             getTeam: PropTypes.func.isRequired,
+            getChannel: PropTypes.func.isRequired,
             getCustomEmojisInText: PropTypes.func.isRequired,
         }).isRequired,
     };
