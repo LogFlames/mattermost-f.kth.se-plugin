@@ -4,16 +4,16 @@ import PropTypes from 'prop-types';
 import debounce from 'lodash/debounce';
 import AsyncSelect from 'react-select/async';
 
-// TeamsInput searches and selects teams displayed by display_name.
-// Teams prop can handle the team object or strings directly if the team object is not available.
-// Returns the selected team ids in the `OnChange` value parameter.
+// ChannelsInput searches and selects channels displayed by display_name.
+// Channels prop can handle the channel object or strings directly if the channel object is not available.
+// Returns the selected channel ids in the `OnChange` value parameter.
 export default class ChannelsInput extends React.PureComponent {
     static propTypes = {
         placeholder: PropTypes.string,
-        teams: PropTypes.array,
+        channels: PropTypes.array,
         onChange: PropTypes.func,
         actions: PropTypes.shape({
-            searchTeams: PropTypes.func.isRequired,
+            searchChannels: PropTypes.func.isRequired,
         }).isRequired,
     };
 
@@ -62,7 +62,7 @@ export default class ChannelsInput extends React.PureComponent {
                 isMulti={true}
                 cacheOptions={true}
                 defaultOptions={false}
-                loadOptions={this.searchTeams}
+                loadOptions={this.searchChannels}
                 onChange={this.onChange}
                 getOptionValue={this.getOptionValue}
                 formatOptionLabel={this.formatOptionLabel}
@@ -70,7 +70,7 @@ export default class ChannelsInput extends React.PureComponent {
                 openMenuOnClick={false}
                 isClearable={false}
                 placeholder={this.props.placeholder}
-                value={this.props.teams}
+                value={this.props.channels}
                 components={{DropdownIndicator: () => null, IndicatorSeparator: () => null}}
                 styles={customStyles}
             />

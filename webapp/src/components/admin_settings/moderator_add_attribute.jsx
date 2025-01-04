@@ -1,5 +1,5 @@
 import AbstractAddAttribute from './abstract_add_attribute.jsx';
-import AttributeModerator from './attribute_moderator/attribute_moderator.jsx';
+import AttributeModerator from './attribute_moderator';
 
 export default class ModeratorAddAttribute extends AbstractAddAttribute {
     render() {
@@ -29,23 +29,21 @@ export default class ModeratorAddAttribute extends AbstractAddAttribute {
         return (
             <div>
                 <AttributeModerator
-                    key={key}
-                    id={key}
-                    is_active={value.IsActive}
-                    string1={value.String1}
-                    string2={value.String2}
-                    string3={value.String3}
-                    string4={value.String4}
-                    string5={value.String5}
-                    bool={value.Bool}
-                    int={value.Int}
-                    users={value.UserIDs}
-                    team={value.TeamID}
-                    teams={value.TeamIDs}
-                    channels={value.ChannelIDs}
-                    groups={value.GroupIDs ? value.GroupIDs.join(' ') : ''}
-                    onChange={this.handleChange}
-                    onDelete={this.triggerDeleteModal}
+                    is_active={this.props.is_active}
+                    string1={this.props.string1}
+                    string2={this.props.string2}
+                    string3={this.props.string3}
+                    string4={this.props.string4}
+                    string5={this.props.string5}
+                    bool={this.props.bool}
+                    int={this.props.int}
+                    users={this.props.users}
+                    team={this.props.team}
+                    teams={this.props.teams}
+                    groups={this.props.groups}
+                    channels={this.props.channels}
+                    onChange={this.onInput}
+                    hideDelete={true}
                 />
 
                 <div

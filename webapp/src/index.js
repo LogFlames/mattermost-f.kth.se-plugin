@@ -15,7 +15,7 @@ export default class Plugin {
     initialize(registry) {
         // registry.registerAdminConsoleCustomSetting('CustomAttributes', AbstractSettings);
         // registry.registerAdminConsoleCustomSetting('NotificationFree_Custom', NotificationFreeCS);
-        registry.registerAdminConsoleCustomSetting('ModeratorBot_Custom', AbstractSettings);
+        registry.registerAdminConsoleCustomSetting('ModeratorBot_Custom', ModeratorCS);
         /*registry.registerAdminConsoleCustomSetting('StandardCategories_Custom', StandardCategoriesCS);
         registry.registerAdminConsoleCustomSetting('StandardChannels_Custom', StandardChannelsCS);
         registry.registerAdminConsoleCustomSetting('WebsitePublisherBot_Custom_ChannelList', WebsitePublisherBotCS1);

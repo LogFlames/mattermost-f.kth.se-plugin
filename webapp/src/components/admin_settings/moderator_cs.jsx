@@ -1,4 +1,3 @@
-import PropTypes from 'prop-types';
 import React from 'react';
 
 import ConfirmModal from '../widgets/confirmation_modal.tsx';
@@ -7,7 +6,7 @@ import AbstractSettings from './abstract_cs.jsx';
 
 import ModeratorAddAttribute from './moderator_add_attribute.jsx';
 
-import AttributeModerator from './attribute_moderator/attribute_moderator.jsx';
+import AttributeModerator from './attribute_moderator';
 
 export default class ModeratorCS extends AbstractSettings {
     getAttributesList() {
@@ -18,7 +17,7 @@ export default class ModeratorCS extends AbstractSettings {
                 </div>
             );
         }
-        
+
         return Array.from(this.state.attributes, ([key, value]) => {
             return (
                 <AttributeModerator
@@ -47,7 +46,7 @@ export default class ModeratorCS extends AbstractSettings {
     render() {
         return (
             <div>
-                <strong>{'Entries'}</strong>
+                <strong>{'Moderator: Channels to Moderate (complain at messages without titles)'}</strong>
                 <div>
                     {this.getAttributesList()}
                     <ModeratorAddAttribute
