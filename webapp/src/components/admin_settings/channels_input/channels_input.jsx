@@ -14,6 +14,7 @@ export default class ChannelsInput extends React.PureComponent {
         onChange: PropTypes.func,
         actions: PropTypes.shape({
             searchChannels: PropTypes.func.isRequired,
+            getTeam: PropTypes.func.isRequired,
         }).isRequired,
     };
 
@@ -33,9 +34,10 @@ export default class ChannelsInput extends React.PureComponent {
 
     formatOptionLabel = (option) => {
         if (option.display_name) {
+            const team = this.props.actions.getTeam(option.team_id);
             return (
                 <React.Fragment>
-                    { `${option.display_name}`}
+                    { `${team.display_name}/${option.display_name}`}
                 </React.Fragment>
             );
         }
