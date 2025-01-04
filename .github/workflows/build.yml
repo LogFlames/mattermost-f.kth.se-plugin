@@ -21,10 +21,11 @@ jobs:
         with:
           go-version: "1.22"
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
           node-version: '16.13.1'
 
-      - name: Run make
-        run: make
+      - name: Run make dist
+        run: make dist
 
