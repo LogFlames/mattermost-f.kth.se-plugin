@@ -34,6 +34,8 @@ export default class ChannelsInput extends React.PureComponent {
 
     formatOptionLabel = (option) => {
         if (option.display_name) {
+            console.log(option)
+            console.log(team)
             const team = this.props.actions.getTeam(option.team_id);
             return (
                 <React.Fragment>
