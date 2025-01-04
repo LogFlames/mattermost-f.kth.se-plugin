@@ -14,14 +14,14 @@ import ModeratorCS from './components/admin_settings/moderator_cs';
 export default class Plugin {
     initialize(registry) {
         // registry.registerAdminConsoleCustomSetting('CustomAttributes', AbstractSettings);
-        registry.registerAdminConsoleCustomSetting('NotificationFree_Custom', NotificationFreeCS);
+        // registry.registerAdminConsoleCustomSetting('NotificationFree_Custom', NotificationFreeCS);
         registry.registerAdminConsoleCustomSetting('Moderator_Custom', ModeratorCS);
-        registry.registerAdminConsoleCustomSetting('StandardCategories_Custom', StandardCategoriesCS);
+        /*registry.registerAdminConsoleCustomSetting('StandardCategories_Custom', StandardCategoriesCS);
         registry.registerAdminConsoleCustomSetting('StandardChannels_Custom', StandardChannelsCS);
         registry.registerAdminConsoleCustomSetting('WebsitePublisherBot_Custom_ChannelList', WebsitePublisherBotCS1);
         registry.registerAdminConsoleCustomSetting('WebsitePublisherBot_Custom_NamndList', WebsitePublisherBotCS2);
         registry.registerAdminConsoleCustomSetting('WebsitePublisherBot_Custom_AdminList', WebsitePublisherBotCS3);
-        registry.registerAdminConsoleCustomSetting('TranslatorBot_Custom', TranslatorBotCS);
+        registry.registerAdminConsoleCustomSetting('TranslatorBot_Custom', TranslatorBotCS);*/
     }
 }
 
