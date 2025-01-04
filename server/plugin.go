@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/mattermost/mattermost/server/public/model"
