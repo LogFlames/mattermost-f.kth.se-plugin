@@ -106,8 +106,8 @@ export default class AbstractAddAttribute extends React.Component {
                     teams={this.props.teams}
                     groups={this.props.groups}
                     channels={this.props.channels}
-                    onChange={this.handleChange}
-                    onDelete={this.triggerDeleteModal}
+                    onChange={this.onInput}
+                    hideDelete={true}
                 />
 
                 <div
