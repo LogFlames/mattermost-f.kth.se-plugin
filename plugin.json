@@ -47,6 +47,12 @@
                 "help_text": "This module is active in channels where @join-leave-free-bot is a member."
             },
             {
+                "key": "JoinLeaveFree_BotUserId",
+                "display_name": "Join/Leave-free: Bot User ID",
+                "type": "text",
+                "help_text": "The ID of the bot that will decide which channels should be join/leave-free."
+            },
+            {
                 "key": "NotificationFree_OnOffBool",
                 "display_name": "Notification-free: Module enabled?",
                 "type": "bool",
