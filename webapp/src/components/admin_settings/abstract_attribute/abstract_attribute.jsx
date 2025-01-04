@@ -242,6 +242,13 @@ export default class AbstractAttribute extends React.Component {
                         />
                     </div>
                     <div className='col-xs-12 col-sm-3'>
+                        <ChannelsInput
+                            placeholder='~channel1 ~channel2'
+                            channels={this.state.channels}
+                            onChange={this.handleChannelsInput}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
                         <input
                             id={`groups-${this.props.id}`}
                             className='form-control'

@@ -6,7 +6,7 @@ import React from 'react';
 
 import ConfirmModal from '../widgets/confirmation_modal.tsx';
 
-import AbstractAttribute from './abstract_attribute/abstract_attribute.jsx';
+import AbstractAttribute from './abstract_attribute';
 import AbstractAddAttribute from './abstract_add_attribute.jsx';
 
 export default class AbstractSettings extends React.Component {
