@@ -29,6 +29,12 @@
                 "help_text": "Log all debug messages to the Admin team."
             },
             {
+                "key": "LoggingChannelID",
+                "display_name": "Global: Channel ID To Send Debug Messages In",
+                "type": "text",
+                "help_text": "Log all debug messages to the specified channel."
+            },
+            {
                 "key": "ConvertToTextEmojies",
                 "display_name": "Global: Prevent Text to Emoji Conversion",
                 "type": "bool",
