@@ -23,8 +23,11 @@
         "footer": "",
         "sections": [
         {
+            "key": "GlobalSettings",
             "header": "Global settings",
             "footer": "",
+            "title": "Title_test",
+            "subtitle": "Subtitle_test",
             "settings": [
             {
                 "key": "DebugLogging",
@@ -41,6 +44,7 @@
         ]
         },
         {
+            "key": "JoinLeaveFreeSettings",
             "header": "Join/Leave-free channels",
             "footer": "The feature is in use in channels where @join-leave-free-bot is a member.",
             "settings": [
@@ -53,6 +57,7 @@
         ]
         },
         {
+            "key": "NotificationFreeSettings",
             "header": "Notification-free channels",
             "footer": "Makes certain channels notification free.",
             "settings": [
@@ -71,6 +76,7 @@
         ]
         },
         {
+            "key": "ModeratorSettings",
             "header": "Moderator",
             "footer": "Complains at posts that are not in the correct format (uses @moderator-bot as a front man).",
             "settings": [
@@ -89,6 +95,7 @@
         ]
         },
         {
+            "key": "StandardCategoriesSettings",
             "header": "Standard Categories",
             "footer": "Which standard categories to create for users who join a team",
             "settings": [
@@ -107,6 +114,7 @@
         ]
         },
         {
+            "key": "StandardChannelsSettings",
             "header": "Standard Channels",
             "footer": "Which standard channels to auto-add users to when they join a team",
             "settings": [
@@ -125,6 +133,7 @@
         ]
         },
         {
+            "key": "WebsitePublisherBotSettings",
             "header": "Bot: Website Publisher",
             "footer": "The settings interface for the Website Publisher bot.",
             "settings": [
@@ -161,6 +170,7 @@
         ]
         },
         {
+            "key": "TranslatorBotSettings",
             "header": "Bot: Translator",
             "footer": "The settings interface for the Translator bot.",
             "settings": [
