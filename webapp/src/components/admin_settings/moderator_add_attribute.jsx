@@ -1,7 +1,5 @@
-import AbstractAddAttribute from "./abstract_add_attribute";
-import AttributeModerator from "./attribute_moderator/attribute_moderator";
-
-AttributeClass = AttributeModerator;
+import AbstractAddAttribute from "./abstract_add_attribute.jsx";
+import AttributeModerator from "./attribute_moderator/attribute_moderator.jsx";
 
 export default class ModeratorAddAttribute extends AbstractAddAttribute {
     render() {
@@ -30,7 +28,7 @@ export default class ModeratorAddAttribute extends AbstractAddAttribute {
 
         return (
             <div>
-                <AttributeClass
+                <AttributeModerator
                     key={key}
                     id={key}
                     is_active={value.IsActive}

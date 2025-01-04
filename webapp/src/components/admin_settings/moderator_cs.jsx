@@ -7,15 +7,12 @@ import ModeratorAddAttribute from './moderator_add_attribute.jsx';
 
 import AttributeModerator from './attribute_moderator/attribute_moderator.jsx';
 
-AttributeClass = AttributeModerator;
-AddAttributeClass = ModeratorAddAttribute;
-
 export default class ModeratorCS extends AbstractSettings {
     getAttributesList() {
         _ = super.getAttributesList();
         return Array.from(this.state.attributes, ([key, value]) => {
             return (
-                <AttributeClass
+                <AttributeModerator
                     key={key}
                     id={key}
                     is_active={value.IsActive}
@@ -44,7 +41,7 @@ export default class ModeratorCS extends AbstractSettings {
                 <strong>{'Entries'}</strong>
                 <div>
                     {this.getAttributesList()}
-                    <AddAttributeClass
+                    <ModeratorAddAttribute
                         onChange={this.handleChange}
                         id={this.state.attributes.size}
                     />
