@@ -43,8 +43,7 @@ func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
 }
 
 func (p *Plugin) MessageWillBePosted(_ *plugin.Context, post *model.Post) (*model.Post, string) {
-
-	if post.ChannelId == LoggingChannelId {
+	if post.ChannelId == LoggingChannelID {
 		return post, ""
 	}
 
@@ -52,8 +51,7 @@ func (p *Plugin) MessageWillBePosted(_ *plugin.Context, post *model.Post) (*mode
 }
 
 func (p *Plugin) MessageWillBeUpdated(_ *plugin.Context, newPost *model.Post, _ *model.Post) (*model.Post, string) {
-
-	if newPost.ChannelId == LoggingChannelId {
+	if newPost.ChannelId == LoggingChannelID {
 		return newPost, ""
 	}
 
