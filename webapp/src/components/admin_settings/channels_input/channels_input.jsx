@@ -32,7 +32,7 @@ export default class ChannelsInput extends React.PureComponent {
         return channel;
     };
 
-    async formatOptionLabel(option) {
+    formatOptionLabel = async (option) => {
         if (option.display_name) {
             console.log(option)
             const team = await this.props.actions.getTeam(option.team_id);
@@ -45,7 +45,7 @@ export default class ChannelsInput extends React.PureComponent {
         }
 
         return option;
-    };
+    }
 
     searchChannels = debounce((term, callback) => {
         this.props.actions.searchChannels(term).then(({data, error}) => {
