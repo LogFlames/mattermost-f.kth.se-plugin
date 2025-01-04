@@ -34,12 +34,10 @@ export default class ChannelsInput extends React.PureComponent {
 
     formatOptionLabel = async (option) => {
         if (option.display_name) {
-            console.log(option)
             const team = await this.props.actions.getTeam(option.team_id);
-            console.log(team)
             return (
                 <React.Fragment>
-                    { `${team.data.display_name}/${option.display_name}`}
+                    { `${team.data.name}/${option.display_name}`}
                 </React.Fragment>
             );
         }
