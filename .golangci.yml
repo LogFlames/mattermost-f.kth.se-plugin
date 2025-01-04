@@ -6,7 +6,7 @@ linters-settings:
   gofmt:
     simplify: true
   goimports:
-    local-prefixes: github.com/logflames/mattermost-f.kth.se-plugin
+    local-prefixes: github.com/LogFlames/mattermost-f.kth.se-plugin
   govet:
     check-shadowing: true
     enable-all: true
