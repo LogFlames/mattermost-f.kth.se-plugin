@@ -19,9 +19,13 @@
         "bundle_path": "webapp/dist/main.js"
     },
     "settings_schema": {
-        "header": "",
+        "header": "f.kth.se-plugin settings",
         "footer": "",
-        "settings": [
+        "sections": [
+        {
+            "header": "Global settings",
+            "footer": "",
+            "settings": [
             {
                 "key": "DebugLogging",
                 "display_name": "Log Debug Messages to Admin team",
@@ -30,10 +34,148 @@
             },
             {
                 "key": "ConvertToTextEmojies",
-                "display_name": "Convert To Text Emojies",
+                "display_name": "Prevent Text to Emoji Conversion",
                 "type": "bool",
                 "help_text": "Insert a zero-width space between : and )Dp( to create normal emojies."
             }
         ]
+        },
+        {
+            "header": "Join/Leave-free channels",
+            "footer": "The feature is in use in channels where @join-leave-free-bot is a member.",
+            "settings": [
+            {
+                "key": "JoinLeaveFree_OnOffBool",
+                "display_name": "Module enabled?",
+                "type": "bool",
+                "help_text": ""
+            }
+        ]
+        },
+        {
+            "header": "Notification-free channels",
+            "footer": "Makes certain channels notification free.",
+            "settings": [
+            {
+                "key": "NotificationFree_OnOffBool",
+                "display_name": "Module enabled?",
+                "type": "bool",
+                "help_text": ""
+            },
+            {
+                "key": "NotificationFree_Custom",
+                "display_name": "Notification Free Channels",
+                "type": "custom",
+                "help_text": "A list of channels where notifications are disabled."
+            }
+        ]
+        },
+        {
+            "header": "Moderator",
+            "footer": "Complains at posts that are not in the correct format (uses @moderator-bot as a front man).",
+            "settings": [
+            {
+                "key": "ModeratorBot_OnOffBool",
+                "display_name": "Module enabled?",
+                "type": "bool",
+                "help_text": ""
+            },
+            {
+                "key": "ModeratorBot_Custom",
+                "display_name": "Channels to Moderate (complain at messages without titles)",
+                "type": "custom",
+                "help_text": "A list of channels to complain at posts without titles."
+            }
+        ]
+        },
+        {
+            "header": "Standard Categories",
+            "footer": "Which standard categories to create for users who join a team",
+            "settings": [
+            {
+                "key": "StandardCategories_OnOffBool",
+                "display_name": "Module enabled?",
+                "type": "bool",
+                "help_text": ""
+            },
+            {
+                "key": "StandardCategories_Custom",
+                "display_name": "Standard Category Configuration",
+                "type": "custom",
+                "help_text": "Configuration for standard categories, one line per category (multiple lines per team)."
+            }
+        ]
+        },
+        {
+            "header": "Standard Channels",
+            "footer": "Which standard channels to auto-add users to when they join a team",
+            "settings": [
+            {
+                "key": "StandardChannels_OnOffBool",
+                "display_name": "Module enabled?",
+                "type": "bool",
+                "help_text": ""
+            },
+            {
+                "key": "StandardChannels_Custom",
+                "display_name": "Standard Channel Configuration",
+                "type": "custom",
+                "help_text": "Configuration for standard channels, one line per team."
+            }
+        ]
+        },
+        {
+            "header": "Bot: Website Publisher",
+            "footer": "The settings interface for the Website Publisher bot.",
+            "settings": [
+            {
+                "key": "WebsitePublisherBot_OnOffBool",
+                "display_name": "Bot enabled?",
+                "type": "bool",
+                "help_text": "Disabling this only prevents the bot from reacting to events, it does not affect whether the bot instance is running on the server."
+            },
+            {
+                "key": "WebsitePublisherBot_Custom_ChannelList",
+                "display_name": "Channels Monitored by the Bot",
+                "type": "custom",
+                "help_text": "A list of channels where the bot will monitor for messages to publish to the website."
+            },
+            {
+                "key": "WebsitePublisherBot_Custom_NamndList",
+                "display_name": "Committees and Permissions",
+                "type": "custom",
+                "help_text": "A list of committees, associated media, and who has permissions for each committee."
+            },
+            {
+                "key": "WebsitePublisherBot_InferAdminsFromSysAdmins",
+                "display_name": "Infer Admins from Mattermost System Admins",
+                "type": "bool",
+                "help_text": "Gives Mattermost System Admins permission to post as all committees."
+            },
+            {
+                "key": "WebsitePublisherBot_Custom_AdminsList",
+                "display_name": "Admins (can post as all committees)",
+                "type": "custom",
+                "help_text": "A list of users who have permission to post as all committees."
+            }
+        ]
+        },
+        {
+            "header": "Bot: Translator",
+            "footer": "The settings interface for the Translator bot.",
+            "settings": [
+            {
+                "key": "TranslatorBot_OnOffBool",
+                "display_name": "Bot enabled?",
+                "type": "bool",
+                "help_text": "Disabling this only prevents the bot from reacting to events, it does not affect whether the bot instance is running on the server."
+            },
+            {
+                "key": "TranslatorBot_Custom_ChannelList",
+                "display_name": "Channels Monitored by the Bot",
+                "type": "custom",
+                "help_text": "A list of channels where the bot will monitor for messages to suggest translations of, as well as its behavior per channel."
+            }
+        ]}]
     }
 }
