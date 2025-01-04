@@ -1,5 +1,5 @@
 import React from 'react';
-import AbstractAttribute from '../abstract_attribute/abstract_attribute';
+import AbstractAttribute from '../abstract_attribute';
 
 import UsersInput from '../users_input';
 import TeamsInput from '../teams_input';
