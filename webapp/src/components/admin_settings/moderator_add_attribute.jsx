@@ -1,5 +1,5 @@
-import AbstractAddAttribute from "./abstract_add_attribute.jsx";
-import AttributeModerator from "./attribute_moderator/attribute_moderator.jsx";
+import AbstractAddAttribute from './abstract_add_attribute.jsx';
+import AttributeModerator from './attribute_moderator/attribute_moderator.jsx';
 
 export default class ModeratorAddAttribute extends AbstractAddAttribute {
     render() {
