@@ -11,7 +11,14 @@ import AttributeModerator from './attribute_moderator/attribute_moderator.jsx';
 
 export default class ModeratorCS extends AbstractSettings {
     getAttributesList() {
-        _ = super.getAttributesList();
+        if (this.state.attributes.size === 0) {
+            return (
+                <div style={styles.alertDiv}>
+                    <div style={styles.alertText}>{'You have no entries for this setting yet.'}</div>
+                </div>
+            );
+        }
+        
         return Array.from(this.state.attributes, ([key, value]) => {
             return (
                 <AttributeModerator
