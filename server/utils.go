@@ -12,11 +12,10 @@ func (p *Plugin) debug(msg string) {
 	}
 
 	post := &model.Post{
-		ChannelId: LoggingChannelID,
+		UserId:    p.pluginBot.UserId,
+		ChannelId: configuration.LoggingChannelID,
 		Message:   msg,
 	}
-
-	p.API.LogDebug(msg)
 
 	if _, err := p.API.CreatePost(post); err != nil {
 		p.API.LogError(err.Error())

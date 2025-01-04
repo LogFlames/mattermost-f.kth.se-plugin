@@ -20,6 +20,7 @@ import (
 type configuration struct {
 	ConvertToTextEmojies bool
 	DebugLogging         bool
+	LoggingChannelID     string
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
