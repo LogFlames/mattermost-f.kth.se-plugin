@@ -3,6 +3,8 @@ import React from 'react';
 
 import ConfirmModal from '../widgets/confirmation_modal.tsx';
 
+import AbstractSettings from './abstract_settings.jsx';
+
 import ModeratorAddAttribute from './moderator_add_attribute.jsx';
 
 import AttributeModerator from './attribute_moderator/attribute_moderator.jsx';
