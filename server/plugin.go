@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -24,7 +25,9 @@ type Plugin struct {
 func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
 	configuration := p.getConfiguration()
 
+	/* Emoji replacement */
 	if configuration.ConvertToTextEmojies {
+		p.debug(fmt.Sprintf("Inserting zero-width spaces into text-emojis in '%s'", post.Id))
 		newMessage := strings.ReplaceAll(post.Message, ":)", ":\u200b)")
 		newMessage = strings.ReplaceAll(newMessage, ":D", ":\u200bD")
 		newMessage = strings.ReplaceAll(newMessage, ":p", ":\u200bp")
@@ -40,9 +43,19 @@ func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
 }
 
 func (p *Plugin) MessageWillBePosted(_ *plugin.Context, post *model.Post) (*model.Post, string) {
+
+	if post.ChannelId == LoggingChannelId {
+		return post, ""
+	}
+
 	return p.FilterPost(post)
 }
 
 func (p *Plugin) MessageWillBeUpdated(_ *plugin.Context, newPost *model.Post, _ *model.Post) (*model.Post, string) {
+
+	if newPost.ChannelId == LoggingChannelId {
+		return newPost, ""
+	}
+
 	return p.FilterPost(newPost)
 }
