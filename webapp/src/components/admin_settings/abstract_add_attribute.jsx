@@ -1,0 +1,150 @@
+import React from 'react';
+import PropTypes from 'prop-types';
+
+import AbstractAttribute from './abstract_attribute';
+export default class AbstractAddAttribute extends React.Component {
+    static propTypes = {
+        id: PropTypes.string,
+        users: PropTypes.array,
+        teams: PropTypes.array,
+        groups: PropTypes.array,
+        onChange: PropTypes.func.isRequired,
+    };
+
+    constructor(props) {
+        super(props);
+
+        this.state = {
+            collapsed: true,
+            is_active: this.props.is_active,
+            string1: this.props.string1,
+            string2: this.props.string2,
+            string3: this.props.string3,
+            string4: this.props.string4,
+            string5: this.props.string5,
+            bool: this.props.bool,
+            int: this.props.int,
+            users: this.props.users,
+            team: this.props.team,
+            teams: this.props.teams,
+            groups: this.props.groups,
+            channels: this.props.channels,
+            error: false,
+        };
+    }
+
+    handleCancel = () => {
+        this.setState({
+            collapsed: true,
+            name: null,
+            users: null,
+            teams: null,
+            groups: null,
+            error: false,
+        });
+    };
+
+    onInput = ({is_active, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels}) => {
+        this.setState({is_active, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels, error: false});
+    };
+
+    handleSave = () => {
+        const usersEmpty = !this.state.users || !this.state.users.length;
+        const teamEmpty = !this.state.team || this.state.team.trim() === '';
+        const teamsEmpty = !this.state.teams || !this.state.teams.length;
+        const groupsEmpty = !this.state.groups || this.state.groups.trim() === '';
+        const channelsEmpty = !this.state.channels || !this.state.channels.length;
+
+        this.props.onChange({id: this.props.id, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.setState({
+            collapsed: true,
+            users: null,
+            team: null,
+            teams: null,
+            groups: null,
+            channels: null,
+        });
+    };
+
+    render() {
+        if (this.state.collapsed) {
+            return (
+                <div>
+                    <a
+                        style={styles.addLink}
+                        onClick={() => {
+                            this.setState({collapsed: false});
+                        }}
+                    ><strong>{'+ Add Entry'}</strong></a>
+                </div>
+            );
+        }
+
+        let errorBanner = null;
+        if (this.state.error) {
+            errorBanner = (
+                <div style={styles.alertDiv}>
+                    <p style={styles.alertText}> {'Something is wrong with your input.'}
+                    </p>
+                </div>
+            );
+        }
+
+        return (
+            <div>
+                <AbstractAttribute
+                    key={key}
+                    id={key}
+                    is_active={value.IsActive}
+                    string1={value.String1}
+                    string2={value.String2}
+                    string3={value.String3}
+                    string4={value.String4}
+                    string5={value.String5}
+                    bool={value.Bool}
+                    int={value.Int}
+                    users={value.UserIDs}
+                    team={value.TeamID}
+                    teams={value.TeamIDs}
+                    channels={value.ChannelIDs}
+                    groups={value.GroupIDs ? value.GroupIDs.join(' ') : ''}
+                    onChange={this.handleChange}
+                    onDelete={this.triggerDeleteModal}
+                />
+
+                <div
+                    className='row'
+                    style={styles.buttonRow}
+                >
+                    <div className='col-sm-12'>
+                        <button
+                            className='btn btn-primary'
+                            style={styles.buttonBorder}
+                            onClick={this.handleSave}
+                        >
+                            {'Add Entry'}
+                        </button>
+                        <button
+                            className='btn btn-link'
+                            onClick={this.handleCancel}
+                        >
+                            <a
+                                style={styles.button}
+                            >
+                                {'Cancel'}
+                            </a>
+                        </button>
+                    </div>
+                </div>
+                {errorBanner}
+            </div>
+
+        );
+    }
+}
+
+const styles = {
+    buttonRow: {
+        marginTop: '8px',
+    },
+};

@@ -1,14 +1,14 @@
 {
-  "compilerOptions": {
+"compilerOptions": {
     "target": "esnext",
     "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"],
+        "@/*": ["src/*"],
     },
     "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
+        "dom",
+        "dom.iterable",
+        "esnext"
     ],
     "allowJs": true,
     "skipLibCheck": true,
@@ -24,14 +24,14 @@
     "noEmit": true,
     "experimentalDecorators": true,
     "jsx": "react"
-  },
-  "include": [
-    "src",
-    "tests"
-  ],
-  "exclude": [
-    "dist",
-    "node_modules",
-    "!node_modules/@types"
-  ]
+    },
+    "include": [
+        "src",
+        "tests"
+    ],
+    "exclude": [
+        "dist",
+        "node_modules",
+        "!node_modules/@types"
+    ]
 }
