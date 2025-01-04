@@ -18,9 +18,12 @@ import (
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
 type configuration struct {
-	ConvertToTextEmojies bool
-	DebugLogging         bool
-	LoggingChannelID     string
+	ConvertToTextEmojies 	bool
+	DebugLogging         	bool
+	LoggingChannelID     	string
+
+	JoinLeaveFree_OnOffBool	bool
+	JoinLeaveFree_BotUserId	string
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -81,6 +84,12 @@ func (p *Plugin) OnConfigurationChange() error {
 	}
 
 	p.setConfiguration(configuration)
+
+	if configuration.JoinLeaveFree_OnOffBool {
+		if err := p.JoinLeaveFree_SetupChannelIds(); err != nil {
+			return err;
+		}
+	}
 
 	return nil
 }

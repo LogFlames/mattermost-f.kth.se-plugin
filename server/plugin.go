@@ -14,7 +14,11 @@ type Plugin struct {
 	configurationLock sync.RWMutex
 	configuration *configuration
 
+	// Global
 	pluginBot model.Bot
+
+	// Join-Leave-Free
+	join_leave_free_channel_ids map[string]bool
 }
 
 // See https://developers.mattermost.com/extend/plugins/server/reference/
@@ -32,6 +36,13 @@ func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
 		}
 	}
 
+	if configuration.JoinLeaveFree_OnOffBool {
+		post, rejectReason := p.JoinLeaveFree_Filter(post, configuration);
+		if rejectReason != "" {
+			return post, rejectReason
+		}
+	}
+
 	return post, ""
 }
 
@@ -43,9 +54,33 @@ func (p *Plugin) MessageWillBeUpdated(_ *plugin.Context, newPost *model.Post, _ 
 	return p.FilterPost(newPost)
 }
 
+func (p *Plugin) UserHasJoinedChannel(_ *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
+	configuration := p.getConfiguration();
+
+	if configuration.JoinLeaveFree_OnOffBool {
+		p.JoinLeaveFree_UserJoinedChannel(channelMember, configuration);
+	}
+}
+
+func (p *Plugin) UserHasLeftChannel(_ *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
+	configuration := p.getConfiguration();
+
+	if configuration.JoinLeaveFree_OnOffBool {
+		p.JoinLeaveFree_UserLeftChannel(channelMember, configuration);
+	}
+}
+
 func (p *Plugin) OnActivate() error {
+	configuration := p.getConfiguration();
+
 	if err := p.EnsureBot(); err != nil {
 		return err;
+	}
+
+	if configuration.JoinLeaveFree_OnOffBool {
+		if err := p.JoinLeaveFree_SetupChannelIds(); err != nil {
+			return err;
+		}
 	}
 
 	return nil;
