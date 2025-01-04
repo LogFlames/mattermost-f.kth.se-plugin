@@ -1,5 +1,6 @@
 import manifest from './manifest';
 
+import AbstractSettings from './components/admin_settings/abstract_cs.jsx';
 // import NotificationFreeCS from './components/admin_settings/notification_free_cs.jsx';
 import ModeratorCS from './components/admin_settings/moderator_cs';
 
