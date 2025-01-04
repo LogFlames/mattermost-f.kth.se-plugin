@@ -118,68 +118,68 @@ export default class AbstractAttribute extends React.Component {
 
     handleIsActiveInput = (e) => {
         this.setState({is_active: e.target.checked});
-        this.onChange({id: this.props.id, is_active: e.target.checked, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: e.target.checked, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
 
     };
 
     handleString1Input = (e) => {
         this.setState({string1: e.target.value});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: e.target.value, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: e.target.value, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleString2Input = (e) => {
         this.setState({string2: e.target.value});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: e.target.value, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: e.target.value, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleString3Input = (e) => {
         this.setState({string3: e.target.value});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: e.target.value, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: e.target.value, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleString4Input = (e) => {
         this.setState({string4: e.target.value});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: e.target.value, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: e.target.value, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleString5Input = (e) => {
         this.setState({string5: e.target.value});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: e.target.value, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: e.target.value, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleBoolInput = (e) => {
         this.setState({bool: e.target.checked});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: e.target.checked, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: e.target.checked, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleIntInput = (e) => {
         this.setState({int: parseInt(e.target.value, 10)});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: parseInt(e.target.value, 10), users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: parseInt(e.target.value, 10), users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleUsersInput = (userIds) => {
         this.setState({users: userIds});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: userIds, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: userIds, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleTeamInput = (teamId) => {
         this.setState({team: teamId});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: teamId, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: teamId, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleTeamsInput = (teamsIds) => {
         this.setState({teams: teamsIds});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: teamsIds, groups: this.state.groups, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: teamsIds, groups: this.state.groups, channels: this.state.channels});
     };
 
     handleGroupsInput = (e) => {
         this.setState({groups: e.target.value});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: e.target.value, channels: this.state.channels});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: e.target.value, channels: this.state.channels});
     };
 
     handleChannelsInput = (channelsIds) => {
         this.setState({channels: channelsIds});
-        this.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: channelsIds});
+        this.props.onChange({id: this.props.id, is_active: this.state.is_active, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: channelsIds});
     };
 
     handleDelete = () => {
