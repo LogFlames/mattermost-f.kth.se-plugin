@@ -26,9 +26,9 @@ func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
 	}
 
 	if configuration.ConvertToTextEmojies {
-		post, errMsg := p.InsertZeroWidthSpaces(post, configuration);
-		if errMsg != "" {
-			return post, errMsg
+		post, rejectReason := p.InsertZeroWidthSpaces(post, configuration);
+		if rejectReason != "" {
+			return post, rejectReason
 		}
 	}
 

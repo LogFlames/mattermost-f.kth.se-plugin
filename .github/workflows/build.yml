@@ -1,0 +1,40 @@
+name: Build CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.22"
+
+      - name: Install NVM
+        run: |
+          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+          echo "export NVM_DIR=\"$HOME/.nvm\"" >> $GITHUB_ENV
+          echo "[ -s \"$HOME/.nvm/nvm.sh\" ] && \\. \"$HOME/.nvm/nvm.sh\"" >> $GITHUB_ENV
+          echo "[ -s \"$HOME/.nvm/bash_completion\" ] && \\. \"$HOME/.nvm/bash_completion\"" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Load NVM and install Node.js
+        run: |
+          source $HOME/.nvm/nvm.sh
+          nvm install
+        shell: bash
+
+      - name: Run make
+        run: make
+
