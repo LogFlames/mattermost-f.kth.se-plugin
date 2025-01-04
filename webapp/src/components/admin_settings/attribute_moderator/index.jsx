@@ -1,6 +1,22 @@
 import {connect} from 'react-redux';
+import {bindActionCreators} from 'redux';
+import {getCustomEmojisInText} from 'mattermost-redux/actions/emojis';
 
-import mapDispatchToProps from '../abstract_attribute';
-import AttributeModerator from './attribute_moderator';
+import {getProfilesByIds} from 'mattermost-redux/actions/users';
+import {getTeam} from 'mattermost-redux/actions/teams';
+import {getChannel} from 'mattermost-redux/actions/channels';
+
+import AttributeModerator from './attribute_moderator.jsx';
+
+function mapDispatchToProps(dispatch) {
+    return {
+        actions: bindActionCreators({
+            getProfilesByIds,
+            getTeam,
+            getChannel,
+            getCustomEmojisInText,
+        }, dispatch),
+    };
+}
 
 export default connect(null, mapDispatchToProps)(AttributeModerator);
