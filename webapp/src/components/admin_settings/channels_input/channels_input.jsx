@@ -34,12 +34,19 @@ export default class ChannelsInput extends React.PureComponent {
 
     formatOptionLabel = async (option) => {
         if (option.display_name) {
-            const team = await this.props.actions.getTeam(option.team_id);
-            return (
-                <React.Fragment>
-                    { `${team.data.name}/${option.display_name}`}
-                </React.Fragment>
-            );
+            this.props.actions.getTeam(option.team_id).then(({data, error}) => {
+                if (error) {
+                    // eslint-disable-next-line no-console
+                    console.error('Error getting team in custom attribute settings dropdown. ' + error.message);
+                    return;
+                }
+
+                return (
+                    <React.Fragment>
+                        { `${team.data.name}/${option.display_name}`}
+                    </React.Fragment>
+                );
+            });
         }
 
         return option;
