@@ -78,3 +78,9 @@ export default class ModeratorAddAttribute extends AbstractAddAttribute {
         );
     }
 }
+
+const styles = {
+    buttonRow: {
+        marginTop: '8px',
+    },
+};

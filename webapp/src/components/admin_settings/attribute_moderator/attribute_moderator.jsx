@@ -50,3 +50,25 @@ export default class AttributeModerator extends AbstractAttribute {
             </div>);
     }
 }
+
+const styles = {
+    attributeRow: {
+        margin: '12px 0',
+        borderBottom: '1px solid #ccc',
+        padding: '4px 0 12px',
+    },
+    deleteIcon: {
+        textDecoration: 'none',
+        height: '20px',
+        width: '24px',
+        color: '#DB1C34',
+        fontFamily: 'material',
+        fontSize: '20px',
+        lineHeight: '32px',
+        margin: '0 0 0 -12px',
+    },
+    errorLabel: {
+        margin: '8px 0 0',
+        color: '#EB5757',
+    },
+};
