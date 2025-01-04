@@ -14,7 +14,7 @@ export default class ChannelsInput extends React.PureComponent {
         onChange: PropTypes.func,
         actions: PropTypes.shape({
             searchChannels: PropTypes.func.isRequired,
-            getTeam: PropTypes.func.isRequired,
+            getTeams: PropTypes.func.isRequired,
         }).isRequired,
     };
 
@@ -32,34 +32,56 @@ export default class ChannelsInput extends React.PureComponent {
         return channel;
     };
 
-    formatOptionLabel = async (option) => {
-        if (option.display_name) {
-            this.props.actions.getTeam(option.team_id).then(({data, error}) => {
-                if (error) {
-                    // eslint-disable-next-line no-console
-                    console.error('Error getting team in custom attribute settings dropdown. ' + error.message);
-                    return;
-                }
-
-                return (
-                    <React.Fragment>
-                        { `${team.data.name}/${option.display_name}`}
-                    </React.Fragment>
-                );
-            });
+    formatOptionLabel = (option) => {
+        if (option.display_name && option.team_display_name) {
+            return (
+                <React.Fragment>
+                    { `${option.team_display_name}/${option.display_name}` }
+                </React.Fragment>
+            );
         }
 
         return option;
-    }
+    };
 
     searchChannels = debounce((term, callback) => {
-        this.props.actions.searchChannels(term).then(({data, error}) => {
-            if (error) {
+        const channelPromise = this.props.actions.searchChannels(term);
+        const teamPromise = this.props.actions.getTeams(0, 60);
+
+        Promise.all([channelPromise, teamPromise]).then((values) => {
+            const channelsData = values[0].data;
+            const channelError = values[0].error;
+
+            if (channelError) {
                 // eslint-disable-next-line no-console
-                console.error('Error searching channel in custom attribute settings dropdown. ' + error.message);
+                console.error('Error searching channel in custom attribute settings dropdown. ' + channelError.message);
                 callback([]);
                 return;
             }
+
+            const teamsData = values[1].data;
+            const teamError = values[1].error;
+
+            if (teamError) {
+                // eslint-disable-next-line no-console
+                console.error('Error getting teams in custom attribute settings dropdown. ' + teamError.message);
+                callback([]);
+                return;
+            }
+
+            // eslint-disable-next-line no-console
+            console.log(channelsData);
+            // eslint-disable-next-line no-console
+            console.log(teamsData);
+
+            // eslint-disable-next-line max-nested-callbacks
+            const data = channelsData.map((channel) => {
+                return {
+                    ...channel,
+                    // eslint-disable-next-line max-nested-callbacks
+                    team_display_name: teamsData.find((team) => team.id === channel.team_id).display_name,
+                };
+            });
 
             callback(data);
         });

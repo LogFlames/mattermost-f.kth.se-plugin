@@ -2,7 +2,7 @@ import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
 
 import {searchAllChannels as reduxSearchAllChannels} from 'mattermost-redux/actions/channels';
-import {getTeam} from 'mattermost-redux/actions/teams';
+import {getTeams} from 'mattermost-redux/actions/teams';
 
 import ChannelsInput from './channels_input.jsx';
 
@@ -17,7 +17,7 @@ function mapDispatchToProps(dispatch) {
     return {
         actions: bindActionCreators({
             searchChannels,
-            getTeam,
+            getTeams,
         }, dispatch),
     };
 }
