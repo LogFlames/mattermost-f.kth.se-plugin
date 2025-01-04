@@ -23,6 +23,12 @@
         "footer": "",
         "settings": [
             {
+                "key": "DebugLogging",
+                "display_name": "Log Debug Messages to Admin team",
+                "type": "bool",
+                "help_text": "Log all debug messages to the Admin team."
+            },
+            {
                 "key": "ConvertToTextEmojies",
                 "display_name": "Convert To Text Emojies",
                 "type": "bool",
