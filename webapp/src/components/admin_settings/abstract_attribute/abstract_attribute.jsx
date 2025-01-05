@@ -118,7 +118,7 @@ export default class AbstractAttribute extends React.Component {
         
         if (teamsData[1].error) {
             // eslint-disable-next-line no-console
-            console.error('Error getting team for channel in dropdown. ' + teamError.message);
+            console.error('Error getting team for channel in setting. ' + teamError.message);
             callback([]);
             return;
         }
