@@ -54,7 +54,7 @@ export default class ChannelsInput extends React.PureComponent {
 
             if (channelError) {
                 // eslint-disable-next-line no-console
-                console.error('Error searching channel in custom attribute settings dropdown. ' + channelError.message);
+                console.error('Error searching channel in dropdown. ' + channelError.message);
                 callback([]);
                 return;
             }
@@ -64,7 +64,7 @@ export default class ChannelsInput extends React.PureComponent {
 
             if (teamError) {
                 // eslint-disable-next-line no-console
-                console.error('Error getting teams in custom attribute settings dropdown. ' + teamError.message);
+                console.error('Error getting team for channel in dropdown. ' + teamError.message);
                 callback([]);
                 return;
             }
