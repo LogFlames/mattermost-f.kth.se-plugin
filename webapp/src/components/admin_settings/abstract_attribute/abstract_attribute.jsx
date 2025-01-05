@@ -27,6 +27,7 @@ export default class AbstractAttribute extends React.Component {
         actions: PropTypes.shape({
             getProfilesByIds: PropTypes.func.isRequired,
             getTeam: PropTypes.func.isRequired,
+            getTeams: PropTypes.func.isRequired,
             getChannel: PropTypes.func.isRequired,
             getCustomEmojisInText: PropTypes.func.isRequired,
         }).isRequired,
@@ -110,8 +111,25 @@ export default class AbstractAttribute extends React.Component {
         }
 
         const channelPromises = this.props.channels.map(this.props.actions.getChannel);
-        const responses = await Promise.all(channelPromises);
-        const channels = responses.filter((res) => !res.error).map((res) => res.data);
+        const teamPromise = this.props.actions.getTeams(0, 60);
+        const responses = await Promise.all([channelPromises, teamPromise]);
+        const channelsData = responses[0].filter((res) => !res.error).map((res) => res.data);
+        const teamsData = responses[1].data;
+        
+        if (teamsData[1].error) {
+            // eslint-disable-next-line no-console
+            console.error('Error getting team for channel in dropdown. ' + teamError.message);
+            callback([]);
+            return;
+        }
+
+        const channels = channelsData.map((channel) => {
+            return {
+                ...channel,
+                // eslint-disable-next-line max-nested-callbacks
+                team_display_name: teamsData.find((team) => team.id === channel.team_id).display_name,
+            };
+        });
 
         this.setState({channels});
     }
