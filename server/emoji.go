@@ -72,8 +72,8 @@ func (p *Plugin) InsertZeroWidthSpaces(post *model.Post, configuration *configur
 				}
 
 				newMessage = newMessage[:left+1] + "\u200b" + newMessage[left+1:]
-				offset++
-				l++
+				offset += 3
+				l += 3
 			}
 		}
 
