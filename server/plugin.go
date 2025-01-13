@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+	"regexp"
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
@@ -19,6 +20,9 @@ type Plugin struct {
 
 	// Join-Leave-Free
 	join_leave_free_channel_ids map[string]bool
+
+	// emoji regexes
+	emoji_regexes []*regexp.Regexp
 }
 
 // See https://developers.mattermost.com/extend/plugins/server/reference/
@@ -72,6 +76,8 @@ func (p *Plugin) UserHasLeftChannel(_ *plugin.Context, channelMember *model.Chan
 
 func (p *Plugin) OnActivate() error {
 	configuration := p.getConfiguration();
+
+	p.emoji_regexes = p.compileEmojiRegexes();
 
 	if err := p.EnsureBot(); err != nil {
 		return err;
