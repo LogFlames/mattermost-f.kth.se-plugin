@@ -16,17 +16,17 @@ func (p *Plugin) compileEmojiRegexes() []*regexp.Regexp {
 	// wink
 	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(;-?\\))(?:$|\\s)"))
 	// open_mouth
-	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:o)(?:$|\\s)"))
+	regexes = append(regexes, regexp.MustCompile("(?i)(?:^|\\s)(:o)(?:$|\\s)"))
 	// scream
-	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-o)(?:$|\\s)"))
+	regexes = append(regexes, regexp.MustCompile("(?i)(?:^|\\s)(:-o)(?:$|\\s)"))
 	// smirk
 	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-?\\])(?:$|\\s)"))
 	// smile
-	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-?d)(?:$|\\s)"))
+	regexes = append(regexes, regexp.MustCompile("(?i)(?:^|\\s)(:-?d)(?:$|\\s)"))
 	// stuck_out_tongue_closed_eyes
-	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(x-d)(?:$|\\s)"))
+	regexes = append(regexes, regexp.MustCompile("(?i)(?:^|\\s)(x-d)(?:$|\\s)"))
 	// stuck_out_tongue
-	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-?p)(?:$|\\s)"))
+	regexes = append(regexes, regexp.MustCompile("(?i)(?:^|\\s)(:-?p)(?:$|\\s)"))
 	// rage
 	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-?[@])(?:$|\\s)"))
 	// slightly_frowning_face
@@ -36,13 +36,13 @@ func (p *Plugin) compileEmojiRegexes() []*regexp.Regexp {
 	// confused
 	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-?\\/)(?:$|\\s)"))
 	// confounded
-	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-?s)(?:$|\\s)"))
+	regexes = append(regexes, regexp.MustCompile("(?i)(?:^|\\s)(:-?s)(?:$|\\s)"))
 	// neutral_face
 	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-?\\|)(?:$|\\s)"))
 	// flushed
 	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-?\\?:$)($|\\s)"))
 	// mask
-	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(:-x)(?:$|\\s)"))
+	regexes = append(regexes, regexp.MustCompile("(?i)(?:^|\\s)(:-x)(?:$|\\s)"))
 	// heart
 	regexes = append(regexes, regexp.MustCompile("(?:^|\\s)(<3|&lt;3)(?:$|\\s)"))
 	// broken_heart
