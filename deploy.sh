@@ -1,4 +1,5 @@
 old_size=$(echo "/opt/mattermost/bin/mmctl config get FileSettings.MaxFileSize --local" | ssh fmm "/bin/bash")
+echo "Saved original value of max file upload: $old_size"
 
 echo "/opt/mattermost/bin/mmctl config set FileSettings.MaxFileSize 104857600 --local" | ssh fmm "/bin/bash"
 

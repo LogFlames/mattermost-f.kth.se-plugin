@@ -1,8 +1,10 @@
 package main
 
 import (
-	"sync"
+	"fmt"
 	"regexp"
+	"strings"
+	"sync"
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
@@ -13,7 +15,7 @@ type Plugin struct {
 	plugin.MattermostPlugin
 
 	configurationLock sync.RWMutex
-	configuration *configuration
+	configuration     *configuration
 
 	// Global
 	pluginBot model.Bot
@@ -34,14 +36,14 @@ func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
 	}
 
 	if configuration.ConvertToTextEmojies {
-		post, rejectReason := p.InsertZeroWidthSpaces(post, configuration);
+		post, rejectReason := p.InsertZeroWidthSpaces(post, configuration)
 		if rejectReason != "" {
 			return post, rejectReason
 		}
 	}
 
 	if configuration.JoinLeaveFree_OnOffBool {
-		post, rejectReason := p.JoinLeaveFree_Filter(post, configuration);
+		post, rejectReason := p.JoinLeaveFree_Filter(post, configuration)
 		if rejectReason != "" {
 			return post, rejectReason
 		}
@@ -59,36 +61,57 @@ func (p *Plugin) MessageWillBeUpdated(_ *plugin.Context, newPost *model.Post, _ 
 }
 
 func (p *Plugin) UserHasJoinedChannel(_ *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
-	configuration := p.getConfiguration();
+	configuration := p.getConfiguration()
 
 	if configuration.JoinLeaveFree_OnOffBool {
-		p.JoinLeaveFree_UserJoinedChannel(channelMember, configuration);
+		p.JoinLeaveFree_UserJoinedChannel(channelMember, configuration)
 	}
 }
 
 func (p *Plugin) UserHasLeftChannel(_ *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
-	configuration := p.getConfiguration();
+	configuration := p.getConfiguration()
 
 	if configuration.JoinLeaveFree_OnOffBool {
-		p.JoinLeaveFree_UserLeftChannel(channelMember, configuration);
+		p.JoinLeaveFree_UserLeftChannel(channelMember, configuration)
+	}
+}
+
+func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
+	trigger := strings.TrimPrefix(strings.Fields(args.Command)[0], "/")
+	switch trigger {
+	case "mass_add":
+		if res, err := p.MassAdd_ExecuteCommand(c, args); err != nil {
+			return nil, err
+		} else {
+			return res, nil
+		}
+	default:
+		return &model.CommandResponse{
+			ResponseType: model.CommandResponseTypeEphemeral,
+			Text:         fmt.Sprintf("Unknown command: %s", args.Command),
+		}, nil
 	}
 }
 
 func (p *Plugin) OnActivate() error {
-	configuration := p.getConfiguration();
+	configuration := p.getConfiguration()
 
-	p.emoji_regexes = p.compileEmojiRegexes();
+	p.emoji_regexes = p.compileEmojiRegexes()
 
 	if err := p.EnsureBot(); err != nil {
-		return err;
+		return err
 	}
 
 	if configuration.JoinLeaveFree_OnOffBool {
 		if err := p.JoinLeaveFree_SetupChannelIds(); err != nil {
-			return err;
+			return err
 		}
 	}
 
-	return nil;
-}
+	command := p.MassAdd_GetCommand()
+	if err := p.API.RegisterCommand(command); err != nil {
+		return err
+	}
 
+	return nil
+}
