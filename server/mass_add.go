@@ -43,9 +43,7 @@ func (p *Plugin) MassAdd_ExecuteCommand(c *plugin.Context, args *model.CommandAr
 		if user.Id == args.UserId {
 			continue // skip the command issuer
 		}
-		if _, err := p.API.AddUserToChannel(args.ChannelId, user.Id, args.UserId); err != nil {
-			return nil, err
-		}
+		p.API.AddUserToChannel(args.ChannelId, user.Id, args.UserId)
 	}
 
 	post := &model.Post{
