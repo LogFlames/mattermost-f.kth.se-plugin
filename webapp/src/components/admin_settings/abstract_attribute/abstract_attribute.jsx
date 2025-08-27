@@ -113,13 +113,13 @@ export default class AbstractAttribute extends React.Component {
         const channelPromises = this.props.channels.map(this.props.actions.getChannel);
         const teamPromise = this.props.actions.getTeams(0, 60);
         const channelResponses = await Promise.all(channelPromises);
-        const teamResponse = await Promise.all([teamPromise]);
+        const teamResponse = await teamPromise;
         const channelsData = channelResponses.filter((res) => !res.error).map((res) => res.data);
         const teamsData = teamResponse.data;
         
-        if (teamsData[1].error) {
+        if (teamResponse.error) {
             // eslint-disable-next-line no-console
-            console.error('Error getting team for channel in setting. ' + teamError.message);
+            console.error('Error getting team for channel in setting. ' + teamResponse.error);
             callback([]);
             return;
         }
