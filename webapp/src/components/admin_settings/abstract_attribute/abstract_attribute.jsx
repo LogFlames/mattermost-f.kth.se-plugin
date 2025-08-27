@@ -45,11 +45,7 @@ export default class AbstractAttribute extends React.Component {
             string5: this.props.string5,
             bool: this.props.bool,
             int: this.props.int,
-            users: this.props.users,
-            team: this.props.team,
-            teams: this.props.teams,
             groups: this.props.groups,
-            channels: this.props.channels,
             error: null,
         };
 
