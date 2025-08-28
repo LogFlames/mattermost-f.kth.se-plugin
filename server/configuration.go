@@ -108,6 +108,17 @@ func (p *Plugin) OnConfigurationChange() error {
 		}
 	}
 
+	if configuration.ModeratorBot_OnOffBool {
+		p.moderator_channels = make(map[string]bool)
+		for _, mbCustom := range configuration.ModeratorBot_Custom {
+			for _, channelID := range mbCustom.ChannelIDs {
+				p.moderator_channels[channelID] = true
+			}
+		}
+	} else {
+		p.moderator_channels = make(map[string]bool)
+	}
+
 	p.debug(fmt.Sprintf("%v", configuration.ModeratorBot_Custom))
 
 	return nil

@@ -6,10 +6,7 @@ import ModeratorEntry from './moderator_entry/index.jsx';
 
 export default class ModeratorSettings extends AbstractSettings {
     render() {
-        const key = "moderator";
-        if (!(key in this.state.attributes)) {
-            this.state.attributes.set(key, {});
-        }
+        const key = 0;
         const value = this.state.attributes.get(key) || {};
         return (
             <div>

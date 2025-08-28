@@ -23,6 +23,9 @@ type Plugin struct {
 	// Join-Leave-Free
 	join_leave_free_channel_ids map[string]bool
 
+	// Moderator
+	moderator_channels map[string]bool
+
 	// emoji regexes
 	emoji_regexes []*regexp.Regexp
 }
@@ -54,6 +57,12 @@ func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
 
 func (p *Plugin) MessageWillBePosted(_ *plugin.Context, post *model.Post) (*model.Post, string) {
 	return p.FilterPost(post)
+}
+
+func (p *Plugin) MessageHasBeenPosted(_ *plugin.Context, post *model.Post) {
+	if p.configuration.ModeratorBot_OnOffBool {
+		p.Moderator_MessageHasBeenPosted(post, p.configuration)
+	}
 }
 
 func (p *Plugin) MessageWillBeUpdated(_ *plugin.Context, newPost *model.Post, _ *model.Post) (*model.Post, string) {
