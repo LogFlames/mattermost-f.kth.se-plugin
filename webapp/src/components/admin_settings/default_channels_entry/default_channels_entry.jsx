@@ -1,59 +1,12 @@
-import React from 'react';
 import AbstractEntry from '../abstract_entry/abstract_entry.jsx';
-
-import UsersInput from '../inputs/users_input/index.js';
-import TeamsInput from '../inputs/teams_input/index.js';
-import ChannelsInput from '../inputs/channels_input/index.js';
 
 export default class DefaultChannels extends AbstractEntry {
     render() {
-        let deleteButton = null;
-        if (!this.props.hideDelete) {
-            deleteButton = (
-                <div
-                    className='col-xs-12 col-sm-1'
-                >
-                    <a
-                        style={styles.deleteIcon}
-                        onClick={this.handleDelete}
-                    >
-                        <i className='fa fa-trash'/>
-                    </a>
-                </div>
-            );
-        }
-
-        let errorLabel = null;
-        if (this.state.error) {
-            errorLabel = this.state.error;
-        }
-
-        return (
-            <div
-                style={styles.attributeRow}
-            >
-                <div
-                    className='row'
-                >
-                    <div className='col-xs-12 col-sm-3'>
-                        <ChannelsInput
-                            placeholder='~channel1 ~channel2'
-                            channels={this.state.channels}
-                            onChange={this.handleChannelsInput}
-                            multi={false}
-                        />
-                        <Input
-                            placeholder='Enter a category name'
-                            value={this.state.string1}
-                            onChange={this.handleString1Input}
-                        />
-                    </div>
-                    {deleteButton}
-                </div>
-                <div style={styles.errorLabel}>
-                    {errorLabel}
-                </div>
-            </div>);
+        return super.render(
+            enableString1=1,
+            string1Name='Enter a category name',
+            enableChannels=1,
+        );
     }
 }
 

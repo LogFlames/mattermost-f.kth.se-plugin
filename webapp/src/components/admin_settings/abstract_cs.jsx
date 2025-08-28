@@ -45,7 +45,7 @@ export default class AbstractSettings extends React.Component {
         return new Map(attributes.map((a, index) => [index, a]));
     }
 
-    getAttributesList() {
+    getAttributesList(EntryType=AbstractEntry) {
         if (this.state.attributes.size === 0) {
             return (
                 <div style={styles.alertDiv}>
@@ -56,7 +56,7 @@ export default class AbstractSettings extends React.Component {
 
         return Array.from(this.state.attributes, ([key, value]) => {
             return (
-                <AbstractEntry
+                <EntryType
                     key={key}
                     id={key}
                     is_active={value.IsActive}
@@ -139,13 +139,13 @@ export default class AbstractSettings extends React.Component {
         this.props.setSaveNeeded();
     };
 
-    render() {
+    render(AddEntryType=AbstractAddEntry, Title='Entries') {
         return (
             <div>
-                <strong>{'Entries'}</strong>
+                <strong>{Title}</strong>
                 <div>
                     {this.getAttributesList()}
-                    <AbstractAddEntry
+                    <AddEntryType
                         onChange={this.handleChange}
                         id={this.state.attributes.size}
                     />

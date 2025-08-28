@@ -68,7 +68,7 @@ export default class AbstractAddEntry extends React.Component {
         });
     };
 
-    render() {
+    render(EntryType=AbstractEntry) {
         if (this.state.collapsed) {
             return (
                 <div>
@@ -94,7 +94,7 @@ export default class AbstractAddEntry extends React.Component {
 
         return (
             <div>
-                <AbstractEntry
+                <EntryType
                     is_active={this.props.is_active}
                     string1={this.props.string1}
                     string2={this.props.string2}

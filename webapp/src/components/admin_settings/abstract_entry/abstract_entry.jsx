@@ -204,7 +204,27 @@ export default class AbstractEntry extends React.Component {
         this.props.onDelete(this.props.id);
     };
 
-    render() {
+    render(
+        enableBool=0,
+        boolName="",
+        enableInt=0,
+        intName="",
+        enableString1=0,
+        string1Name="",
+        enableString2=0,
+        string2Name="",
+        enableString3=0,
+        string3Name="",
+        enableString4=0,
+        string4Name="",
+        enableString5=0,
+        string5Name="",
+        enableUsers=0,
+        enableTeam=0,
+        enableTeams=0,
+        enableGroups=0,
+        enableChannels=0,
+    ) {
         let deleteButton = null;
         if (!this.props.hideDelete) {
             deleteButton = (
@@ -227,61 +247,161 @@ export default class AbstractEntry extends React.Component {
         }
 
         return (
-            <div
-                style={styles.attributeRow}
-            >
-                <div
-                    className='row'
-                >
-                    <div
-                        className='col-xs-12 col-sm-2'
-                    >
-                        <input
-                            id={`name-${this.props.id}`}
-                            className='form-control'
-                            type='text'
-                            placeholder='Attribute Label'
-                            value={this.state.name}
-                            onChange={this.handleNameInput}
-                        />
-                    </div>
-                    <div className='col-xs-12 col-sm-3'>
-                        <UsersInput
-                            placeholder='@username1 @username2'
-                            users={this.state.users}
-                            onChange={this.handleUsersInput}
-                        />
-                    </div>
-                    <div className='col-xs-12 col-sm-3'>
-                        <TeamsInput
-                            placeholder='teamName1 teamName2'
-                            teams={this.state.teams}
-                            onChange={this.handleTeamsInput}
-                        />
-                    </div>
-                    <div className='col-xs-12 col-sm-3'>
-                        <ChannelsInput
-                            placeholder='~channel1 ~channel2'
-                            channels={this.state.channels}
-                            onChange={this.handleChannelsInput}
-                        />
-                    </div>
-                    <div className='col-xs-12 col-sm-3'>
-                        <input
-                            id={`groups-${this.props.id}`}
-                            className='form-control'
-                            type='text'
-                            placeholder='GroupID1 GroupID2'
-                            value={this.state.groups}
-                            onChange={this.handleGroupsInput}
-                        />
-                    </div>
-                    {deleteButton}
+            <div>
+            <div style={styles.attributeRow}>
+            <div className='row'></div>
+                <div className='col-xs-12 col-sm-2'>
+                    <input
+                        id={`name-${this.props.id}`}
+                        className='form-control'
+                        type='text'
+                        placeholder='Attribute Label'
+                        value={this.state.name}
+                        onChange={this.handleNameInput}
+                    />
                 </div>
+                {enableString1 === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <input
+                    id={`string1-${this.props.id}`}
+                    className='form-control'
+                    type='text'
+                    placeholder={string1Name === '' ? 'String1' : string1Name}
+                    value={this.state.string1}
+                    onChange={this.handleString1Input}
+                    />
+                </div>
+                )}
+                {enableString2 === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <input
+                    id={`string2-${this.props.id}`}
+                    className='form-control'
+                    type='text'
+                    placeholder={string2Name === '' ? 'String2' : string2Name}
+                    value={this.state.string2}
+                    onChange={this.handleString2Input}
+                    />
+                </div>
+                )}
+                {enableString3 === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <input
+                    id={`string3-${this.props.id}`}
+                    className='form-control'
+                    type='text'
+                    placeholder={string3Name === '' ? 'String3' : string3Name}
+                    value={this.state.string3}
+                    onChange={this.handleString3Input}
+                    />
+                </div>
+                )}
+                {enableString4 === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <input
+                    id={`string4-${this.props.id}`}
+                    className='form-control'
+                    type='text'
+                    placeholder={string4Name === '' ? 'String4' : string4Name}
+                    value={this.state.string4}
+                    onChange={this.handleString4Input}
+                    />
+                </div>
+                )}
+                {enableString5 === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <input
+                    id={`string5-${this.props.id}`}
+                    className='form-control'
+                    type='text'
+                    placeholder={string5Name === '' ? 'String5' : string5Name}
+                    value={this.state.string5}
+                    onChange={this.handleString5Input}
+                    />
+                </div>
+                )}
+                {enableBool === 1 && (
+                <div className='col-xs-12 col-sm-2'>
+                    <label style={{marginRight: '8px'}}>
+                    <input
+                        id={`bool-${this.props.id}`}
+                        type='checkbox'
+                        checked={!!this.state.bool}
+                        onChange={this.handleBoolInput}
+                        style={{marginRight: '4px'}}
+                    />
+                    {boolName === '' ? 'Bool' : boolName}
+                    </label>
+                </div>
+                )}
+                {enableInt === 1 && (
+                <div className='col-xs-12 col-sm-2'>
+                    <input
+                    id={`int-${this.props.id}`}
+                    className='form-control'
+                    type='number'
+                    placeholder={intName === '' ? 'Int' : intName}
+                    value={this.state.int || ''}
+                    onChange={this.handleIntInput}
+                    />
+                </div>
+                )}
+                {enableUsers === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <UsersInput
+                    placeholder='@username1 @username2'
+                    users={this.state.users}
+                    onChange={this.handleUsersInput}
+                    />
+                </div>
+                )}
+                {enableTeam === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <TeamsInput
+                    placeholder='teamName'
+                    teams={this.state.team ? [this.state.team] : []}
+                    onChange={([team]) => this.handleTeamsInput([team])}
+                    isMulti={false}
+                    />
+                </div>
+                )}
+                {enableTeams === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <TeamsInput
+                    placeholder='teamName1 teamName2'
+                    teams={this.state.teams}
+                    onChange={this.handleTeamsInput}
+                    />
+                </div>
+                )}
+                {enableChannels === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <ChannelsInput
+                    placeholder='~channel1 ~channel2'
+                    channels={this.state.channels}
+                    onChange={this.handleChannelsInput}
+                    />
+                </div>
+                )}
+                {enableGroups === 1 && (
+                <div className='col-xs-12 col-sm-3'>
+                    <input
+                    id={`groups-${this.props.id}`}
+                    className='form-control'
+                    type='text'
+                    placeholder='GroupID1 GroupID2'
+                    value={this.state.groups}
+                    onChange={this.handleGroupsInput}
+                    />
+                </div>
+                )}
+                {deleteButton}
+            </div>
                 <div style={styles.errorLabel}>
                     {errorLabel}
                 </div>
-            </div>);
+            </div>
+        );   
     }
 }
 
