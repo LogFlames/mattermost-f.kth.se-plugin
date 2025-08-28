@@ -2,7 +2,29 @@ import AbstractEntry from '../abstract_entry/abstract_entry.jsx';
 
 export default class ModeratorEntry extends AbstractEntry {
     render() {
-        return super.render({enableChannels: true});
+        let errorLabel = null;
+        if (this.state.error) {
+            errorLabel = this.state.error;
+        }
+
+        return (
+            <div
+                style={styles.attributeRow}
+            >
+                <div>
+                    <div className=''>
+                        <ChannelsInput
+                            placeholder='~channel1 ~channel2'
+                            channels={this.state.channels}
+                            onChange={this.handleChannelsInput}
+                            multi={true}
+                        />
+                    </div>
+                </div>
+                <div style={styles.errorLabel}>
+                    {errorLabel}
+                </div>
+            </div>);
     }
 }
 

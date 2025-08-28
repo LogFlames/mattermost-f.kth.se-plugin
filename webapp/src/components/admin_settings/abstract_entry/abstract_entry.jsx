@@ -204,26 +204,7 @@ export default class AbstractEntry extends React.Component {
         this.props.onDelete(this.props.id);
     };
 
-    render({
-        enableBool, 
-        enableInt, 
-        intPlaceholder, 
-        enableString1, 
-        string1Placeholder, 
-        enableString2, 
-        string2Placeholder, 
-        enableString3, 
-        string3Placeholder, 
-        enableString4, 
-        string4Placeholder, 
-        enableString5, 
-        string5Placeholder, 
-        enableUsers, 
-        enableTeam, 
-        enableTeams, 
-        enableGroups, 
-        enableChannels
-    }={}) {
+    render() {
         let deleteButton = null;
         if (!this.props.hideDelete) {
             deleteButton = (
@@ -249,67 +230,56 @@ export default class AbstractEntry extends React.Component {
             <div>
             <div style={styles.attributeRow}>
             <div className='row'></div>
-                {enableString1 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string1-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string1Placeholder || 'string1'}
+                    placeholder='string'
                     value={this.state.string1}
                     onChange={this.handleString1Input}
                     />
                 </div>
-                )}
-                {enableString2 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string2-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string2Placeholder || 'String2'}
+                    placeholder='string'
                     value={this.state.string2}
                     onChange={this.handleString2Input}
                     />
                 </div>
-                )}
-                {enableString3 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string3-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string3Placeholder || 'String3'}
+                    placeholder='string'
                     value={this.state.string3}
                     onChange={this.handleString3Input}
                     />
                 </div>
-                )}
-                {enableString4 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string4-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string4Placeholder || 'String4'}
+                    placeholder='string'
                     value={this.state.string4}
                     onChange={this.handleString4Input}
                     />
                 </div>
-                )}
-                {enableString5 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string5-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string5Placeholder || 'String5'}
+                    placeholder='string'
                     value={this.state.string5}
                     onChange={this.handleString5Input}
                     />
                 </div>
-                )}
-                {enableBool && (
                 <div className='col-xs-12 col-sm-2'>
                     <label style={{marginRight: '8px'}}>
                     <input
@@ -321,20 +291,16 @@ export default class AbstractEntry extends React.Component {
                     />
                     </label>
                 </div>
-                )}
-                {enableInt && (
                 <div className='col-xs-12 col-sm-2'>
                     <input
                     id={`int-${this.props.id}`}
                     className='form-control'
                     type='number'
-                    placeholder={intPlaceholder || 'Int'}
+                    placeholder='int'
                     value={this.state.int || ''}
                     onChange={this.handleIntInput}
                     />
                 </div>
-                )}
-                {enableUsers && (
                 <div className='col-xs-12 col-sm-3'>
                     <UsersInput
                     placeholder='@username1 @username2'
@@ -342,8 +308,6 @@ export default class AbstractEntry extends React.Component {
                     onChange={this.handleUsersInput}
                     />
                 </div>
-                )}
-                {enableTeam && (
                 <div className='col-xs-12 col-sm-3'>
                     <TeamsInput
                     placeholder='teamName'
@@ -352,8 +316,6 @@ export default class AbstractEntry extends React.Component {
                     isMulti={false}
                     />
                 </div>
-                )}
-                {enableTeams && (
                 <div className='col-xs-12 col-sm-3'>
                     <TeamsInput
                     placeholder='teamName1 teamName2'
@@ -361,8 +323,6 @@ export default class AbstractEntry extends React.Component {
                     onChange={this.handleTeamsInput}
                     />
                 </div>
-                )}
-                {enableChannels && (
                 <div className='col-xs-12 col-sm-3'>
                     <ChannelsInput
                     placeholder='~channel1 ~channel2'
@@ -370,8 +330,6 @@ export default class AbstractEntry extends React.Component {
                     onChange={this.handleChannelsInput}
                     />
                 </div>
-                )}
-                {enableGroups && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`groups-${this.props.id}`}
@@ -382,7 +340,6 @@ export default class AbstractEntry extends React.Component {
                     onChange={this.handleGroupsInput}
                     />
                 </div>
-                )}
                 {deleteButton}
             </div>
                 <div style={styles.errorLabel}>
