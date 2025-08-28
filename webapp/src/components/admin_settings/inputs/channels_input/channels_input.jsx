@@ -12,6 +12,7 @@ export default class ChannelsInput extends React.PureComponent {
         placeholder: PropTypes.string,
         channels: PropTypes.array,
         onChange: PropTypes.func,
+        multi: PropTypes.bool,
         actions: PropTypes.shape({
             searchChannels: PropTypes.func.isRequired,
             getTeams: PropTypes.func.isRequired,
@@ -20,6 +21,9 @@ export default class ChannelsInput extends React.PureComponent {
 
     onChange = (value) => {
         if (this.props.onChange) {
+            if (!this.props.multi) {
+                value = value ? [value] : [];
+            }
             this.props.onChange(value);
         }
     };
@@ -69,11 +73,6 @@ export default class ChannelsInput extends React.PureComponent {
                 return;
             }
 
-            // eslint-disable-next-line no-console
-            console.log(channelsData);
-            // eslint-disable-next-line no-console
-            console.log(teamsData);
-
             // eslint-disable-next-line max-nested-callbacks
             const data = channelsData.map((channel) => {
                 return {
@@ -90,7 +89,7 @@ export default class ChannelsInput extends React.PureComponent {
     render() {
         return (
             <AsyncSelect
-                isMulti={true}
+                isMulti={this.props.multi}
                 cacheOptions={true}
                 defaultOptions={false}
                 loadOptions={this.searchChannels}

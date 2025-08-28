@@ -6,8 +6,8 @@ import React from 'react';
 
 import ConfirmModal from '../widgets/confirmation_modal.tsx';
 
-import AbstractAttribute from './abstract_attribute';
-import AbstractAddAttribute from './abstract_add_attribute.jsx';
+import AbstractEntry from './abstract_entry/index.jsx';
+import AbstractAddEntry from './abstract_add_entry.jsx';
 
 export default class AbstractSettings extends React.Component {
     static propTypes = {
@@ -56,7 +56,7 @@ export default class AbstractSettings extends React.Component {
 
         return Array.from(this.state.attributes, ([key, value]) => {
             return (
-                <AbstractAttribute
+                <AbstractEntry
                     key={key}
                     id={key}
                     is_active={value.IsActive}
@@ -145,7 +145,7 @@ export default class AbstractSettings extends React.Component {
                 <strong>{'Entries'}</strong>
                 <div>
                     {this.getAttributesList()}
-                    <AbstractAddAttribute
+                    <AbstractAddEntry
                         onChange={this.handleChange}
                         id={this.state.attributes.size}
                     />

@@ -1,11 +1,11 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-import UsersInput from '../users_input';
-import TeamsInput from '../teams_input';
-import ChannelsInput from '../channels_input';
+import UsersInput from '../inputs/users_input';
+import TeamsInput from '../inputs/teams_input';
+import ChannelsInput from '../inputs/channels_input';
 
-export default class AbstractAttribute extends React.Component {
+export default class AbstractEntry extends React.Component {
     static propTypes = {
         id: PropTypes.string.isRequired,
         is_active: PropTypes.bool,
@@ -138,7 +138,6 @@ export default class AbstractAttribute extends React.Component {
     handleIsActiveInput = (e) => {
         this.setState({is_active: e.target.checked});
         this.props.onChange({id: this.props.id, is_active: e.target.checked, string1: this.state.string1, string2: this.state.string2, string3: this.state.string3, string4: this.state.string4, string5: this.state.string5, bool: this.state.bool, int: this.state.int, users: this.state.users, team: this.state.team, teams: this.state.teams, groups: this.state.groups, channels: this.state.channels});
-
     };
 
     handleString1Input = (e) => {

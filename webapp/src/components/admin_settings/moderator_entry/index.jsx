@@ -6,7 +6,7 @@ import {getProfilesByIds} from 'mattermost-redux/actions/users';
 import {getTeam, getTeams} from 'mattermost-redux/actions/teams';
 import {getChannel} from 'mattermost-redux/actions/channels';
 
-import AttributeModerator from './attribute_moderator.jsx';
+import ModeratorEntry from './moderator_entry.jsx';
 
 function mapDispatchToProps(dispatch) {
     return {
@@ -20,4 +20,4 @@ function mapDispatchToProps(dispatch) {
     };
 }
 
-export default connect(null, mapDispatchToProps)(AttributeModerator);
+export default connect(null, mapDispatchToProps)(ModeratorEntry);

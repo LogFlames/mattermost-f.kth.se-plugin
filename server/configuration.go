@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -18,18 +19,34 @@ import (
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
 type configuration struct {
-	ConvertToTextEmojies 	bool
-	DebugLogging         	bool
-	LoggingChannelID     	string
+	ConvertToTextEmojies bool
+	DebugLogging         bool
+	LoggingChannelID     string
 
-	JoinLeaveFree_OnOffBool	bool
-	JoinLeaveFree_BotUserId	string
+	JoinLeaveFree_OnOffBool bool
+	JoinLeaveFree_BotUserId string
+
+	ModeratorBot_OnOffBool bool
+	ModeratorBot_Custom    []ModeratorBot_Custom
+}
+
+type ModeratorBot_Custom struct {
+	ChannelIDs []string
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
 // your configuration has reference types.
 func (c *configuration) Clone() *configuration {
 	var clone = *c
+
+	clone.ModeratorBot_Custom = make([]ModeratorBot_Custom, len(c.ModeratorBot_Custom))
+	for i := range c.ModeratorBot_Custom {
+		mbCustom := ModeratorBot_Custom{}
+		mbCustom.ChannelIDs = make([]string, len(c.ModeratorBot_Custom[i].ChannelIDs))
+		copy(mbCustom.ChannelIDs, c.ModeratorBot_Custom[i].ChannelIDs)
+		clone.ModeratorBot_Custom[i] = mbCustom
+	}
+
 	return &clone
 }
 
@@ -87,9 +104,11 @@ func (p *Plugin) OnConfigurationChange() error {
 
 	if configuration.JoinLeaveFree_OnOffBool {
 		if err := p.JoinLeaveFree_SetupChannelIds(); err != nil {
-			return err;
+			return err
 		}
 	}
+
+	p.debug(fmt.Sprintf("%v", configuration.ModeratorBot_Custom))
 
 	return nil
 }

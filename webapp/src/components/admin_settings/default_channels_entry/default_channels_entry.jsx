@@ -1,11 +1,11 @@
 import React from 'react';
-import AbstractAttribute from '../abstract_attribute/abstract_attribute.jsx';
+import AbstractEntry from '../abstract_entry/abstract_entry.jsx';
 
-import UsersInput from '../users_input';
-import TeamsInput from '../teams_input';
-import ChannelsInput from '../channels_input';
+import UsersInput from '../inputs/users_input/index.js';
+import TeamsInput from '../inputs/teams_input/index.js';
+import ChannelsInput from '../inputs/channels_input/index.js';
 
-export default class AttributeModerator extends AbstractAttribute {
+export default class DefaultChannels extends AbstractEntry {
     render() {
         let deleteButton = null;
         if (!this.props.hideDelete) {
@@ -40,6 +40,12 @@ export default class AttributeModerator extends AbstractAttribute {
                             placeholder='~channel1 ~channel2'
                             channels={this.state.channels}
                             onChange={this.handleChannelsInput}
+                            multi={false}
+                        />
+                        <Input
+                            placeholder='Enter a category name'
+                            value={this.state.string1}
+                            onChange={this.handleString1Input}
                         />
                     </div>
                     {deleteButton}
