@@ -68,7 +68,7 @@ export default class AbstractAddEntry extends React.Component {
         });
     };
 
-    render(EntryType=AbstractEntry) {
+    render(EntryType) {
         if (this.state.collapsed) {
             return (
                 <div>
