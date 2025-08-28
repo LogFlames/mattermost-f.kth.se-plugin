@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 )
@@ -31,6 +33,7 @@ func (p *Plugin) MassAdd_ExecuteCommand(c *plugin.Context, args *model.CommandAr
 			Type:      model.PostTypeEphemeral,
 		}
 		_ = p.API.SendEphemeralPost(args.UserId, post)
+		p.debug(fmt.Sprintf("User %s tried to use /mass_add in channel %s, but is lacking permission.", args.UserId, args.ChannelId))
 		return &model.CommandResponse{}, nil
 	}
 
@@ -39,6 +42,7 @@ func (p *Plugin) MassAdd_ExecuteCommand(c *plugin.Context, args *model.CommandAr
 		return nil, err
 	}
 
+	p.debug(fmt.Sprintf("User %s used /mass_add. Adding %d users to channel %s", args.UserId, len(users), args.ChannelId))
 	for _, user := range users {
 		if user.Id == args.UserId {
 			continue // skip the command issuer
