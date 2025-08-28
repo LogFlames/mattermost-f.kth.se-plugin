@@ -6,4 +6,5 @@ echo "/opt/mattermost/bin/mmctl config set FileSettings.MaxFileSize 268435456 --
 source ./set_secret.sh
 MM_SERVICESETTINGS_SITEURL="https://mattermost.fysiksektionen.se" make deploy
 
+echo "Restoring original value of max file upload: $old_size"
 echo "/opt/mattermost/bin/mmctl config set FileSettings.MaxFileSize $old_size --local" | ssh fmm "/bin/bash"
