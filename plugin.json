@@ -33,115 +33,169 @@
                 "display_name": "Global: Channel ID To Send Debug Messages In",
                 "type": "text",
                 "help_text": "Log all debug messages to the specified channel."
-            },
-            {
-                "key": "ConvertToTextEmojies",
-                "display_name": "Global: Prevent Text to Emoji Conversion",
-                "type": "bool",
-                "help_text": "Insert a zero-width space between : and )Dp( to create normal emojies."
-            },
-            {
-                "key": "JoinLeaveFree_OnOffBool",
-                "display_name": "Join/Leave-free: Module enabled?",
-                "type": "bool",
-                "help_text": "This module is active in channels where @join-leave-free-bot is a member."
-            },
-            {
-                "key": "JoinLeaveFree_BotUserId",
-                "display_name": "Join/Leave-free: Bot User ID",
-                "type": "text",
-                "help_text": "The ID of the bot that will decide which channels should be join/leave-free."
-            },
-            {
-                "key": "NotificationFree_OnOffBool",
-                "display_name": "Notification-free: Module enabled?",
-                "type": "bool",
-                "help_text": "This module removes notifications in configured channels"
-            },
-            {
-                "key": "NotificationFree_Custom",
-                "display_name": "Notification-free: Notification Free Channels",
-                "type": "custom",
-                "help_text": "A list of channels where notifications are disabled."
-            },
-            {
-                "key": "ModeratorBot_OnOffBool",
-                "display_name": "Moderator: Module enabled?",
-                "type": "bool",
-                "help_text": "This module complains at posts that are not in the correct format (uses @moderator-bot as a front man)."
-            },
-            {
-                "key": "ModeratorBot_Custom",
-                "display_name": "Moderator: Channels to Moderate (complain at messages without titles)",
-                "type": "custom",
-                "help_text": "A list of channels to complain at posts without titles."
-            },
-            {
-                "key": "StandardCategories_OnOffBool",
-                "display_name": "Standard Categories: Module enabled?",
-                "type": "bool",
-                "help_text": "This module controls which standard categories to create for users who join a team"
-            },
-            {
-                "key": "StandardCategories_Custom",
-                "display_name": "Standard Categories: Configuration",
-                "type": "custom",
-                "help_text": "Configuration for standard categories, one line per category (multiple lines per team)."
-            },
-            {
-                "key": "StandardChannels_OnOffBool",
-                "display_name": "Standard Channels: Module enabled?",
-                "type": "bool",
-                "help_text": "This module controls which standard channels to create for users who join a team"
-            },
-            {
-                "key": "StandardChannels_Custom",
-                "display_name": "Standard Channels: Configuration",
-                "type": "custom",
-                "help_text": "Configuration for standard channels, one line per team."
-            },
-            {
-                "key": "WebsitePublisherBot_OnOffBool",
-                "display_name": "Website Publisher: Bot enabled?",
-                "type": "bool",
-                "help_text": "Disabling this only prevents the bot from reacting to events, it does not affect whether the bot instance is running on the server."
-            },
-            {
-                "key": "WebsitePublisherBot_Custom_ChannelList",
-                "display_name": "Website Publisher: Channels Monitored by the Bot",
-                "type": "custom",
-                "help_text": "A list of channels where the bot will monitor for messages to publish to the website."
-            },
-            {
-                "key": "WebsitePublisherBot_Custom_NamndList",
-                "display_name": "Website Publisher: Committees and Permissions",
-                "type": "custom",
-                "help_text": "A list of committees, associated media, and who has permissions for each committee."
-            },
-            {
-                "key": "WebsitePublisherBot_InferAdminsFromSysAdmins",
-                "display_name": "Website Publisher: Infer Admins from Mattermost System Admins",
-                "type": "bool",
-                "help_text": "Gives Mattermost System Admins permission to post as all committees."
-            },
-            {
-                "key": "WebsitePublisherBot_Custom_AdminsList",
-                "display_name": "Website Publisher: Admins (can post as all committees)",
-                "type": "custom",
-                "help_text": "A list of users who have permission to post as all committees."
-            },
-            {
-                "key": "TranslatorBot_OnOffBool",
-                "display_name": "Translator: Bot enabled?",
-                "type": "bool",
-                "help_text": "Disabling this only prevents the bot from reacting to events, it does not affect whether the bot instance is running on the server."
-            },
-            {
-                "key": "TranslatorBot_Custom_ChannelList",
-                "display_name": "Translator: Channels Monitored by the Bot",
-                "type": "custom",
-                "help_text": "A list of channels where the bot will monitor for messages to suggest translations of, as well as its behavior per channel."
             }
+        ],
+        "sections": [
+            {
+                "key": "text-emojis",
+                "title": "Text Emojis Module",
+                "subtitle": "",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "ConvertToTextEmojies",
+                        "display_name": "Global: Prevent Text to Emoji Conversion",
+                        "type": "bool",
+                        "help_text": "Insert a zero-width space between : and )Dp( to create normal emojies."
+                    }
+                ]
+            },
+            {
+                "key": "join-leave-free",
+                "title": "Join/Leave-free Module",
+                "subtitle": "Prevents join/leave messages in configured channels.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "JoinLeaveFree_OnOffBool",
+                        "display_name": "Join/Leave-free: Module enabled?",
+                        "type": "bool",
+                        "help_text": "This module is active in channels where @join-leave-free-bot is a member."
+                    },
+                    {
+                        "key": "JoinLeaveFree_BotUserId",
+                        "display_name": "Join/Leave-free: Bot User ID",
+                        "type": "text",
+                        "help_text": "The ID of the bot that will decide which channels should be join/leave-free."
+                    }
+                ]
+            },
+            {
+                "key": "notification-free",
+                "title": "Notification-free Module",
+                "subtitle": "Removes notifications in configured channels.",
+                "header": "NOT IMPLEMENTED",
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "NotificationFree_OnOffBool",
+                        "display_name": "Notification-free: Module enabled?",
+                        "type": "bool",
+                        "help_text": "This module removes notifications in configured channels"
+                    },
+                    {
+                        "key": "NotificationFree_Custom",
+                        "display_name": "Notification-free: Notification Free Channels",
+                        "type": "custom",
+                        "help_text": "A list of channels where notifications are disabled."
+                    }
+                ]
+            },
+            {
+                "key": "moderator",
+                "title": "Moderator Module",
+                "subtitle": "Moderates channels by reminding users to add titles to their messages.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "ModeratorBot_OnOffBool",
+                        "display_name": "Moderator: Module enabled?",
+                        "type": "bool",
+                        "help_text": "This module complains at posts that are not in the correct format (uses @moderator-bot as a front man)."
+                    },
+                    {
+                        "key": "ModeratorBot_Custom",
+                        "display_name": "Moderator: Channels to Moderate (complain at messages without titles)",
+                        "type": "custom",
+                        "help_text": "A list of channels to complain at posts without titles."
+                    }
+                ]
+            },
+            {
+                "key": "standard-channels",
+                "title": "Standard Channels Module",
+                "subtitle": "Sort users into standard channels for teams",
+                "header": "UNDER IMPLEMENTATION",
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "StandardChannels_OnOffBool",
+                        "display_name": "Standard Channels: Module enabled?",
+                        "type": "bool",
+                        "help_text": "This module controls which standard channels to create for users who join a team"
+                    },
+                    {
+                        "key": "StandardChannels_Custom",
+                        "display_name": "Standard Channels: Configuration",
+                        "type": "custom",
+                        "help_text": "Configuration for standard channels, one line per team."
+                    }
+                ]
+            },
+            {
+                "key": "website-publisher",
+                "title": "Website Publisher Module",
+                "subtitle": "Posts messages from Mattermost to the f.kth.se website",
+                "header": "NOT IMPLEMENTED",
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "WebsitePublisherBot_OnOffBool",
+                        "display_name": "Website Publisher: Bot enabled?",
+                        "type": "bool",
+                        "help_text": "Disabling this only prevents the bot from reacting to events, it does not affect whether the bot instance is running on the server."
+                    },
+                    {
+                        "key": "WebsitePublisherBot_Custom_ChannelList",
+                        "display_name": "Website Publisher: Channels Monitored by the Bot",
+                        "type": "custom",
+                        "help_text": "A list of channels where the bot will monitor for messages to publish to the website."
+                    },
+                    {
+                        "key": "WebsitePublisherBot_Custom_NamndList",
+                        "display_name": "Website Publisher: Committees and Permissions",
+                        "type": "custom",
+                        "help_text": "A list of committees, associated media, and who has permissions for each committee."
+                    },
+                    {
+                        "key": "WebsitePublisherBot_InferAdminsFromSysAdmins",
+                        "display_name": "Website Publisher: Infer Admins from Mattermost System Admins",
+                        "type": "bool",
+                        "help_text": "Gives Mattermost System Admins permission to post as all committees."
+                    },
+                    {
+                        "key": "WebsitePublisherBot_Custom_AdminsList",
+                        "display_name": "Website Publisher: Admins (can post as all committees)",
+                        "type": "custom",
+                        "help_text": "A list of users who have permission to post as all committees."
+                    }
+                ]
+            },
+            {
+                "key": "translator",
+                "title": "Translator Module",
+                "subtitle": "Translates messages into english",
+                "header": "NOT IMPLEMENTED",
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "TranslatorBot_OnOffBool",
+                        "display_name": "Translator: Bot enabled?",
+                        "type": "bool",
+                        "help_text": "Disabling this only prevents the bot from reacting to events, it does not affect whether the bot instance is running on the server."
+                    },
+                    {
+                        "key": "TranslatorBot_Custom_ChannelList",
+                        "display_name": "Translator: Channels Monitored by the Bot",
+                        "type": "custom",
+                        "help_text": "A list of channels where the bot will monitor for messages to suggest translations of, as well as its behavior per channel."
+                    }
+                ]
+            }
+
         ]
     }
 }
