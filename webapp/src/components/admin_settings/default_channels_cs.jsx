@@ -4,9 +4,8 @@ import ConfirmModal from '../widgets/confirmation_modal.tsx';
 
 import AbstractSettings from './abstract_cs.jsx';
 
-import ModeratorAddEntry from './moderator_add_entry.jsx';
-
 import DefaultChannels from './default_channels_entry/default_channels_entry.jsx';
+import DefaultChannelsAddEntry from './default_channels_add_entry.jsx';
 
 export default class DefaultChannelsSettings extends AbstractSettings {
     getAttributesList() {
@@ -49,7 +48,7 @@ export default class DefaultChannelsSettings extends AbstractSettings {
                 <strong>{'Default Channels: Default Channels and Categories'}</strong>
                 <div>
                     {this.getAttributesList()}
-                    <ModeratorAddEntry
+                    <DefaultChannelsAddEntry
                         onChange={this.handleChange}
                         id={this.state.attributes.size}
                     />
