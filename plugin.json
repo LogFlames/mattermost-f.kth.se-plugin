@@ -21,21 +21,26 @@
     "settings_schema": {
         "header": "f.kth.se-plugin settings",
         "footer": "",
-        "settings": [
-            {
-                "key": "DebugLogging",
-                "display_name": "Global: Log Debug Messages to Admin team",
-                "type": "bool",
-                "help_text": "Log all debug messages to the Admin team."
-            },
-            {
-                "key": "LoggingChannelID",
-                "display_name": "Global: Channel ID To Send Debug Messages In",
-                "type": "text",
-                "help_text": "Log all debug messages to the specified channel."
-            }
-        ],
+        "settings": null,
         "sections": [
+            {
+                "key": "debugging",
+                "title": "Debugging",
+                "settings": [
+                    {
+                        "key": "DebugLogging",
+                        "display_name": "Global: Log Debug Messages to Admin team",
+                        "type": "bool",
+                        "help_text": "Log all debug messages to the Admin team."
+                    },
+                    {
+                        "key": "LoggingChannelID",
+                        "display_name": "Global: Channel ID To Send Debug Messages In",
+                        "type": "text",
+                        "help_text": "Log all debug messages to the specified channel."
+                    }
+                ]
+            },
             {
                 "key": "text-emojis",
                 "title": "Text Emojis Module",
