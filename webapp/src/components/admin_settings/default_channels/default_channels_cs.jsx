@@ -1,4 +1,4 @@
-import AbstractSettings from './abstract_cs.jsx';
+import AbstractSettings from '../abstract/abstract_cs.jsx';
 
 import DefaultChannelsEntry from './default_channels_entry';
 import DefaultChannelsAddEntry from './default_channels_add_entry.jsx';

@@ -1,5 +1,5 @@
-import AbstractEntry from '../abstract_entry/abstract_entry.jsx';
-import ChannelsInput from '../inputs/channels_input';
+import AbstractEntry from '../abstract/abstract_entry/abstract_entry.jsx';
+import ChannelsInput from '../../inputs/channels_input/index.jsx';
 
 export default class DefaultChannelsEntry extends AbstractEntry {
     render() {

@@ -1,9 +1,9 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-import UsersInput from '../inputs/users_input';
-import TeamsInput from '../inputs/teams_input';
-import ChannelsInput from '../inputs/channels_input';
+import UsersInput from '../../inputs/users_input';
+import TeamsInput from '../../inputs/teams_input';
+import ChannelsInput from '../../inputs/channels_input';
 
 export default class AbstractEntry extends React.Component {
     static propTypes = {

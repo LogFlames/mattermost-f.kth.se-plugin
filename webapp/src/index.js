@@ -1,7 +1,7 @@
 import manifest from './manifest';
 
-import ModeratorSettings from './components/admin_settings/moderator_cs';
-import DefaultChannelsSettings from './components/admin_settings/default_channels_cs';
+import ModeratorSettings from './components/admin_settings/moderator/moderator_cs';
+import DefaultChannelsSettings from './components/admin_settings/default_channels/default_channels_cs';
 
 export default class Plugin {
     initialize(registry) {

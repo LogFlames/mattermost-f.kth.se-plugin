@@ -1,4 +1,4 @@
-import AbstractAddEntry from './abstract_add_entry.jsx';
+import AbstractAddEntry from '../abstract/abstract_add_entry.jsx';
 import DefaultChannelsEntry from './default_channels_entry';
 
 export default class DefaultChannelsAddEntry extends AbstractAddEntry {
