@@ -120,23 +120,23 @@
                 ]
             },
             {
-                "key": "standard-channels",
-                "title": "Standard Channels Module",
+                "key": "default-channels",
+                "title": "Default Channels Module",
                 "subtitle": "Sort users into standard channels for teams",
                 "header": "UNDER IMPLEMENTATION",
                 "footer": null,
                 "settings": [
                     {
-                        "key": "StandardChannels_OnOffBool",
-                        "display_name": "Standard Channels: Module enabled?",
+                        "key": "DefaultChannels_OnOffBool",
+                        "display_name": "Default Channels: Module enabled?",
                         "type": "bool",
-                        "help_text": "This module controls which standard channels to create for users who join a team"
+                        "help_text": "This module controls which default channels to create for users who join a team"
                     },
                     {
-                        "key": "StandardChannels_Custom",
-                        "display_name": "Standard Channels: Configuration",
+                        "key": "DefaultChannels_Custom",
+                        "display_name": "Default Channels: Configuration",
                         "type": "custom",
-                        "help_text": "Configuration for standard channels, one line per team."
+                        "help_text": "Configuration for default channels, one line per team."
                     }
                 ]
             },
