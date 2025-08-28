@@ -45,7 +45,7 @@ export default class AbstractSettings extends React.Component {
         return new Map(attributes.map((a, index) => [index, a]));
     }
 
-    getAttributesList(EntryType=AbstractEntry) {
+    getAttributesList(EntryType) {
         if (this.state.attributes.size === 0) {
             return (
                 <div style={styles.alertDiv}>
@@ -162,7 +162,7 @@ export default class AbstractSettings extends React.Component {
         this.props.setSaveNeeded();
     };
 
-    render(AddEntryType=AbstractAddEntry, Title='Entries') {
+    render(AddEntryType, Title) {
         return (
             <div>
                 <strong>{Title}</strong>

@@ -5,11 +5,11 @@ import DefaultChannelsAddEntry from './default_channels_add_entry.jsx';
 
 export default class DefaultChannelsSettings extends AbstractSettings {
     getAttributesList() {
-        return super.getAttributesList(EntryType=DefaultChannels);
+        return super.getAttributesList(DefaultChannels);
     }
 
     render() {
-        return super.render(AddEntryType=DefaultChannelsAddEntry, Title='Default Channels: Default Channels and Categories');
+        return super.render(DefaultChannelsAddEntry, 'Default Channels: Default Channels and Categories');
     }
 }
 
