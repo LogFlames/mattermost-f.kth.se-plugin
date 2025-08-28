@@ -6,9 +6,6 @@ import React from 'react';
 
 import ConfirmModal from '../widgets/confirmation_modal.tsx';
 
-import AbstractEntry from './abstract_entry/index.jsx';
-import AbstractAddEntry from './abstract_add_entry.jsx';
-
 export default class AbstractSettings extends React.Component {
     static propTypes = {
         id: PropTypes.string.isRequired,
