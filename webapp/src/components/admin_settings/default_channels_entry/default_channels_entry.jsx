@@ -2,11 +2,11 @@ import AbstractEntry from '../abstract_entry/abstract_entry.jsx';
 
 export default class DefaultChannels extends AbstractEntry {
     render() {
-        return super.render(
-            enableString1=1,
-            string1Name='Enter a category name',
-            enableChannels=1,
-        );
+        return super.render({
+            enableString1: true,
+            string1Name: 'Enter a category name',
+            enableChannels: true,
+        });
     }
 }
 

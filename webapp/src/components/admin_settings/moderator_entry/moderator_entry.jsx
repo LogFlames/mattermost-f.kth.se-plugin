@@ -2,7 +2,7 @@ import AbstractEntry from '../abstract_entry/abstract_entry.jsx';
 
 export default class ModeratorEntry extends AbstractEntry {
     render() {
-        return super.render(enableChannels=1);
+        return super.render({enableChannels: true});
     }
 }
 

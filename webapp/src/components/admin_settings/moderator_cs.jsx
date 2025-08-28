@@ -12,7 +12,6 @@ export default class ModeratorSettings extends AbstractSettings {
                 <strong>{'Moderator: Channels to Moderate (complain at messages without titles)'}</strong>
                 <div>
                     <ModeratorEntry
-                        key={key}
                         id={key}
                         is_active={value.IsActive}
                         string1={value.String1}

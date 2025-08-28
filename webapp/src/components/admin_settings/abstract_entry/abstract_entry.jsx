@@ -204,27 +204,26 @@ export default class AbstractEntry extends React.Component {
         this.props.onDelete(this.props.id);
     };
 
-    render(
-        enableBool=0,
-        boolName="",
-        enableInt=0,
-        intName="",
-        enableString1=0,
-        string1Name="",
-        enableString2=0,
-        string2Name="",
-        enableString3=0,
-        string3Name="",
-        enableString4=0,
-        string4Name="",
-        enableString5=0,
-        string5Name="",
-        enableUsers=0,
-        enableTeam=0,
-        enableTeams=0,
-        enableGroups=0,
-        enableChannels=0,
-    ) {
+    render({
+        enableBool, 
+        enableInt, 
+        intPlaceholder, 
+        enableString1, 
+        string1Placeholder, 
+        enableString2, 
+        string2Placeholder, 
+        enableString3, 
+        string3Placeholder, 
+        enableString4, 
+        string4Placeholder, 
+        enableString5, 
+        string5Placeholder, 
+        enableUsers, 
+        enableTeam, 
+        enableTeams, 
+        enableGroups, 
+        enableChannels
+    }={}) {
         let deleteButton = null;
         if (!this.props.hideDelete) {
             deleteButton = (
@@ -250,77 +249,67 @@ export default class AbstractEntry extends React.Component {
             <div>
             <div style={styles.attributeRow}>
             <div className='row'></div>
-                <div className='col-xs-12 col-sm-2'>
-                    <input
-                        id={`name-${this.props.id}`}
-                        className='form-control'
-                        type='text'
-                        placeholder='Attribute Label'
-                        value={this.state.name}
-                        onChange={this.handleNameInput}
-                    />
-                </div>
-                {enableString1 === 1 && (
+                {enableString1 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string1-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string1Name === '' ? 'String1' : string1Name}
+                    placeholder={string1Placeholder || 'string1'}
                     value={this.state.string1}
                     onChange={this.handleString1Input}
                     />
                 </div>
                 )}
-                {enableString2 === 1 && (
+                {enableString2 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string2-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string2Name === '' ? 'String2' : string2Name}
+                    placeholder={string2Placeholder || 'String2'}
                     value={this.state.string2}
                     onChange={this.handleString2Input}
                     />
                 </div>
                 )}
-                {enableString3 === 1 && (
+                {enableString3 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string3-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string3Name === '' ? 'String3' : string3Name}
+                    placeholder={string3Placeholder || 'String3'}
                     value={this.state.string3}
                     onChange={this.handleString3Input}
                     />
                 </div>
                 )}
-                {enableString4 === 1 && (
+                {enableString4 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string4-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string4Name === '' ? 'String4' : string4Name}
+                    placeholder={string4Placeholder || 'String4'}
                     value={this.state.string4}
                     onChange={this.handleString4Input}
                     />
                 </div>
                 )}
-                {enableString5 === 1 && (
+                {enableString5 && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`string5-${this.props.id}`}
                     className='form-control'
                     type='text'
-                    placeholder={string5Name === '' ? 'String5' : string5Name}
+                    placeholder={string5Placeholder || 'String5'}
                     value={this.state.string5}
                     onChange={this.handleString5Input}
                     />
                 </div>
                 )}
-                {enableBool === 1 && (
+                {enableBool && (
                 <div className='col-xs-12 col-sm-2'>
                     <label style={{marginRight: '8px'}}>
                     <input
@@ -330,23 +319,22 @@ export default class AbstractEntry extends React.Component {
                         onChange={this.handleBoolInput}
                         style={{marginRight: '4px'}}
                     />
-                    {boolName === '' ? 'Bool' : boolName}
                     </label>
                 </div>
                 )}
-                {enableInt === 1 && (
+                {enableInt && (
                 <div className='col-xs-12 col-sm-2'>
                     <input
                     id={`int-${this.props.id}`}
                     className='form-control'
                     type='number'
-                    placeholder={intName === '' ? 'Int' : intName}
+                    placeholder={intPlaceholder || 'Int'}
                     value={this.state.int || ''}
                     onChange={this.handleIntInput}
                     />
                 </div>
                 )}
-                {enableUsers === 1 && (
+                {enableUsers && (
                 <div className='col-xs-12 col-sm-3'>
                     <UsersInput
                     placeholder='@username1 @username2'
@@ -355,7 +343,7 @@ export default class AbstractEntry extends React.Component {
                     />
                 </div>
                 )}
-                {enableTeam === 1 && (
+                {enableTeam && (
                 <div className='col-xs-12 col-sm-3'>
                     <TeamsInput
                     placeholder='teamName'
@@ -365,7 +353,7 @@ export default class AbstractEntry extends React.Component {
                     />
                 </div>
                 )}
-                {enableTeams === 1 && (
+                {enableTeams && (
                 <div className='col-xs-12 col-sm-3'>
                     <TeamsInput
                     placeholder='teamName1 teamName2'
@@ -374,7 +362,7 @@ export default class AbstractEntry extends React.Component {
                     />
                 </div>
                 )}
-                {enableChannels === 1 && (
+                {enableChannels && (
                 <div className='col-xs-12 col-sm-3'>
                     <ChannelsInput
                     placeholder='~channel1 ~channel2'
@@ -383,7 +371,7 @@ export default class AbstractEntry extends React.Component {
                     />
                 </div>
                 )}
-                {enableGroups === 1 && (
+                {enableGroups && (
                 <div className='col-xs-12 col-sm-3'>
                     <input
                     id={`groups-${this.props.id}`}
