@@ -7,7 +7,6 @@ export default class Plugin {
     initialize(registry) {
         registry.registerAdminConsoleCustomSetting('ModeratorBot_Custom', ModeratorSettings);
         registry.registerAdminConsoleCustomSetting('DefaultChannels_Custom', DefaultChannelsSettings);
-        console.log("testtest");
     }
 }
 
