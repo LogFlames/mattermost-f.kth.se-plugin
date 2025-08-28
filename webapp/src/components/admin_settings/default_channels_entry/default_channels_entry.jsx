@@ -2,11 +2,37 @@ import AbstractEntry from '../abstract_entry/abstract_entry.jsx';
 
 export default class DefaultChannels extends AbstractEntry {
     render() {
-        return super.render({
-            enableString1: true,
-            string1Name: 'Enter a category name',
-            enableChannels: true,
-        });
+        let errorLabel = null;
+        if (this.state.error) {
+            errorLabel = this.state.error;
+        }
+
+        return (
+            <div
+                style={styles.attributeRow}
+            >
+                <div className='col-xs-12 col-sm-3'>
+                <input
+                    id={`string1-${this.props.id}`}
+                    className='form-control'
+                    type='text'
+                    placeholder='categoryName'
+                    value={this.state.string1}
+                    onChange={this.handleString1Input}
+                />
+                </div>
+                <div className='col-xs-12 col-sm-3'>
+                    <ChannelsInput
+                        placeholder='~channel1 ~channel2'
+                        channels={this.state.channels}
+                        onChange={this.handleChannelsInput}
+                        multi={true}
+                    />
+                </div>
+                <div style={styles.errorLabel}>
+                    {errorLabel}
+                </div>
+            </div>);
     }
 }
 

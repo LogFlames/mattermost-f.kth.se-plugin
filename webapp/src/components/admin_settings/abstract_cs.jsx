@@ -90,7 +90,22 @@ export default class AbstractSettings extends React.Component {
         this.setState({showDeleteModal: false});
     };
 
-    handleChange = ({id, users, team, teams, channels, groups}) => {
+    handleChange = ({
+                id,
+                is_active,
+                string1,
+                string2,
+                string3,
+                string4,
+                string5,
+                bool,
+                int,
+                users,
+                team,
+                teams,
+                groups,
+                channels,
+            }) => {
         let userIds = [];
         if (users) {
             userIds = users.map((v) => {
@@ -128,6 +143,14 @@ export default class AbstractSettings extends React.Component {
         }
 
         this.state.attributes.set(id, {
+            IsActive: is_active,
+            String1: string1,
+            String2: string2,
+            String3: string3,
+            String4: string4,
+            String5: string5,
+            Bool: bool,
+            Int: int,
             UserIDs: userIds,
             TeamID: teamId,
             TeamIDs: teamIds,
