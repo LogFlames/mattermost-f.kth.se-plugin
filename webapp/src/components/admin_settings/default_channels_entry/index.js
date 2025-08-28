@@ -6,7 +6,7 @@ import {getProfilesByIds} from 'mattermost-redux/actions/users';
 import {getTeam, getTeams} from 'mattermost-redux/actions/teams';
 import {getChannel} from 'mattermost-redux/actions/channels';
 
-import AbstractEntry from './abstract_entry.jsx';
+import DefaultChannelsEntry from './default_channels_entry.jsx';
 
 function mapDispatchToProps(dispatch) {
     return {
@@ -20,4 +20,4 @@ function mapDispatchToProps(dispatch) {
     };
 }
 
-export default connect(null, mapDispatchToProps)(AbstractEntry);
+export default connect(null, mapDispatchToProps)(DefaultChannelsEntry);
