@@ -4,7 +4,7 @@
 import PropTypes from 'prop-types';
 import React from 'react';
 
-import ConfirmModal from '../widgets/confirmation_modal.tsx';
+import ConfirmModal from '../../widgets/confirmation_modal.tsx';
 
 export default class AbstractSettings extends React.Component {
     static propTypes = {
