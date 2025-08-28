@@ -1,7 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-import AbstractEntry from './abstract_entry';
 export default class AbstractAddEntry extends React.Component {
     static propTypes = {
         id: PropTypes.string,

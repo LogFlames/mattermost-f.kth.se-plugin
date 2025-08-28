@@ -1,7 +1,7 @@
 import React from 'react';
 
 import AbstractSettings from './abstract_cs.jsx';
-import ModeratorEntry from './moderator_entry/index.jsx';
+import ModeratorEntry from './moderator_entry';
 
 export default class ModeratorSettings extends AbstractSettings {
     render() {
