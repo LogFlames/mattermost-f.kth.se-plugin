@@ -1,4 +1,4 @@
-import AbstractEntry from '../abstract_entry';
+import AbstractEntry from '../abstract_entry/abstract_entry.jsx';
 import ChannelsInput from '../inputs/channels_input';
 
 export default class ModeratorEntry extends AbstractEntry {
