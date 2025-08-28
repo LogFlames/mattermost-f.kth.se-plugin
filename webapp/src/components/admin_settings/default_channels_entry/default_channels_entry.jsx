@@ -1,6 +1,6 @@
 import AbstractEntry from '../abstract_entry/abstract_entry.jsx';
 
-export default class DefaultChannels extends AbstractEntry {
+export default class DefaultChannelsEntry extends AbstractEntry {
     render() {
         let errorLabel = null;
         if (this.state.error) {

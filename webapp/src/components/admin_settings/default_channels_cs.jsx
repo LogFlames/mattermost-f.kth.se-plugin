@@ -1,11 +1,11 @@
 import AbstractSettings from './abstract_cs.jsx';
 
-import DefaultChannels from './default_channels_entry/default_channels_entry.jsx';
+import DefaultChannelsEntry from './default_channels_entry/default_channels_entry.jsx';
 import DefaultChannelsAddEntry from './default_channels_add_entry.jsx';
 
 export default class DefaultChannelsSettings extends AbstractSettings {
     getAttributesList() {
-        return super.getAttributesList(DefaultChannels);
+        return super.getAttributesList(DefaultChannelsEntry);
     }
 
     render() {
