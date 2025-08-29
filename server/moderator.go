@@ -33,7 +33,5 @@ func (p *Plugin) Moderator_MessageHasBeenPosted(post *model.Post, configuration 
 				"\n" +
 				"Consider editing in a title in the message you just sent.\n"),
 		})
-
-		p.debug("Moderator_MessageHasBeenPosted: Successfully sent DM to user: " + post.UserId)
 	}
 }

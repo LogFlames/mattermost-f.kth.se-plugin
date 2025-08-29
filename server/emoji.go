@@ -53,8 +53,6 @@ func (p *Plugin) compileEmojiRegexes() []*regexp.Regexp {
 
 func (p *Plugin) InsertZeroWidthSpaces(post *model.Post, configuration *configuration) (*model.Post, string) {
 	if configuration.ConvertToTextEmojies {
-		p.debug("Inserting zero-width spaces into text-emojis")
-
 		newMessage := post.Message
 		for _, regex := range p.emoji_regexes {
 			matches := regex.FindAllStringIndex(newMessage, -1)
