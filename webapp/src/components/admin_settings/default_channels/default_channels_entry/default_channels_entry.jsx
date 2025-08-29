@@ -27,7 +27,7 @@ export default class DefaultChannelsEntry extends AbstractEntry {
                         placeholder='~channel1 ~channel2'
                         channels={this.state.channels}
                         onChange={this.handleChannelsInput}
-                        multi={true}
+                        isMulti={true}
                     />
                 </div>
                 <div style={styles.errorLabel}>

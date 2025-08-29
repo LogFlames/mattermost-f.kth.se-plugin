@@ -39,12 +39,11 @@ export default class AbstractSelectInput extends React.Component {
         }
 
         this.initValue(this.props.value).then((values) => {
-            console.log("Initial values: ", values);
             this.setState({value: values});
         });
     }
 
-    initValue(values) {
+    async initValue(values) {
         if (!values) {
             return [];
         }
@@ -55,11 +54,11 @@ export default class AbstractSelectInput extends React.Component {
 
         var ret;
         if (this.type === "teams") {
-            ret = this.fetchTeams(values);
+            ret = await this.fetchTeams(values);
         } else if (this.type === "channels") {
-            ret = this.fetchChannels(values);
+            ret = await this.fetchChannels(values);
         } else if (this.type === "users") {
-            ret = this.fetchUsers(values);
+            ret = await this.fetchUsers(values);
         } else {
             return [];
         }
@@ -68,6 +67,13 @@ export default class AbstractSelectInput extends React.Component {
     }
 
     newValue = (newV) => {
+        if (!newV) {
+            this.setState({value: this.isMulti ? [] : null});
+            this.props.onChange(this.props.id, this.isMulti ? [] : null);
+            this.props.setSaveNeeded();
+            return;
+        }
+
         if (!Array.isArray(newV)) {
             newV = [newV];
         }
@@ -87,17 +93,32 @@ export default class AbstractSelectInput extends React.Component {
     };
 
     async fetchTeams(teamIds) {
-        const teams = await Promise.all(teamIds.map(this.props.actions.getTeam));
+        const teams = await Promise.all(teamIds.filter(teamId => teamId).map(this.props.actions.getTeam));
         return teams.filter(team => !team.err).map(team => team.data);
     }
 
     async fetchChannels(channelIds) {
-        const channels = await Promise.all(channelIds.map(this.props.actions.getChannel));
-        return channels.filter(channel => !channel.err).map(channel => channel.data);
+        const channels = await Promise.all(channelIds.filter(channelId => channelId).map(async (channelId) => {
+            const {data: channelData, err: channelErr} = await this.props.actions.getChannel(channelId);
+            if (channelErr) {
+                return {err: channelErr};
+            }
+
+            const {data: teamData, err: teamErr} = await this.props.actions.getTeam(channelData.team_id);
+
+            let team_display_name = '<Team Not Found>';
+            if (!teamErr) {
+                team_display_name = teamData.display_name;
+            }
+
+            return {...channelData, team_display_name};
+        }));
+
+        return channels;
     }
 
     async fetchUsers(userIds) {
-        const users = await Promise.all(userIds.map(this.props.actions.getUser));
+        const users = await Promise.all(userIds.filter(userId => userId).map(this.props.actions.getUser));
         return users.filter(user => !user.err).map(user => user.data);
     }
 

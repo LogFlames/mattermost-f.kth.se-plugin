@@ -41,7 +41,7 @@ export default class TeamsInput extends React.PureComponent {
             );
         }
 
-        return option;
+        return (<React.Fragment>{"<Invalid option>"}</React.Fragment>);
     };
 
     searchTeams = debounce((term, callback) => {

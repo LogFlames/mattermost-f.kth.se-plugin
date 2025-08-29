@@ -41,7 +41,7 @@ export default class UsersInput extends React.Component {
             );
         }
 
-        return option;
+        return (<React.Fragment>{"<Invalid option>"}</React.Fragment>);
     };
 
     debouncedSearchProfiles = debounce((term, callback) => {
