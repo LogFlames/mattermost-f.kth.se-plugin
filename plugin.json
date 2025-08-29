@@ -197,10 +197,33 @@
                         "display_name": "Translator: Channels Monitored by the Bot",
                         "type": "custom",
                         "help_text": "A list of channels where the bot will monitor for messages to suggest translations of, as well as its behavior per channel."
+                    },
+                    {
+                        "key": "Team",
+                        "display_name": "Team test",
+                        "type": "custom",
+                        "help_text": "aeousnth"
+                    },
+                    {
+                        "key": "Teams",
+                        "display_name": "Teams test",
+                        "type": "custom",
+                        "help_text": "aeousnth"
+                    },
+                    {
+                        "key": "User",
+                        "display_name": "User test",
+                        "type": "custom",
+                        "help_text": "aeousnth"
+                    },
+                    {
+                        "key": "Users",
+                        "display_name": "Users test",
+                        "type": "custom",
+                        "help_text": "aeousnth"
                     }
                 ]
             }
-
         ]
     }
 }
