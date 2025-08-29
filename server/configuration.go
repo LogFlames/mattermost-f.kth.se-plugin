@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -27,11 +26,7 @@ type configuration struct {
 	JoinLeaveFree_BotUserId string
 
 	ModeratorBot_OnOffBool bool
-	ModeratorBot_Custom    []ModeratorBot_Custom
-}
-
-type ModeratorBot_Custom struct {
-	ChannelIDs []string
+	ModeratorBot_Channels  []string
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -39,13 +34,8 @@ type ModeratorBot_Custom struct {
 func (c *configuration) Clone() *configuration {
 	var clone = *c
 
-	clone.ModeratorBot_Custom = make([]ModeratorBot_Custom, len(c.ModeratorBot_Custom))
-	for i := range c.ModeratorBot_Custom {
-		mbCustom := ModeratorBot_Custom{}
-		mbCustom.ChannelIDs = make([]string, len(c.ModeratorBot_Custom[i].ChannelIDs))
-		copy(mbCustom.ChannelIDs, c.ModeratorBot_Custom[i].ChannelIDs)
-		clone.ModeratorBot_Custom[i] = mbCustom
-	}
+	clone.ModeratorBot_Channels = make([]string, len(c.ModeratorBot_Channels))
+	copy(clone.ModeratorBot_Channels, c.ModeratorBot_Channels)
 
 	return &clone
 }
@@ -110,16 +100,12 @@ func (p *Plugin) OnConfigurationChange() error {
 
 	if configuration.ModeratorBot_OnOffBool {
 		p.moderator_channels = make(map[string]bool)
-		for _, mbCustom := range configuration.ModeratorBot_Custom {
-			for _, channelID := range mbCustom.ChannelIDs {
-				p.moderator_channels[channelID] = true
-			}
+		for _, channelID := range configuration.ModeratorBot_Channels {
+			p.moderator_channels[channelID] = true
 		}
 	} else {
 		p.moderator_channels = make(map[string]bool)
 	}
-
-	p.debug(fmt.Sprintf("%v", configuration.ModeratorBot_Custom))
 
 	return nil
 }

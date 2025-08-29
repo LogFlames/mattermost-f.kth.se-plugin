@@ -1,11 +1,11 @@
 import manifest from './manifest';
 
-import ModeratorSettings from './components/admin_settings/moderator/moderator_cs';
+import ModeratorBotChannels from './components/admin_settings/single_type_input/moderator_bot_channels';
 import DefaultChannelsSettings from './components/admin_settings/default_channels/default_channels_cs';
 
 export default class Plugin {
     initialize(registry) {
-        registry.registerAdminConsoleCustomSetting('ModeratorBot_Custom', ModeratorSettings);
+        registry.registerAdminConsoleCustomSetting('ModeratorBot_Channels', ModeratorBotChannels);
         registry.registerAdminConsoleCustomSetting('DefaultChannels_Custom', DefaultChannelsSettings);
     }
 }
