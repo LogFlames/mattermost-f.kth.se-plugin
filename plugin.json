@@ -36,7 +36,7 @@
                     {
                         "key": "LoggingChannelID",
                         "display_name": "Global: Channel ID To Send Debug Messages In",
-                        "type": "text",
+                        "type": "custom",
                         "help_text": "Log all debug messages to the specified channel."
                     }
                 ]
@@ -72,7 +72,7 @@
                     {
                         "key": "JoinLeaveFree_BotUserId",
                         "display_name": "Join/Leave-free: Bot User ID",
-                        "type": "text",
+                        "type": "custom",
                         "help_text": "The ID of the bot that will decide which channels should be join/leave-free."
                     }
                 ]
