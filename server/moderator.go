@@ -16,6 +16,10 @@ func (p *Plugin) Moderator_MessageHasBeenPosted(post *model.Post, configuration 
 		return
 	}
 
+	if post.RootId != "" {
+		return
+	}
+
 	if !strings.HasPrefix(post.Message, "#") || strings.HasPrefix(post.Message, "######") {
 		p.API.SendEphemeralPost(post.UserId, &model.Post{
 			UserId:    p.pluginBot.UserId,
