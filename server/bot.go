@@ -49,3 +49,52 @@ func (p *Plugin) EnsureBot() error {
 
 	return nil;
 }
+
+func (p *Plugin) EnsureReactionsBot() error {
+	reactionsBot := model.Bot{
+		Username:    "reactions",
+		DisplayName: "Alla som har reagerat",
+		Description: "Tagga alla som har reagerat på första meddelandet.",
+	}
+
+	botId, err := p.API.KVGet("reactionsBotId")
+	if err != nil {
+		p.API.LogError(err.Error())
+		return err
+	}
+
+	if botId == nil {
+		createdBot, err := p.API.CreateBot(&reactionsBot)
+		if err != nil {
+			// Bot may already exist from a previous install — look it up by username
+			user, userErr := p.API.GetUserByUsername(reactionsBot.Username)
+			if userErr != nil {
+				p.API.LogError("EnsureReactionsBot: CreateBot failed and could not find existing user: " + err.Error())
+				return err
+			}
+			p.reactionsBotUserId = user.Id
+		} else {
+			p.reactionsBotUserId = createdBot.UserId
+		}
+
+		if err := p.API.KVSet("reactionsBotId", []byte(p.reactionsBotUserId)); err != nil {
+			p.API.LogError(err.Error())
+			return err
+		}
+	} else {
+		p.reactionsBotUserId = string(botId)
+
+		_, err := p.API.PatchBot(p.reactionsBotUserId, &model.BotPatch{
+			Username:    &reactionsBot.Username,
+			DisplayName: &reactionsBot.DisplayName,
+			Description: &reactionsBot.Description,
+		})
+
+		if err != nil {
+			p.API.LogError(err.Error())
+			return err
+		}
+	}
+
+	return nil
+}

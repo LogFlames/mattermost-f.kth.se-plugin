@@ -27,6 +27,8 @@ type configuration struct {
 
 	ModeratorBot_OnOffBool bool
 	ModeratorBot_Channels  []string
+
+	Reactions_OnOffBool bool
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if

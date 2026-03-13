@@ -120,6 +120,21 @@
                 ]
             },
             {
+                "key": "reactions",
+                "title": "Reactions Mention Module",
+                "subtitle": "Expands @reactions in thread replies to mention all reactors on the root post.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "Reactions_OnOffBool",
+                        "display_name": "Reactions: Module enabled?",
+                        "type": "bool",
+                        "help_text": "When enabled, typing @reactions in a thread reply will be expanded to mention all users who reacted to the root post."
+                    }
+                ]
+            },
+            {
                 "key": "default-channels",
                 "title": "Default Channels Module",
                 "subtitle": "Sort users into standard channels for teams",

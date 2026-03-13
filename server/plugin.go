@@ -26,6 +26,9 @@ type Plugin struct {
 	// Moderator
 	moderator_channels map[string]bool
 
+	// Reactions
+	reactionsBotUserId string
+
 	// emoji regexes
 	emoji_regexes []*regexp.Regexp
 }
@@ -47,6 +50,13 @@ func (p *Plugin) FilterPost(post *model.Post) (*model.Post, string) {
 
 	if configuration.JoinLeaveFree_OnOffBool {
 		post, rejectReason := p.JoinLeaveFree_Filter(post, configuration)
+		if rejectReason != "" {
+			return post, rejectReason
+		}
+	}
+
+	if configuration.Reactions_OnOffBool {
+		post, rejectReason := p.Reactions_Filter(post, configuration)
 		if rejectReason != "" {
 			return post, rejectReason
 		}
@@ -108,6 +118,10 @@ func (p *Plugin) OnActivate() error {
 	p.emoji_regexes = p.compileEmojiRegexes()
 
 	if err := p.EnsureBot(); err != nil {
+		return err
+	}
+
+	if err := p.EnsureReactionsBot(); err != nil {
 		return err
 	}
 
