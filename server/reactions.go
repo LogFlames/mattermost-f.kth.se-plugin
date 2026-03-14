@@ -72,7 +72,7 @@ func (p *Plugin) Reactions_Filter(post *model.Post, configuration *configuration
 
 	// Replace the leading @reactions with the expanded mention list
 	mentionList := strings.Join(usernames, ":")
-	replacement := "[@reactions ](" + mentionList + ")"
+	replacement := "[@Alla som har reagerat](" + mentionList + ")"
 	post.Message = replacement + post.Message[len("@reactions"):]
 
 	p.debug("Reactions: Replacement done")

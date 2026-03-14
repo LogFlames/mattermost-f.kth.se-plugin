@@ -53,7 +53,7 @@ func (p *Plugin) EnsureBot() error {
 func (p *Plugin) EnsureReactionsBot() error {
 	reactionsBot := model.Bot{
 		Username:    "reactions",
-		DisplayName: "Alla som har reagerat",
+		DisplayName: "Tagga @reactions först i meddelandet.",
 		Description: "Tagga alla som har reagerat på första meddelandet.",
 	}
 
