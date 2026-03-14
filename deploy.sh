@@ -1,3 +1,9 @@
+nv=$(node --version)
+if [ $nv != "v16.16.0" ]; then
+    echo "Please use node v16.16.0"
+    exit 1
+fi
+
 old_size=$(echo "/opt/mattermost/bin/mmctl config get FileSettings.MaxFileSize --local" | ssh fmm "/bin/bash")
 echo "Saved original value of max file upload: $old_size"
 
