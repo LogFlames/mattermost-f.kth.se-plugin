@@ -10,7 +10,7 @@ export default class Plugin {
         registry.registerAdminConsoleCustomSetting('DefaultChannels_Custom', DefaultChannelsSettings);
         registry.registerAdminConsoleCustomSetting('ModeratorBot_Channels', ModeratorBotChannels, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('JoinLeaveFree_BotUserId', JoinLeaveFreeBotUserId, {showTitle: true});
-        registry.registerAdminConsoleCustomSetting('LoggingChannelId', LoggingChannelId, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('LoggingChannelID', LoggingChannelId, {showTitle: true});
     }
 }
 

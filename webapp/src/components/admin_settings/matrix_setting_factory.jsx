@@ -159,7 +159,7 @@ const MatrixEntry = ({fields, id, value, onChange, onDelete, hideDelete, actions
         onChange(fields.reduce((record, currentField) => {
             record[currentField.name] = serializeValue(currentField, nextHydratedValue[currentField.name]);
             return record;
-        }, {}));
+        }, {...value}));
     };
 
     return (
