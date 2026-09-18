@@ -2,7 +2,7 @@
 
 # Matrix setting factory
 
-> *Written by GPT-5.6 Luna.*
+> Written by GPT-5.6 Luna.
 
 `matrix_setting_factory.jsx` creates an Admin Console custom setting from a list of named fields.
 
