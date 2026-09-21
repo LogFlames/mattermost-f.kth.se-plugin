@@ -84,7 +84,7 @@ func TestDefaultChannelsConsoleSharesCommandJobs(t *testing.T) {
 	p.SetAPI(api)
 	base.users = []*model.User{{Id: "alice"}, {Id: "bob"}}
 	base.channel.Type = model.ChannelTypePrivate
-	base.settings["defaultchannels_custom"] = []defaultChannelEntry{{String1: "Old category", ChannelIDs: []string{"other"}}}
+	base.settings["defaultchannels_custom"] = []string{"other"}
 	for i := 0; i < 2; i++ {
 		w := consoleRequest(p, http.MethodPost, "system-admin", `{"channel_id":"channel","action":"set"}`)
 		if w.Code != http.StatusOK || base.saves != 1 || len(base.added) != 0 {
@@ -107,15 +107,14 @@ func TestDefaultChannelsConsoleSharesCommandJobs(t *testing.T) {
 	}
 	data, err := json.Marshal(base.settings["defaultchannels_custom"])
 	if base.settings["UnrelatedSetting"] != "keep" || err != nil || string(data) != `["other"]` {
-		t.Fatalf("damaged unrelated configuration or failed to migrate: %s, err=%v", data, err)
+		t.Fatalf("damaged unrelated configuration or failed to save flat IDs: %s, err=%v", data, err)
 	}
 }
 
-func TestDefaultChannelsConsoleMigrationOnSave(t *testing.T) {
+func TestDefaultChannelsConsoleSaveDoesNotBackfill(t *testing.T) {
 	p, base := newDefaultChannelTestPlugin(t)
 	p.SetAPI(&defaultChannelsHTTPTestAPI{defaultChannelTestAPI: base})
-	legacy := []defaultChannelEntry{{String1: "Old category", ChannelIDs: []string{"channel", "channel"}}}
-	base.settings["defaultchannels_custom"] = legacy
+	base.settings["defaultchannels_custom"] = []string{"channel", "channel"}
 	if err := p.OnConfigurationChange(); err != nil {
 		t.Fatal(err)
 	}
@@ -128,8 +127,8 @@ func TestDefaultChannelsConsoleMigrationOnSave(t *testing.T) {
 	if err != nil || string(value) != `["channel"]` || base.saves != 0 || len(base.kv) != 0 {
 		t.Fatalf("GET must normalize without saving/queuing jobs: %s", w.Body)
 	}
-	if _, ok := base.settings["defaultchannels_custom"].([]defaultChannelEntry); !ok {
-		t.Fatal("reading config migrated persisted settings")
+	if !slices.Equal(base.settings["defaultchannels_custom"].([]string), []string{"channel", "channel"}) {
+		t.Fatal("reading config changed persisted settings")
 	}
 	// Simulate the enclosing console's Save using the staged API value.
 	base.settings["defaultchannels_custom"] = result["value"]
@@ -137,11 +136,11 @@ func TestDefaultChannelsConsoleMigrationOnSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !slices.Equal(p.getConfiguration().defaultChannelIDs(), []string{"channel"}) || len(base.kv) != 0 || len(base.added) != 0 {
-		t.Fatal("format migration changed defaults or queued a backfill")
+		t.Fatal("saving unchanged defaults queued a backfill or changed channel IDs")
 	}
 	defaultCommand(t, p, "set")
 	if base.saves != 1 || len(base.kv) != 0 {
-		t.Fatal("re-setting a migrated default queued another backfill")
+		t.Fatal("re-setting an existing default queued another backfill")
 	}
 }
 
@@ -150,7 +149,7 @@ func TestDefaultChannelsConsoleUsesLiveTeamAndCategory(t *testing.T) {
 	p.SetAPI(&defaultChannelsHTTPTestAPI{defaultChannelTestAPI: base})
 	base.channels["b"] = model.Channel{Id: "b", TeamId: "other", Name: "private", Type: model.ChannelTypePrivate}
 	base.channels["town"] = model.Channel{Id: "town", TeamId: "team", Name: model.DefaultChannelName, Type: model.ChannelTypeOpen}
-	base.settings["defaultchannels_custom"] = []defaultChannelEntry{{String1: "Ignored label", ChannelIDs: []string{"channel", "b", "channel"}}}
+	base.settings["defaultchannels_custom"] = []string{"channel", "b", "channel"}
 	for _, category := range []string{"News", "Updated category"} {
 		base.channel.DefaultCategoryName = category
 		w := consoleRequest(p, http.MethodGet, "system-admin", "")

@@ -19,21 +19,13 @@ import (
 const defaultChannelJobPrefix = "default_channel_add_"
 const defaultChannelDescription = "Default channels automatically add new team members. Setting a channel as default also adds all current team members."
 
-// Read legacy category-labelled groups as well as the current flat ID list.
-// Categories belong to Mattermost's channels and are never saved here.
+// Default channels are a flat ID list. Categories belong to Mattermost's channels.
 type defaultChannelList []string
 
 func (ids *defaultChannelList) UnmarshalJSON(data []byte) error {
 	var flat []string
 	if err := json.Unmarshal(data, &flat); err != nil {
-		var legacy []struct{ ChannelIDs []string }
-		if err := json.Unmarshal(data, &legacy); err != nil {
-			return err
-		}
-		flat = nil // A failed string-slice decode can leave partially decoded elements.
-		for _, entry := range legacy {
-			flat = append(flat, entry.ChannelIDs...)
-		}
+		return err
 	}
 	normalized := make(defaultChannelList, 0, len(flat))
 	for _, id := range flat {

@@ -49,8 +49,8 @@ export default class DefaultChannelsSettings extends React.PureComponent {
             if (!this.unmounted) {
                 this.setState({channels: result.channels, enabled: result.enabled, message, selected: null});
 
-                // Stage legacy-format conversion for the console's next Save.
-                // Reading settings never persists config or starts a backfill.
+                // Keep the enclosing form in sync with the saved channel IDs,
+                // including defaults changed by commands since the form opened.
                 if (!this.props.disabled && !this.props.setByEnv && JSON.stringify(this.props.value || []) !== JSON.stringify(result.value)) {
                     this.props.onChange(this.props.id, result.value);
                 }

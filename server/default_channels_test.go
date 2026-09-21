@@ -15,19 +15,11 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
-// Legacy wire-format fixture; production code only uses a flat list internally.
-type defaultChannelEntry struct {
-	String1    string
-	ChannelIDs []string
-}
-
 func TestDefaultChannelListFormats(t *testing.T) {
 	for _, tc := range []struct{ name, input, want string }{
-		{"legacy", `[{"String1":"Ignored","ChannelIDs":["b","a"]},{"ChannelIDs":["a","c"]},{"ChannelIDs":null}]`, `["b","a","c"]`},
 		{"flat", `["b","a","b","c"]`, `["b","a","c"]`},
 		{"empty", `[]`, `[]`},
 		{"null", `null`, `[]`},
-		{"empty groups", `[{"String1":"Empty","ChannelIDs":[]}]`, `[]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ids := defaultChannelList{"previous"}
@@ -40,7 +32,10 @@ func TestDefaultChannelListFormats(t *testing.T) {
 			}
 		})
 	}
-	for _, input := range []string{`{}`, `[42]`, `["a",{"ChannelIDs":["b"]}]`, `[{"ChannelIDs":"a"}]`} {
+	for _, input := range []string{
+		`{}`, `[42]`, `["a",{"ChannelIDs":["b"]}]`, `[{"ChannelIDs":"a"}]`,
+		`[{"String1":"Old category","ChannelIDs":["b","a"]}]`, `[{"ChannelIDs":[]}]`,
+	} {
 		ids := defaultChannelList{"keep"}
 		if err := json.Unmarshal([]byte(input), &ids); err == nil || !slices.Equal(ids, []string{"keep"}) {
 			t.Fatalf("invalid input %s was accepted or changed existing IDs: %v", input, ids)
@@ -70,7 +65,7 @@ func newDefaultChannelTestPlugin(t *testing.T) (*Plugin, *defaultChannelTestAPI)
 	}
 	p := &Plugin{pluginBot: model.Bot{UserId: "bot"}}
 	api := &defaultChannelTestAPI{categoryTestAPI: base, p: p, left: map[string]bool{}, settings: map[string]any{
-		"defaultchannels_onoffbool": true, "defaultchannels_custom": []defaultChannelEntry{}, "UnrelatedSetting": "keep",
+		"defaultchannels_onoffbool": true, "defaultchannels_custom": []string{}, "UnrelatedSetting": "keep",
 	}}
 	p.SetAPI(api)
 	if err := p.OnConfigurationChange(); err != nil {
@@ -286,10 +281,7 @@ func TestDefaultChannelListAndUnset(t *testing.T) {
 	api.channels["b"] = model.Channel{Id: "b", Name: "beta", TeamId: "team", Type: model.ChannelTypePrivate}
 	api.channels["foreign"] = model.Channel{Id: "foreign", Name: "secret", TeamId: "other", Type: model.ChannelTypeOpen}
 	api.channels["archived"] = model.Channel{Id: "archived", Name: "old", TeamId: "team", Type: model.ChannelTypeOpen, DeleteAt: 1}
-	api.settings["defaultchannels_custom"] = []defaultChannelEntry{
-		{String1: "Legacy category", ChannelIDs: []string{"channel", "foreign", "b"}},
-		{ChannelIDs: []string{"channel", "archived", "missing"}},
-	}
+	api.settings["defaultchannels_custom"] = []string{"channel", "foreign", "b", "channel", "archived", "missing"}
 	want := defaultChannelDescription + "\n\n* ~beta (category: Channels)\n* ~general (category: News)"
 	if got := defaultCommand(t, p, "list"); got != want {
 		t.Fatalf("list=%q want=%q", got, want)
@@ -335,7 +327,7 @@ func TestDefaultChannelListSeparatesTownSquare(t *testing.T) {
 				ids = append(ids, "channel")
 				want = defaultChannelDescription + "\n\n* ~general (category: News)"
 			}
-			api.settings["defaultchannels_custom"] = []defaultChannelEntry{{ChannelIDs: ids}}
+			api.settings["defaultchannels_custom"] = ids
 			want += "\n\n**Default channel (town-square):** ~town-square (category: " + tc.want + ")"
 			if got := defaultCommand(t, p, "list"); got != want {
 				t.Fatalf("list=%q want=%q", got, want)
@@ -353,7 +345,7 @@ func TestDefaultChannelJoinAndCancellation(t *testing.T) {
 			p, api := newDefaultChannelTestPlugin(t)
 			api.users = []*model.User{{Id: "new-user"}}
 			api.channels["foreign"] = model.Channel{Id: "foreign", TeamId: "other", Type: model.ChannelTypeOpen}
-			api.settings["defaultchannels_custom"] = []defaultChannelEntry{{ChannelIDs: []string{"channel", "foreign", "channel"}}}
+			api.settings["defaultchannels_custom"] = []string{"channel", "foreign", "channel"}
 			if err := p.OnConfigurationChange(); err != nil {
 				t.Fatal(err)
 			}
@@ -431,7 +423,7 @@ func TestDefaultChannelConfigKeyCasing(t *testing.T) {
 		t.Run(key, func(t *testing.T) {
 			p, api := newDefaultChannelTestPlugin(t)
 			delete(api.settings, "defaultchannels_custom")
-			api.settings[key] = []defaultChannelEntry{{ChannelIDs: []string{"other"}}}
+			api.settings[key] = []string{"other"}
 			defaultCommand(t, p, "set")
 			if !slices.Equal(p.getConfiguration().defaultChannelIDs(), []string{"other", "channel"}) {
 				t.Fatal("lost saved channel IDs")
@@ -456,7 +448,7 @@ func TestDefaultChannelThousandJoinsRestartAndRetry(t *testing.T) {
 		api.channels[id] = model.Channel{Id: id, TeamId: "team", Type: model.ChannelTypeOpen}
 	}
 	api.channels["private"] = model.Channel{Id: "private", TeamId: "team", Type: model.ChannelTypePrivate}
-	api.settings["defaultchannels_custom"] = []defaultChannelEntry{{ChannelIDs: ids}}
+	api.settings["defaultchannels_custom"] = ids
 	if err := p.OnConfigurationChange(); err != nil {
 		t.Fatal(err)
 	}

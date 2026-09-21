@@ -27,11 +27,11 @@ afterEach(() => {
 });
 
 it.each([
-    ['legacy', [{String1: 'Ignored', ChannelIDs: ['b', 'a', 'b']}], {}, true],
-    ['flat', ['b', 'a'], {}, false],
-    ['disabled', [{ChannelIDs: ['b', 'a']}], {disabled: true}, false],
-    ['environment override', [{ChannelIDs: ['b', 'a']}], {setByEnv: true}, false],
-])('stages only writable legacy settings: %s', async (name, value, flags, shouldStage) => {
+    ['stale', ['b'], {}, true],
+    ['current', ['b', 'a'], {}, false],
+    ['disabled', ['b'], {disabled: true}, false],
+    ['environment override', ['b'], {setByEnv: true}, false],
+])('syncs only writable stale settings: %s', async (name, value, flags, shouldStage) => {
     const onChange = jest.fn();
     await act(async () => {
         ReactDOM.render(
@@ -54,7 +54,7 @@ it.each([
     expect(client.doFetch).toHaveBeenCalledWith(expect.any(String), {method: 'get'});
 });
 
-it('does not stage a migration if the saved configuration cannot be read', async () => {
+it('does not change the form if the saved configuration cannot be read', async () => {
     client.doFetch.mockRejectedValue(new Error('Unavailable'));
     const onChange = jest.fn();
     await act(async () => {
@@ -62,7 +62,7 @@ it('does not stage a migration if the saved configuration cannot be read', async
             <DefaultChannelsSettings
                 id='defaultchannels_custom'
                 config={{}}
-                value={[{ChannelIDs: ['keep']}]}
+                value={['keep']}
                 onChange={onChange}
             />,
             container,
