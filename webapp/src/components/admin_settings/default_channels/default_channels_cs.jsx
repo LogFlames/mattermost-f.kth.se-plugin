@@ -9,18 +9,13 @@ export default class DefaultChannelsSettings extends AbstractSettings {
     }
 
     render() {
-        return super.render(DefaultChannelsAddEntry, 'Default Channels: Default Channels and Categories');
+        return (
+            <div>
+                {super.render(DefaultChannelsAddEntry, 'Default Channels')}
+                <p className='help-text'>
+                    {'Selected channels are defaults for their own teams. Set categories in each channel\'s settings.'}
+                </p>
+            </div>
+        );
     }
 }
-
-const styles = {
-    alertDiv: {
-        borderRadius: '4px',
-        backgroundColor: 'rgba(0, 0, 0, .04)',
-        padding: '12px',
-        margin: '8px 0',
-    },
-    alertText: {
-        opacity: '0.6',
-    },
-};
