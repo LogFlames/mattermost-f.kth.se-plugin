@@ -25,6 +25,7 @@ type defaultChannelTestAPI struct {
 	failAdd    string
 	failConfig bool
 	saves      int
+	afterAdd   func()
 }
 
 func newDefaultChannelTestPlugin(t *testing.T) (*Plugin, *defaultChannelTestAPI) {
@@ -112,6 +113,9 @@ func (a *defaultChannelTestAPI) AddUserToChannel(channelID, userID, actorID stri
 		return nil, testAppError(http.StatusServiceUnavailable)
 	}
 	a.added = append(a.added, channelID+":"+userID)
+	if a.afterAdd != nil {
+		a.afterAdd()
+	}
 	return &model.ChannelMember{ChannelId: channelID, UserId: userID}, nil
 }
 
@@ -405,5 +409,69 @@ func TestDefaultChannelConfigKeyCasing(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDefaultChannelThousandJoinsRestartAndRetry(t *testing.T) {
+	p, api := newDefaultChannelTestPlugin(t)
+	ids := []string{"channel", "second", "private", "fourth"}
+	for _, id := range ids[1:] {
+		api.channels[id] = model.Channel{Id: id, TeamId: "team", Type: model.ChannelTypeOpen}
+	}
+	api.channels["private"] = model.Channel{Id: "private", TeamId: "team", Type: model.ChannelTypePrivate}
+	api.settings["defaultchannels_custom"] = []defaultChannelEntry{{ChannelIDs: ids}}
+	if err := p.OnConfigurationChange(); err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for i := 0; i < 1000; i++ {
+		userID := fmt.Sprintf("user-%04d", i)
+		api.users = append(api.users, &model.User{Id: userID})
+		p.UserHasJoinedTeam(nil, &model.TeamMember{TeamId: "team", UserId: userID}, nil)
+		for _, id := range ids {
+			want = append(want, id+":"+userID)
+		}
+	}
+	if len(api.kv) != 4000 || len(api.added) != 0 {
+		t.Fatalf("incorrect queued burst: jobs=%d added=%d", len(api.kv), len(api.added))
+	}
+	api.failAdd = "user-0073"
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	api.afterAdd = func() {
+		if len(api.added) == 1500 {
+			cancel()
+		}
+	}
+	p.runDefaultChannelJobs(ctx)
+	if len(api.added) != 1500 || len(api.kv) != 2500 {
+		t.Fatalf("interrupted pass lost work: added=%d jobs=%d", len(api.added), len(api.kv))
+	}
+	api.afterAdd = nil
+	restarted := &Plugin{pluginBot: p.pluginBot}
+	restarted.SetAPI(api)
+	restarted.runDefaultChannelJobs(context.Background())
+	if len(api.added) != 3996 || len(api.kv) != 4 {
+		t.Fatalf("failed member blocked other joins: added=%d jobs=%d", len(api.added), len(api.kv))
+	}
+	for key, data := range api.kv {
+		var job defaultChannelJob
+		if err := json.Unmarshal(data, &job); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(job.Pending, []string{"user-0073"}) || job.NextAttempt == 0 {
+			t.Fatalf("wrong persisted retry: %+v", job)
+		}
+		job.NextAttempt = 0 // Advance past the retry delay without sleeping.
+		if err := restarted.saveDefaultChannelJob(key, &job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	api.failAdd = ""
+	restarted.runDefaultChannelJobs(context.Background())
+	slices.Sort(api.added)
+	slices.Sort(want)
+	if !slices.Equal(api.added, want) || len(api.kv) != 0 {
+		t.Fatalf("incomplete/duplicate memberships after recovery: added=%d jobs=%d", len(api.added), len(api.kv))
 	}
 }
