@@ -21,6 +21,13 @@ func (p *Plugin) MassAdd_ExecuteCommand(c *plugin.Context, args *model.CommandAr
 	if err != nil {
 		return nil, err
 	}
+	// The plugin RPC client returns nil, nil when its transport fails.
+	if channel == nil {
+		return &model.CommandResponse{
+			ResponseType: model.CommandResponseTypeEphemeral,
+			Text:         "Could not load this channel. Please try again or contact a system admin.",
+		}, nil
+	}
 
 	hasPerm := ((channel.Type == model.ChannelTypePrivate && p.API.HasPermissionToChannel(args.UserId, args.ChannelId, model.PermissionManagePrivateChannelMembers)) ||
 		(channel.Type == model.ChannelTypeOpen && p.API.HasPermissionToChannel(args.UserId, args.ChannelId, model.PermissionManagePublicChannelMembers)))

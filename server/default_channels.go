@@ -165,7 +165,17 @@ func (p *Plugin) setDefaultChannel(args *model.CommandArgs, set bool, settings m
 			delete(settings, key)
 		}
 	}
-	settings["defaultchannels_custom"] = config.DefaultChannels_Custom
+	// Plugin RPC only registers generic JSON containers for interface values,
+	// not this plugin's Go structs. Keep the wire format identical to config.json.
+	entries := make([]any, len(config.DefaultChannels_Custom))
+	for i, entry := range config.DefaultChannels_Custom {
+		ids := make([]any, len(entry.ChannelIDs))
+		for j, id := range entry.ChannelIDs {
+			ids[j] = id
+		}
+		entries[i] = map[string]any{"String1": entry.String1, "ChannelIDs": ids}
+	}
+	settings["defaultchannels_custom"] = entries
 	if err := p.API.SavePluginConfig(settings); err != nil {
 		if set {
 			if deleteErr := p.API.KVDelete(key); deleteErr != nil {

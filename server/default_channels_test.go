@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
 type defaultChannelTestAPI struct {
@@ -54,7 +57,17 @@ func (a *defaultChannelTestAPI) SavePluginConfig(settings map[string]any) *model
 	if a.failConfig {
 		return testAppError(http.StatusServiceUnavailable)
 	}
-	a.settings = settings
+	// Exercise the actual RPC argument encoding. A direct fake accepts custom
+	// Go types that Mattermost's gob transport cannot send to the server.
+	var wire bytes.Buffer
+	if err := gob.NewEncoder(&wire).Encode(&plugin.Z_SavePluginConfigArgs{A: settings}); err != nil {
+		return model.NewAppError("SavePluginConfig", "test.rpc.encode", nil, err.Error(), http.StatusInternalServerError)
+	}
+	var decoded plugin.Z_SavePluginConfigArgs
+	if err := gob.NewDecoder(&wire).Decode(&decoded); err != nil {
+		return model.NewAppError("SavePluginConfig", "test.rpc.decode", nil, err.Error(), http.StatusInternalServerError)
+	}
+	a.settings = decoded.A
 	a.saves++
 	// Exercise the reentrant config callback, as the real API does.
 	if err := a.p.OnConfigurationChange(); err != nil {
