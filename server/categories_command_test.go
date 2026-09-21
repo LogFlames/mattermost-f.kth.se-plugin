@@ -27,7 +27,7 @@ func TestForceSyncCategoriesCommand(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p, api := newCategoryTestPlugin(t)
 			api.adminTeam, api.failSave = "team", tc.failSave
-			response, err := p.ExecuteCommand(nil, &model.CommandArgs{UserId: tc.user, TeamId: tc.team, Command: tc.command})
+			response, err := p.ExecuteCommand(nil, &model.CommandArgs{UserId: tc.user, TeamId: tc.team, ChannelId: "invoking-channel", Command: tc.command})
 			if err != nil || response.ResponseType != model.CommandResponseTypeEphemeral || !strings.Contains(response.Text, tc.want) {
 				t.Fatalf("response=%+v err=%v", response, err)
 			}
@@ -39,7 +39,8 @@ func TestForceSyncCategoriesCommand(t *testing.T) {
 				if err := json.Unmarshal(data, &job); err != nil {
 					t.Fatal(err)
 				}
-				if !strings.HasPrefix(key, categoryJobPrefix) || job.TeamID != "team" || job.ChannelID != "" || job.CreatedAt == 0 {
+				if !strings.HasPrefix(key, categoryJobPrefix) || job.TeamID != "team" || job.ChannelID != "" || job.CreatedAt == 0 ||
+					job.RequesterID != "admin" || job.ReplyChannelID != "invoking-channel" {
 					t.Fatalf("incorrect team job: %+v", job)
 				}
 			}
@@ -94,7 +95,7 @@ func TestTeamCategorySyncPaginationAndMembers(t *testing.T) {
 			Channels: channels[min(page*100, len(channels)):min((page+1)*100, len(channels))], TotalCount: 101,
 		}, nil
 	}
-	if _, err := p.ExecuteCommand(nil, &model.CommandArgs{UserId: "admin", TeamId: "team", Command: "/force_sync_categories"}); err != nil {
+	if _, err := p.ExecuteCommand(nil, &model.CommandArgs{UserId: "admin", TeamId: "team", ChannelId: "invoking-channel", Command: "/force_sync_categories"}); err != nil {
 		t.Fatal(err)
 	}
 	p.runCategoryJobs(context.Background())
@@ -105,6 +106,10 @@ func TestTeamCategorySyncPaginationAndMembers(t *testing.T) {
 	restarted := &Plugin{pluginBot: p.pluginBot}
 	restarted.SetAPI(api)
 	restarted.runCategoryJobs(context.Background())
+	restarted.runCategoryJobs(context.Background())
+	if len(api.reports) != 0 {
+		t.Fatal("report sent before all child jobs finished")
+	}
 	restarted.runCategoryJobs(context.Background())
 	if len(api.kv) != 0 || !slices.Equal(pages, []int{0, 1}) || api.updates != 4 {
 		t.Fatalf("sync incomplete: jobs=%d pages=%v updates=%d", len(api.kv), pages, api.updates)
@@ -125,6 +130,11 @@ func TestTeamCategorySyncPaginationAndMembers(t *testing.T) {
 	}
 	if !slices.Equal(api.deleted, []string{"personal"}) || len(api.sessions) != len(api.revoked) {
 		t.Fatalf("cleanup/session lifecycle incorrect: deleted=%v sessions=%d revoked=%d", api.deleted, len(api.sessions), len(api.revoked))
+	}
+	want := "Category synchronization complete.\n- Channels moved: 3 (4 member sidebar moves)\n- Categories created: 4\n- Categories deleted: 1"
+	if len(api.reports) != 1 || api.reports[0].Message != want || api.reports[0].ChannelId != "invoking-channel" ||
+		api.reports[0].UserId != "bot" || !slices.Equal(api.recipients, []string{"admin"}) {
+		t.Fatalf("incorrect completion report: %+v recipients=%v", api.reports, api.recipients)
 	}
 }
 
@@ -190,5 +200,107 @@ func TestTeamCategoryJobRechecksEligibility(t *testing.T) {
 				t.Fatal("skipped channel mutated sidebars")
 			}
 		})
+	}
+}
+
+func TestTeamCategoryReportWaitsForRetry(t *testing.T) {
+	p, api := newCategoryTestPlugin(t)
+	parentKey := categoryJobPrefix + model.NewId()
+	parent := &categoryJob{TeamID: "team", RequesterID: "admin", ReplyChannelID: "invoking-channel", Scanned: true}
+	childKey := parentKey + "_channel"
+	child := testCategoryJob()
+	child.ParentKey, child.TeamID = parentKey, "team"
+	api.categories["user"] = []*model.SidebarCategoryWithChannels{testCategory("old", "Old", model.SidebarCategoryCustom, "channel")}
+	for key, job := range map[string]*categoryJob{parentKey: parent, childKey: child} {
+		if err := p.saveCategoryJob(key, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	api.deleteStatus = http.StatusServiceUnavailable
+	p.runCategoryJobs(context.Background())
+	p.runCategoryJobs(context.Background())
+	if len(api.reports) != 0 {
+		t.Fatal("reported completion while cleanup still needs retrying")
+	}
+	if err := json.Unmarshal(api.kv[childKey], child); err != nil {
+		t.Fatal(err)
+	}
+	if child.Moved != 1 || child.Created != 1 || child.Deleted != 0 || child.Done {
+		t.Fatalf("incorrect persisted counts after partial failure: %+v", child)
+	}
+	child.NextAttempt = 0
+	if err := p.saveCategoryJob(childKey, child); err != nil {
+		t.Fatal(err)
+	}
+	api.deleteStatus = 0
+	restarted := &Plugin{pluginBot: p.pluginBot}
+	restarted.SetAPI(api)
+	restarted.runCategoryJobs(context.Background())
+	restarted.runCategoryJobs(context.Background())
+	restarted.runCategoryJobs(context.Background())
+	want := "Category synchronization complete.\n- Channels moved: 1 (1 member sidebar moves)\n- Categories created: 1\n- Categories deleted: 1"
+	if len(api.reports) != 1 || api.reports[0].Message != want || len(api.kv) != 0 || api.updates != 1 {
+		t.Fatalf("retry lost/doubled counts or report: reports=%+v jobs=%d updates=%d", api.reports, len(api.kv), api.updates)
+	}
+}
+
+func TestTeamCategoryReportZeros(t *testing.T) {
+	for _, empty := range []bool{false, true} {
+		t.Run(fmt.Sprintf("empty-team-%t", empty), func(t *testing.T) {
+			p, api := newCategoryTestPlugin(t)
+			api.adminTeam = "team"
+			api.categories["user"] = []*model.SidebarCategoryWithChannels{testCategory("target", "New", model.SidebarCategoryCustom, "channel")}
+			api.searchChannels = func(*model.ChannelSearch) (*model.ChannelsWithCount, *model.AppError) {
+				result := &model.ChannelsWithCount{}
+				if !empty {
+					result.Channels = model.ChannelListWithTeamData{{Channel: api.channel}}
+				}
+				return result, nil
+			}
+			if _, err := p.ExecuteCommand(nil, &model.CommandArgs{UserId: "admin", TeamId: "team", ChannelId: "invoking-channel", Command: "/force_sync_categories"}); err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 4; i++ {
+				p.runCategoryJobs(context.Background())
+			}
+			want := "Category synchronization complete.\n- Channels moved: 0 (0 member sidebar moves)\n- Categories created: 0\n- Categories deleted: 0"
+			if len(api.reports) != 1 || api.reports[0].Message != want || len(api.kv) != 0 {
+				t.Fatalf("no-op sync should report zero changes: %+v", api.reports)
+			}
+		})
+	}
+}
+
+func TestTeamCategoryReportDeliveryAndCleanupRetry(t *testing.T) {
+	p, api := newCategoryTestPlugin(t)
+	key := categoryJobPrefix + model.NewId()
+	job := &categoryJob{TeamID: "team", RequesterID: "admin", ReplyChannelID: "invoking-channel", Scanned: true}
+	// More than one KV page, and an unrelated request that must not be counted/deleted.
+	for i := 0; i < 103; i++ {
+		if err := p.saveCategoryJob(fmt.Sprintf("%s_%03d", key, i), &categoryJob{ParentKey: key, Done: true, Moved: 2, Created: 3, Deleted: 1}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	api.kv[categoryJobPrefix+"unrelated"] = []byte(`{"moved":1000}`)
+	api.failReport = true
+	if done, err := p.finishTeamCategoryJob(key, job); done || err == nil || job.Reported || len(api.kv) != 104 {
+		t.Fatal("delivery failure must retain all child totals")
+	}
+	api.failReport = false
+	api.failDeleteKey = key + "_050"
+	if done, err := p.finishTeamCategoryJob(key, job); done || err == nil || !job.Reported {
+		t.Fatal("cleanup failure must retain the reported flag")
+	}
+	var resumed categoryJob
+	if err := json.Unmarshal(api.kv[key], &resumed); err != nil {
+		t.Fatal(err)
+	}
+	api.failDeleteKey = ""
+	if done, err := p.finishTeamCategoryJob(key, &resumed); !done || err != nil {
+		t.Fatalf("cleanup retry failed: done=%t err=%v", done, err)
+	}
+	want := "Category synchronization complete.\n- Channels moved: 103 (206 member sidebar moves)\n- Categories created: 309\n- Categories deleted: 103"
+	if len(api.reports) != 1 || api.reports[0].Message != want || len(api.kv) != 2 {
+		t.Fatalf("aggregation/cleanup duplicated report or skipped a page: reports=%+v keys=%d", api.reports, len(api.kv))
 	}
 }

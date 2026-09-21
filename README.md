@@ -15,6 +15,9 @@ moves the channel to Channels. Sync runs in the background, retries failures, an
 resumes after restarts; it does not enforce placement continuously. Team admins can run
 `/force_sync_categories` to apply existing defaults to all members of all active public
 and private channels in the current team, with the same placement and cleanup behavior.
+An ephemeral completion report shows channels moved (including member-sidebar moves)
+and categories created/deleted. Counts track successful operations; a crash between a
+change and saving its count can undercount.
 
 Startup ensures `f.kth.se-plugin-bot` exists with `system_admin`. REST requests use
 short-lived bot sessions; tokens stay in memory and existing access tokens are untouched.

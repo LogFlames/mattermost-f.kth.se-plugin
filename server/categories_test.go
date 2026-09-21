@@ -43,6 +43,10 @@ type categoryTestAPI struct {
 	adminTeam      string
 	channelMembers map[string]model.ChannelMembers
 	searchChannels func(*model.ChannelSearch) (*model.ChannelsWithCount, *model.AppError)
+	reports        []*model.Post
+	recipients     []string
+	failReport     bool
+	failDeleteKey  string
 }
 
 func newCategoryTestPlugin(t *testing.T) (*Plugin, *categoryTestAPI) {
@@ -124,6 +128,14 @@ func (a *categoryTestAPI) GetPluginID() string     { return "plugin-id" }
 func (a *categoryTestAPI) HasPermissionToTeam(userID, teamID string, permission *model.Permission) bool {
 	return userID == "admin" && teamID == a.adminTeam && permission == model.PermissionManageTeam
 }
+func (a *categoryTestAPI) SendEphemeralPost(userID string, post *model.Post) *model.Post {
+	if a.failReport {
+		return nil
+	}
+	a.recipients = append(a.recipients, userID)
+	a.reports = append(a.reports, post)
+	return post
+}
 func (a *categoryTestAPI) KVGet(key string) ([]byte, *model.AppError) {
 	return bytes.Clone(a.kv[key]), nil
 }
@@ -146,6 +158,9 @@ func (a *categoryTestAPI) KVSetWithOptions(key string, value []byte, options mod
 	return true, nil
 }
 func (a *categoryTestAPI) KVDelete(key string) *model.AppError {
+	if key == a.failDeleteKey {
+		return testAppError(http.StatusServiceUnavailable)
+	}
 	delete(a.kv, key)
 	return nil
 }
@@ -494,6 +509,9 @@ func TestCategoryPaginationAndFailedMember(t *testing.T) {
 	if !slices.Equal(api.pages, []int{0, 1}) || api.updates != categoryPageSize+2 || len(job.Pending) != 1 {
 		t.Fatalf("failure stopped later members/pages: pages=%v updates=%d pending=%v", api.pages, api.updates, job.Pending)
 	}
+	if job.Created != 103 || job.Moved != 102 || job.Deleted != 0 {
+		t.Fatalf("failed move counted as successful: %+v", job)
+	}
 	// A successful member rearranges their sidebar before the failed user retries.
 	api.categories["user-102"][0].Channels = []string{"channel"}
 	api.categories["user-102"][1].Channels = nil
@@ -508,6 +526,9 @@ func TestCategoryPaginationAndFailedMember(t *testing.T) {
 	if api.updates != categoryPageSize+3 || len(resumed.Pending) != 0 || !slices.Equal(api.pages, []int{0, 1}) ||
 		!slices.Equal(api.categories["user-102"][0].Channels, []string{"channel"}) {
 		t.Fatal("retry duplicated moves or lost failed member")
+	}
+	if resumed.Created != 103 || resumed.Moved != 103 || resumed.Deleted != 0 {
+		t.Fatalf("retry lost or double-counted operations: %+v", resumed)
 	}
 }
 
@@ -530,19 +551,19 @@ func TestCategorySupersededJobUsesCommittedDefault(t *testing.T) {
 func TestCategorySessions(t *testing.T) {
 	p, api := newCategoryTestPlugin(t)
 	rest := &categoryREST{plugin: p}
-	if err := rest.deleteCategory(context.Background(), "user", "team", "empty"); err != nil {
+	if deleted, err := rest.deleteCategory(context.Background(), "user", "team", "empty"); err != nil || !deleted {
 		t.Fatal(err)
 	}
 	session := api.sessions[0]
 	if session.UserId != "bot" || session.Roles != "system_user system_admin" || session.Props[model.SessionPropIsBot] != model.SessionPropIsBotValue || session.ExpiresAt <= time.Now().UnixMilli() || session.ExpiresAt > time.Now().Add(11*time.Minute).UnixMilli() {
 		t.Fatalf("invalid session: %+v", session)
 	}
-	if err := rest.deleteCategory(context.Background(), "user", "team", "another"); err != nil || len(api.sessions) != 1 {
+	if deleted, err := rest.deleteCategory(context.Background(), "user", "team", "another"); err != nil || !deleted || len(api.sessions) != 1 {
 		t.Fatal("session not reused")
 	}
 	session.ExpiresAt = time.Now().UnixMilli()
 	api.deleteStatus = http.StatusNotFound
-	if err := rest.deleteCategory(context.Background(), "user", "team", "gone"); err != nil || len(api.sessions) != 2 || !reflect.DeepEqual(api.revoked, []string{"session-0"}) {
+	if deleted, err := rest.deleteCategory(context.Background(), "user", "team", "gone"); err != nil || deleted || len(api.sessions) != 2 || !reflect.DeepEqual(api.revoked, []string{"session-0"}) {
 		t.Fatalf("session renewal/404 handling failed: %v", err)
 	}
 	rest.close()

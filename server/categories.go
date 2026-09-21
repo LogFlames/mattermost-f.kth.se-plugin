@@ -25,7 +25,17 @@ const (
 // progress. A team request expands into individual channel jobs. No credentials
 // are stored here.
 type categoryJob struct {
-	TeamID      string `json:"team_id,omitempty"`
+	TeamID         string `json:"team_id,omitempty"`
+	ParentKey      string `json:"parent_key,omitempty"`
+	RequesterID    string `json:"requester_id,omitempty"`
+	ReplyChannelID string `json:"reply_channel_id,omitempty"`
+	Reported       bool   `json:"reported,omitempty"`
+	Done           bool   `json:"done,omitempty"`
+	// Count acknowledged mutations, not attempts or already-correct placement.
+	// API writes and KV saves are not atomic: a crash between them can undercount.
+	Moved       int    `json:"moved,omitempty"`
+	Created     int    `json:"created,omitempty"`
+	Deleted     int    `json:"deleted,omitempty"`
 	ChannelID   string `json:"channel_id"`
 	OldName     string `json:"old_name"`
 	NewName     string `json:"new_name"`
@@ -50,12 +60,15 @@ func (p *Plugin) forceSyncCategories(args *model.CommandArgs) (*model.CommandRes
 	} else if len(strings.Fields(args.Command)) != 1 {
 		response.Text = "Usage: /force_sync_categories (no arguments)."
 	} else {
-		job := &categoryJob{TeamID: args.TeamId, CreatedAt: time.Now().UnixMilli()}
+		job := &categoryJob{
+			TeamID: args.TeamId, CreatedAt: time.Now().UnixMilli(),
+			RequesterID: args.UserId, ReplyChannelID: args.ChannelId,
+		}
 		if err := p.saveCategoryJob(categoryJobPrefix+model.NewId(), job); err != nil {
 			p.API.LogError("Cannot queue team category synchronization", "team_id", args.TeamId, "error", err.Error())
 			response.Text = "Could not queue category synchronization. Please try again."
 		} else {
-			response.Text = "Queued category synchronization for all members of this team's public and private channels with a default category. Archived channels are skipped. This runs in the background and overrides personal placement, including Favorites."
+			response.Text = "Queued category synchronization for all members of this team's public and private channels with a default category. Archived channels are skipped. This runs in the background and overrides personal placement, including Favorites. You'll receive an ephemeral report here when it finishes."
 		}
 	}
 	return response, nil
@@ -179,10 +192,17 @@ func (p *Plugin) runCategoryJobs(ctx context.Context) {
 			p.API.LogError("Invalid category job", "key", key, "error", err.Error())
 			continue
 		}
-		if time.Now().UnixMilli() < job.NextAttempt {
+		if job.Done || time.Now().UnixMilli() < job.NextAttempt {
 			continue
 		}
 		done, err := p.runCategoryJob(ctx, rest, key, &job)
+		if done && err == nil && job.ParentKey != "" {
+			// Retain each child's totals until its parent has reported. This also
+			// prevents a repeated search page from replaying completed children.
+			job.Done = true
+			err = p.saveCategoryJob(key, &job)
+			done = false
+		}
 		if err != nil {
 			p.API.LogError("Category synchronization will retry", "channel_id", job.ChannelID, "team_id", job.TeamID, "error", err.Error())
 			job.Attempts++
@@ -200,6 +220,9 @@ func (p *Plugin) runCategoryJobs(ctx context.Context) {
 
 func (p *Plugin) runCategoryJob(ctx context.Context, rest *categoryREST, key string, job *categoryJob) (bool, error) {
 	if job.ChannelID == "" {
+		if job.Scanned {
+			return p.finishTeamCategoryJob(key, job)
+		}
 		return p.queueTeamCategoryJobs(ctx, rest, key, job)
 	}
 	channel, appErr := p.API.GetChannel(job.ChannelID)
@@ -333,18 +356,88 @@ func (p *Plugin) queueTeamCategoryJobs(ctx context.Context, rest *categoryREST, 
 		} else if len(data) != 0 {
 			continue
 		}
-		if err := p.saveCategoryJob(childKey, &categoryJob{
+		child := &categoryJob{
 			TeamID: job.TeamID, ChannelID: channel.Id, NewName: channel.DefaultCategoryName,
 			CreatedAt: time.Now().UnixMilli(), Confirmed: true, Pending: make(map[string][]string),
-		}); err != nil {
+		}
+		if job.RequesterID != "" {
+			child.ParentKey = key
+		}
+		if err := p.saveCategoryJob(childKey, child); err != nil {
 			return false, err
 		}
 	}
 	if len(result.Channels) < perPage {
-		return true, nil
+		if job.RequesterID == "" {
+			return true, nil // Jobs queued before completion reports were added.
+		}
+		job.Scanned = true
+	} else {
+		job.Page++
 	}
-	job.Page++
 	return false, p.saveCategoryJob(key, job)
+}
+
+func (p *Plugin) finishTeamCategoryJob(key string, job *categoryJob) (bool, error) {
+	var children []string
+	var channels, moved, created, deleted int
+	// Snapshot before deleting; completed children remain durable until the
+	// report is saved, so aggregation can be retried without double counting.
+	for page := 0; ; page++ {
+		keys, appErr := p.API.KVList(page, categoryPageSize)
+		if appErr != nil {
+			return false, appErr
+		}
+		for _, childKey := range keys {
+			if !strings.HasPrefix(childKey, key+"_") {
+				continue
+			}
+			children = append(children, childKey)
+			if job.Reported {
+				continue
+			}
+			data, appErr := p.API.KVGet(childKey)
+			if appErr != nil {
+				return false, appErr
+			}
+			var child categoryJob
+			if err := json.Unmarshal(data, &child); err != nil {
+				return false, err
+			}
+			if !child.Done {
+				return false, nil
+			}
+			if child.Moved > 0 {
+				channels++
+			}
+			moved += child.Moved
+			created += child.Created
+			deleted += child.Deleted
+		}
+		if len(keys) < categoryPageSize {
+			break
+		}
+	}
+	if !job.Reported {
+		post := p.API.SendEphemeralPost(job.RequesterID, &model.Post{
+			Id: strings.TrimPrefix(key, categoryJobPrefix), UserId: p.pluginBot.UserId, ChannelId: job.ReplyChannelID,
+			Type:    model.PostTypeEphemeral,
+			Message: fmt.Sprintf("Category synchronization complete.\n- Channels moved: %d (%d member sidebar moves)\n- Categories created: %d\n- Categories deleted: %d", channels, moved, created, deleted),
+		})
+		if post == nil {
+			return false, errors.New("could not send category synchronization report")
+		}
+		job.Reported = true
+		if err := p.saveCategoryJob(key, job); err != nil {
+			return false, err
+		}
+	}
+	for _, childKey := range children {
+		if appErr := p.API.KVDelete(childKey); appErr != nil {
+			return false, appErr
+		}
+	}
+	return true, nil
 }
 
 func (p *Plugin) syncMemberCategory(ctx context.Context, rest *categoryREST, key string, job *categoryJob, teamID, userID string) error {
@@ -378,6 +471,10 @@ func (p *Plugin) syncMemberCategory(ctx context.Context, rest *categoryREST, key
 		if appErr != nil {
 			return appErr
 		}
+		job.Created++
+		if err := p.saveCategoryJob(key, job); err != nil {
+			return err
+		}
 	}
 	var updates []*model.SidebarCategoryWithChannels
 	for _, category := range categories.Categories {
@@ -405,6 +502,10 @@ func (p *Plugin) syncMemberCategory(ctx context.Context, rest *categoryREST, key
 		if _, appErr = p.API.UpdateChannelSidebarCategories(userID, teamID, updates); appErr != nil {
 			return appErr
 		}
+		job.Moved++
+		if err := p.saveCategoryJob(key, job); err != nil {
+			return err
+		}
 	}
 	// Re-read after the move: do not delete based on the earlier snapshot.
 	categories, appErr = p.API.GetChannelSidebarCategories(userID, teamID)
@@ -431,8 +532,15 @@ func (p *Plugin) syncMemberCategory(ctx context.Context, rest *categoryREST, key
 			}
 		}
 		if !hasActiveChannel {
-			if err := rest.deleteCategory(ctx, userID, teamID, category.Id); err != nil {
+			deleted, err := rest.deleteCategory(ctx, userID, teamID, category.Id)
+			if err != nil {
 				return err
+			}
+			if deleted {
+				job.Deleted++
+				if err := p.saveCategoryJob(key, job); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -484,14 +592,14 @@ func (r *categoryREST) ensureSession() error {
 	return nil
 }
 
-func (r *categoryREST) deleteCategory(ctx context.Context, userID, teamID, categoryID string) error {
+func (r *categoryREST) deleteCategory(ctx context.Context, userID, teamID, categoryID string) (bool, error) {
 	if err := r.ensureSession(); err != nil {
-		return err
+		return false, err
 	}
 	_, err := r.client.DeleteSidebarCategoryForTeamForUser(ctx, userID, teamID, categoryID)
 	var appErr *model.AppError
 	if errors.As(err, &appErr) && appErr.StatusCode == http.StatusNotFound {
-		return nil // A concurrent user action may already have deleted it.
+		return false, nil // A concurrent user action may already have deleted it.
 	}
-	return err
+	return err == nil, err
 }
