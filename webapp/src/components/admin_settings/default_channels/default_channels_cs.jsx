@@ -136,16 +136,21 @@ export default class DefaultChannelsSettings extends React.PureComponent {
                 {channel.display_name}
                 <small style={styles.meta}>{` ~${channel.name}${channel.type === 'P' ? ' · Private' : ''}${channel.delete_at ? ' · Archived' : ''}`}</small>
             </span>
-            <button
-                type='button'
-                className='btn btn-link'
-                style={styles.button}
-                aria-label={`Remove ${channel.display_name} as a default channel`}
-                disabled={this.isDisabled()}
-                onClick={() => this.stage(channel, false)}
+            <span
+                title={channel.name === 'town-square' ? 'This is the default channel (town-square).' : null}
+                style={styles.remove}
             >
-                {'Remove'}
-            </button>
+                <button
+                    type='button'
+                    className='btn btn-link'
+                    style={{...styles.button, pointerEvents: channel.name === 'town-square' ? 'none' : null}}
+                    aria-label={`Remove ${channel.display_name} as a default channel`}
+                    disabled={this.isDisabled() || channel.name === 'town-square'}
+                    onClick={() => this.stage(channel, false)}
+                >
+                    {'Remove'}
+                </button>
+            </span>
         </li>
     );
 
@@ -172,12 +177,6 @@ export default class DefaultChannelsSettings extends React.PureComponent {
                     <ul style={styles.list}>{channels.sort((a, b) => a.display_name.localeCompare(b.display_name)).map(this.renderChannel)}</ul>
                 </div>
             ))}
-            {team.townSquare && (
-                <p style={styles.builtIn}>
-                    <strong>{'Default channel (town-square): '}</strong>
-                    {`${team.townSquare.display_name} (category: ${team.townSquare.default_category_name || 'Channels'})`}
-                </p>
-            )}
         </details>
     );
 
@@ -191,15 +190,11 @@ export default class DefaultChannelsSettings extends React.PureComponent {
                 teams.set(channel.team_id, {id: channel.team_id, name: channel.team_display_name, categories: new Map()});
             }
             const team = teams.get(channel.team_id);
-            if (channel.name === 'town-square') {
-                team.townSquare = channel;
-            } else {
-                const category = channel.default_category_name || 'Channels';
-                if (!team.categories.has(category)) {
-                    team.categories.set(category, []);
-                }
-                team.categories.get(category).push(channel);
+            const category = channel.default_category_name || 'Channels';
+            if (!team.categories.has(category)) {
+                team.categories.set(category, []);
             }
+            team.categories.get(category).push(channel);
         }
         return (
             <div
@@ -302,7 +297,7 @@ const styles = {
     channel: {display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '4px 0'},
     name: {minWidth: 0},
     meta: {opacity: 0.7},
-    builtIn: {margin: 0, padding: '12px 16px', borderTop: '1px solid #ddd'},
+    remove: {flexShrink: 0},
     button: {minHeight: 44, flexShrink: 0},
     add: {marginTop: 12, minHeight: 44},
 };

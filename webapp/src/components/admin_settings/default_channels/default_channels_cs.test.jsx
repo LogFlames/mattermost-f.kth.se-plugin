@@ -88,9 +88,9 @@ it('does not change the form if the saved configuration cannot be read', async (
     expect(container.querySelector('[role="alert"]').textContent).toBe('Unavailable');
 });
 
-it('starts each team collapsed and keeps Town Square separate without redundant text', async () => {
+it.each(['Information', ''])('groups Town Square in its category (%s) with removal disabled', async (category) => {
     client.doFetch.mockResolvedValue({
-        channels: [channel('a'), channel('town-square'), {...channel('b'), team_id: 'other', team_display_name: 'Other'}],
+        channels: [channel('a'), {...channel('town-square'), display_name: 'General', default_category_name: category}, {...channel('b'), team_id: 'other', team_display_name: 'Other'}],
         value: ['a', 'b'],
         enabled: true,
     });
@@ -99,9 +99,16 @@ it('starts each team collapsed and keeps Town Square separate without redundant 
     expect(teams).toHaveLength(2);
     expect(Array.from(teams, (team) => team.open)).toEqual([false, false]);
     expect(Array.from(teams, (team) => team.querySelector('summary').textContent)).toEqual(['Other', 'Team']);
-    expect(container.textContent).toContain('Default channel (town-square): TOWN-SQUARE (category: Channels)');
-    expect(container.textContent).not.toContain('Managed by Mattermost');
-    expect(container.querySelector('[aria-label="Remove TOWN-SQUARE as a default channel"]')).toBeNull();
+    const townSquare = container.querySelector('[aria-label="Remove General as a default channel"]');
+    expect(townSquare.disabled).toBe(true);
+    expect(townSquare.parentElement.title).toBe('This is the default channel (town-square).');
+    expect(townSquare.closest('li').parentElement.parentElement.querySelector('strong').textContent).toBe(category || 'Channels');
+    expect(container.textContent).not.toContain('Default channel (town-square):');
+    act(() => townSquare.click());
+    expect(onChange).not.toHaveBeenCalled();
+    expect(editor.state.ids).toEqual(['a', 'b']);
+    remove('a');
+    expect(onChange).toHaveBeenLastCalledWith('defaultchannels_custom', ['b']);
 });
 
 it('stages additions and removals and queues only new channels on Save', async () => {
