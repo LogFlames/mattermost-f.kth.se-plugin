@@ -4,6 +4,21 @@ Customizes things in mattermost.fysiksektionen.se. Currently inserts zero-width 
 
 To easily deploy create `set_secret.sh` which exports MM\_ADMIN\_TOKEN as an environment variable. The script `deploy.sh` will then raise the file upload limit, build and upload, and lower the upload limit to the old value.
 
+## Default channel category synchronization
+
+Requires Mattermost 11.11.0+, a reachable `ServiceSettings.SiteURL`, and the Go version in `go.mod`.
+
+Changing a channel's default category moves it for all members, overriding Favorites
+and personal placement, then deletes affected empty custom categories. Clearing the
+default moves it to Channels. Sync runs in the background, retries failures, and
+resumes after restarts; it does not backfill existing defaults or enforce placement continuously.
+
+Startup ensures `f.kth.se-plugin-bot` exists with `system_admin`. REST deletion uses
+short-lived bot sessions; tokens stay in memory and existing access tokens are untouched.
+Concurrent manual sidebar edits can race with synchronization, including empty-category deletion.
+
+Verify with `go test -race ./...`, `go vet ./...`, and `make dist`.
+
 Se template readme below:
 
 # Plugin Starter Template [![CircleCI branch](https://img.shields.io/circleci/project/github/mattermost/mattermost-plugin-starter-template/master.svg)](https://circleci.com/gh/mattermost/mattermost-plugin-starter-template)

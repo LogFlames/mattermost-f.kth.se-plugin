@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -19,6 +20,9 @@ type Plugin struct {
 
 	// Global
 	pluginBot model.Bot
+
+	categoryCancel context.CancelFunc
+	categoryDone   chan struct{}
 
 	// Join-Leave-Free
 	join_leave_free_channel_ids map[string]bool
@@ -136,5 +140,5 @@ func (p *Plugin) OnActivate() error {
 		return err
 	}
 
-	return nil
+	return p.startCategoryWorker()
 }
