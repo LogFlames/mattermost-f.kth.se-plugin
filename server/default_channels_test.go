@@ -274,23 +274,32 @@ func TestDefaultChannelListAndUnset(t *testing.T) {
 	}
 }
 
-func TestDefaultChannelListIncludesTownSquare(t *testing.T) {
+func TestDefaultChannelListSeparatesTownSquare(t *testing.T) {
 	for _, tc := range []struct {
 		name, category, want string
 		configured           bool
+		otherDefaults        bool
 	}{
-		{"no configured defaults", "", "Channels", false},
-		{"native category", "Information", "Information", false},
-		{"already configured", "Information", "Information", true},
+		{"no configured defaults", "", "Channels", false, false},
+		{"native category", "Information", "Information", false, false},
+		{"already configured", "Information", "Information", true, false},
+		{"alongside configured defaults", "Information", "Information", true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, api := newDefaultChannelTestPlugin(t)
 			api.channels["town"] = model.Channel{Id: "town", Name: "town-square", TeamId: "team", Type: model.ChannelTypeOpen, DefaultCategoryName: tc.category}
 			api.channels["other-town"] = model.Channel{Id: "other-town", Name: "town-square", TeamId: "other", Type: model.ChannelTypeOpen, DefaultCategoryName: "Wrong team"}
+			var ids []string
 			if tc.configured {
-				api.settings["defaultchannels_custom"] = []defaultChannelEntry{{ChannelIDs: []string{"town"}}}
+				ids = append(ids, "town")
 			}
-			want := defaultChannelDescription + "\n\n* ~town-square (category: " + tc.want + ")"
+			want := defaultChannelDescription + "\n\nNo default channels are configured for this team."
+			if tc.otherDefaults {
+				ids = append(ids, "channel")
+				want = defaultChannelDescription + "\n\n* ~general (category: News)"
+			}
+			api.settings["defaultchannels_custom"] = []defaultChannelEntry{{ChannelIDs: ids}}
+			want += "\n\n**Default channel (town-square):** ~town-square (category: " + tc.want + ")"
 			if got := defaultCommand(t, p, "list"); got != want {
 				t.Fatalf("list=%q want=%q", got, want)
 			}

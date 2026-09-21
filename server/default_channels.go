@@ -100,6 +100,7 @@ func (p *Plugin) listDefaultChannels(teamID string, config *configuration) (*mod
 		ids = append(ids, townSquare.Id)
 	}
 	var lines []string
+	var builtInChannel string
 	for _, id := range ids {
 		channel, err := p.API.GetChannel(id)
 		if err != nil {
@@ -116,12 +117,20 @@ func (p *Plugin) listDefaultChannels(teamID string, config *configuration) (*mod
 			category = "Channels"
 		}
 		category = strings.NewReplacer("\\", "\\\\", "*", "\\*", "_", "\\_", "`", "\\`", "[", "\\[", "]", "\\]", "\n", " ", "\r", " ").Replace(category)
-		lines = append(lines, fmt.Sprintf("* ~%s (category: %s)", channel.Name, category))
+		entry := fmt.Sprintf("~%s (category: %s)", channel.Name, category)
+		if channel.Name == model.DefaultChannelName {
+			builtInChannel = "**Default channel (town-square):** " + entry
+		} else {
+			lines = append(lines, "* "+entry)
+		}
 	}
 	sort.Strings(lines)
 	text := defaultChannelDescription + "\n\nNo default channels are configured for this team."
 	if len(lines) > 0 {
 		text = defaultChannelDescription + "\n\n" + strings.Join(lines, "\n")
+	}
+	if builtInChannel != "" {
+		text += "\n\n" + builtInChannel
 	}
 	return &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral, Text: text}, nil
 }
