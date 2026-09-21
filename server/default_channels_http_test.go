@@ -37,11 +37,12 @@ func consoleRequest(p *Plugin, method, user, body string) *httptest.ResponseReco
 }
 
 func TestDefaultChannelsConsoleAuthorizationAndValidation(t *testing.T) {
-	for _, scenario := range []string{"anonymous", "team-admin", "member", "method", "malformed", "action", "disabled", "town-square", "archived", "direct", "save-config", "save-job"} {
+	for _, scenario := range []string{"anonymous", "team-admin", "member", "method", "malformed", "old-action", "town-square", "archived", "direct", "failed-config-save", "changed-elsewhere", "unconfigured-addition", "save-job"} {
 		t.Run(scenario, func(t *testing.T) {
 			p, base := newDefaultChannelTestPlugin(t)
 			p.SetAPI(&defaultChannelsHTTPTestAPI{defaultChannelTestAPI: base})
-			user, method, body := "system-admin", http.MethodPost, `{"channel_id":"channel","action":"set"}`
+			base.settings["defaultchannels_custom"] = []string{"channel"}
+			user, method, body := "system-admin", http.MethodPost, `{"save_id":"save-1","expected_channel_ids":["channel"],"added_channel_ids":["channel"]}`
 			want := http.StatusBadRequest
 			switch scenario {
 			case "anonymous":
@@ -54,19 +55,22 @@ func TestDefaultChannelsConsoleAuthorizationAndValidation(t *testing.T) {
 				method, want = http.MethodDelete, http.StatusMethodNotAllowed
 			case "malformed":
 				body = `{`
-			case "action":
-				body = `{"channel_id":"channel","action":"other"}`
-			case "disabled":
-				base.settings["defaultchannels_onoffbool"] = false
-				want = http.StatusConflict
+			case "old-action":
+				body = `{"channel_id":"channel","action":"set"}`
 			case "town-square":
 				base.channel.Name = model.DefaultChannelName
 			case "archived":
 				base.channel.DeleteAt = 1
 			case "direct":
 				base.channel.Type = model.ChannelTypeDirect
-			case "save-config":
-				base.failConfig, want = true, http.StatusServiceUnavailable
+			case "failed-config-save":
+				base.settings["defaultchannels_custom"] = []string{}
+				want = http.StatusConflict
+			case "changed-elsewhere":
+				base.settings["defaultchannels_custom"] = []string{"channel", "other"}
+				want = http.StatusConflict
+			case "unconfigured-addition":
+				body = `{"save_id":"save-1","expected_channel_ids":["channel"],"added_channel_ids":["other"]}`
 			case "save-job":
 				base.failSave, want = true, http.StatusInternalServerError
 			}
@@ -78,16 +82,21 @@ func TestDefaultChannelsConsoleAuthorizationAndValidation(t *testing.T) {
 	}
 }
 
-func TestDefaultChannelsConsoleSharesCommandJobs(t *testing.T) {
+func TestDefaultChannelsConsoleBackfillAfterSaveAndRetry(t *testing.T) {
 	p, base := newDefaultChannelTestPlugin(t)
 	api := &defaultChannelsHTTPTestAPI{defaultChannelTestAPI: base}
 	p.SetAPI(api)
 	base.users = []*model.User{{Id: "alice"}, {Id: "bob"}}
 	base.channel.Type = model.ChannelTypePrivate
-	base.settings["defaultchannels_custom"] = []string{"other"}
+	// The native console saves configuration before invoking the save action.
+	base.settings["defaultchannels_custom"] = []string{"other", "channel"}
+	if err := p.OnConfigurationChange(); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"save_id":"save-1","expected_channel_ids":["channel","other"],"added_channel_ids":["channel"]}`
 	for i := 0; i < 2; i++ {
-		w := consoleRequest(p, http.MethodPost, "system-admin", `{"channel_id":"channel","action":"set"}`)
-		if w.Code != http.StatusOK || base.saves != 1 || len(base.added) != 0 {
+		w := consoleRequest(p, http.MethodPost, "system-admin", body)
+		if w.Code != http.StatusOK || base.saves != 0 || len(base.added) != 0 || len(base.kv) != 1 {
 			t.Fatalf("add was not queued/idempotent: %d %s", w.Code, w.Body)
 		}
 	}
@@ -95,19 +104,35 @@ func TestDefaultChannelsConsoleSharesCommandJobs(t *testing.T) {
 		t.Fatalf("overwrote another team's defaults: %v", got)
 	}
 	p.runDefaultChannelJobs(context.Background())
-	if !slices.Equal(base.added, []string{"channel:alice", "channel:bob"}) || len(base.kv) != 0 || len(base.reports) != 0 {
+	if !slices.Equal(base.added, []string{"channel:alice", "channel:bob"}) || len(base.kv) != 1 || len(base.reports) != 0 || string(base.kv[defaultChannelCompletedSavePrefix+"channel"]) != "save-1" {
 		t.Fatalf("console backfill failed: added=%v jobs=%d reports=%d", base.added, len(base.kv), len(base.reports))
 	}
-	// Removing an archived default must still work, without removing its members.
-	base.channel.DeleteAt = 1
-	api.failTeam = true // A metadata outage must not turn a committed edit into an apparent failure.
-	w := consoleRequest(p, http.MethodPost, "system-admin", `{"channel_id":"channel","action":"unset"}`)
-	if w.Code != http.StatusOK || !slices.Equal(p.getConfiguration().defaultChannelIDs(), []string{"other"}) || len(base.added) != 2 {
-		t.Fatalf("unset failed: %d %s", w.Code, w.Body)
+	// A retry after completion (including after restart) must not run a second pass.
+	restarted := &Plugin{pluginBot: p.pluginBot}
+	restarted.SetAPI(api)
+	if w := consoleRequest(restarted, http.MethodPost, "system-admin", body); w.Code != http.StatusOK {
+		t.Fatal(w.Body)
 	}
-	data, err := json.Marshal(base.settings["defaultchannels_custom"])
-	if base.settings["UnrelatedSetting"] != "keep" || err != nil || string(data) != `["other"]` {
-		t.Fatalf("damaged unrelated configuration or failed to save flat IDs: %s, err=%v", data, err)
+	restarted.runDefaultChannelJobs(context.Background())
+	if len(base.added) != 2 || len(base.kv) != 1 || base.settings["UnrelatedSetting"] != "keep" {
+		t.Fatal("retried save repeated a completed backfill or changed configuration")
+	}
+	// A new save after unsetting/re-setting the channel starts a fresh pass.
+	if w := consoleRequest(p, http.MethodPost, "system-admin", strings.ReplaceAll(body, "save-1", "save-2")); w.Code != http.StatusOK {
+		t.Fatal(w.Body)
+	}
+	key := defaultChannelJobPrefix + "bulk_channel"
+	var job defaultChannelJob
+	if err := json.Unmarshal(base.kv[key], &job); err != nil {
+		t.Fatal(err)
+	}
+	job.Page = 3
+	if err := p.saveDefaultChannelJob(key, &job); err != nil {
+		t.Fatal(err)
+	}
+	w := consoleRequest(p, http.MethodPost, "system-admin", strings.ReplaceAll(body, "save-1", "save-2"))
+	if w.Code != http.StatusOK || json.Unmarshal(base.kv[key], &job) != nil || job.Page != 3 {
+		t.Fatal("retry reset in-progress pagination")
 	}
 }
 
@@ -137,6 +162,10 @@ func TestDefaultChannelsConsoleSaveDoesNotBackfill(t *testing.T) {
 	}
 	if !slices.Equal(p.getConfiguration().defaultChannelIDs(), []string{"channel"}) || len(base.kv) != 0 || len(base.added) != 0 {
 		t.Fatal("saving unchanged defaults queued a backfill or changed channel IDs")
+	}
+	w = consoleRequest(p, http.MethodPost, "system-admin", `{"save_id":"no-additions","expected_channel_ids":["channel"],"added_channel_ids":[]}`)
+	if w.Code != http.StatusOK || len(base.kv) != 0 {
+		t.Fatal("save without additions queued a backfill")
 	}
 	defaultCommand(t, p, "set")
 	if base.saves != 1 || len(base.kv) != 0 {

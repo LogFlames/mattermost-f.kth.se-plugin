@@ -2,6 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import debounce from 'lodash/debounce';
 import Client4 from 'mattermost-redux/client/client4';
+import {generateId} from 'mattermost-redux/utils/helpers';
 import AsyncSelect from 'react-select/async';
 
 import manifest from '../../../manifest';
@@ -14,6 +15,8 @@ export default class DefaultChannelsSettings extends React.PureComponent {
         setByEnv: PropTypes.bool,
         value: PropTypes.array,
         onChange: PropTypes.func.isRequired,
+        registerSaveAction: PropTypes.func.isRequired,
+        unRegisterSaveAction: PropTypes.func.isRequired,
     };
 
     constructor(props) {
@@ -21,33 +24,29 @@ export default class DefaultChannelsSettings extends React.PureComponent {
         this.client = new Client4();
         this.client.setUrl((props.config.ServiceSettings?.SiteURL || '').replace(/\/$/, ''));
         this.url = `${this.client.getUrl()}/plugins/${manifest.id}/default-channels`;
-        this.state = {channels: [], enabled: false, busy: true, error: '', message: '', selected: null};
+        this.state = {channels: [], ids: [], savedIDs: [], enabled: false, busy: true, error: '', message: '', selected: null};
     }
 
     componentDidMount() {
+        this.props.registerSaveAction(this.save);
         this.refresh();
     }
 
     componentWillUnmount() {
+        this.props.unRegisterSaveAction(this.save);
         this.search.cancel();
         this.unmounted = true;
     }
 
-    request = async (change) => {
+    refresh = async () => {
+        if (this.hasChanges()) {
+            return;
+        }
         this.setState({busy: true, error: '', message: ''});
         try {
-            let message = '';
-            if (change) {
-                const saved = await this.client.doFetch(this.url, {method: 'post', body: JSON.stringify(change)});
-
-                // Sync before fetching metadata: a refresh failure must not let
-                // the enclosing console form save its pre-edit value later.
-                this.props.onChange(this.props.id, saved.value);
-                message = saved.message;
-            }
             const result = await this.client.doFetch(this.url, {method: 'get'});
             if (!this.unmounted) {
-                this.setState({channels: result.channels, enabled: result.enabled, message, selected: null});
+                this.setState({channels: result.channels, ids: result.value, savedIDs: result.value, enabled: result.enabled, selected: null});
 
                 // Keep the enclosing form in sync with the saved channel IDs,
                 // including defaults changed by commands since the form opened.
@@ -66,14 +65,51 @@ export default class DefaultChannelsSettings extends React.PureComponent {
         }
     };
 
-    refresh = () => this.request();
+    hasChanges = () => JSON.stringify(this.state.ids) !== JSON.stringify(this.state.savedIDs);
+
+    stage = (channel, add) => {
+        this.saveID = generateId();
+        const ids = add ? [...this.state.ids, channel.id] : this.state.ids.filter((id) => id !== channel.id);
+        const channels = this.state.channels.filter((entry) => entry.id !== channel.id);
+        channels.push(channel);
+        this.setState({ids, channels, selected: null, error: '', message: ''});
+        this.props.onChange(this.props.id, ids);
+    };
+
+    // Mattermost calls this after saving the enclosing config form. The endpoint
+    // verifies that save succeeded before queueing any membership changes.
+    save = async () => {
+        if (!this.hasChanges()) {
+            return {};
+        }
+        const ids = this.state.ids;
+        const added = ids.filter((id) => !this.state.savedIDs.includes(id));
+        this.setState({busy: true, error: '', message: ''});
+        try {
+            await this.client.doFetch(this.url, {method: 'post', body: JSON.stringify({save_id: this.saveID, expected_channel_ids: ids, added_channel_ids: added})});
+            if (!this.unmounted) {
+                this.setState({savedIDs: ids, message: 'Default channels saved. New defaults will add current team members in the background.'});
+            }
+            return {};
+        } catch (error) {
+            const message = error.message || 'Could not finish saving default channels. Press Save to retry.';
+            if (!this.unmounted) {
+                this.setState({error: message});
+            }
+            return {error: {message}};
+        } finally {
+            if (!this.unmounted) {
+                this.setState({busy: false});
+            }
+        }
+    };
 
     search = debounce((term, callback) => {
         if (!term.trim()) {
             callback([]);
             return;
         }
-        const existing = new Set(this.state.channels.map((channel) => channel.id));
+        const existing = new Set(this.state.ids);
         this.client.searchAllChannels(term, {public: true, private: true, include_deleted: false}).then((channels) => {
             const available = [];
             for (const channel of channels) {
@@ -105,7 +141,7 @@ export default class DefaultChannelsSettings extends React.PureComponent {
                 style={styles.button}
                 aria-label={`Remove ${channel.display_name} as a default channel`}
                 disabled={this.isDisabled()}
-                onClick={() => this.request({channel_id: channel.id, action: 'unset'})}
+                onClick={() => this.stage(channel, false)}
             >
                 {'Remove'}
             </button>
@@ -143,6 +179,9 @@ export default class DefaultChannelsSettings extends React.PureComponent {
     render() {
         const teams = new Map();
         for (const channel of this.state.channels) {
+            if (channel.name !== 'town-square' && !this.state.ids.includes(channel.id)) {
+                continue;
+            }
             if (!teams.has(channel.team_id)) {
                 teams.set(channel.team_id, {id: channel.team_id, name: channel.team_display_name, categories: new Map()});
             }
@@ -165,16 +204,17 @@ export default class DefaultChannelsSettings extends React.PureComponent {
                         type='button'
                         className='btn btn-link'
                         style={styles.button}
-                        disabled={this.state.busy}
+                        disabled={this.state.busy || this.hasChanges()}
                         onClick={this.refresh}
                     >
                         {'Refresh'}
                     </button>
                 </div>
                 <p className='help-text'>
-                    {'Default channels add all current and new team members. Add and Remove apply immediately; removing a default keeps its members. Categories come from each channel’s settings.'}
+                    {'Default channels add all current and new team members. Press Save to apply additions and removals. Removing a default keeps its members. Categories come from each channel’s settings.'}
                 </p>
                 {!this.state.busy && !this.state.enabled && <p role='status'>{'Enable and save this module, then refresh to manage default channels.'}</p>}
+                {this.hasChanges() && <p role='status'>{'Unsaved changes. Press Save to apply.'}</p>}
                 {this.state.error && <p role='alert'>{this.state.error}</p>}
                 {this.state.message && <p role='status'>{this.state.message}</p>}
                 {!this.state.busy && !this.state.error && teams.size === 0 && <p>{'No additional default channels configured. Town Square is managed by Mattermost.'}</p>}
@@ -196,7 +236,7 @@ export default class DefaultChannelsSettings extends React.PureComponent {
                     className='btn btn-primary'
                     style={styles.add}
                     disabled={this.isDisabled() || !this.state.selected}
-                    onClick={() => this.request({channel_id: this.state.selected.id, action: 'set'})}
+                    onClick={() => this.stage(this.state.selected, true)}
                 >
                     {'Add default channel'}
                 </button>

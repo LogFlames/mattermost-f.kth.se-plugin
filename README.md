@@ -26,12 +26,15 @@ apply; failed additions are logged and remain pending rather than reporting succ
 Disabling the module pauses pending work and ignores new join events. Members may
 leave channels after being added; membership is not continuously enforced.
 
-Commands update the existing `DefaultChannels_Custom` setting. Channels already
-selected there are used for future joins, without a bulk addition on startup or
-settings edits; unset then set a channel to backfill existing members. The old
-category text in that setting is preserved but ignored: configure categories in
-Mattermost's channel settings instead. Existing members' personal placement is not
-changed by adding them again. Avoid simultaneous System Console edits and commands,
+In the System Console, Add and Remove only edit the draft. Press **Save** to
+persist the channel list and queue a backfill for newly added defaults. Leaving
+without saving discards the draft. If queueing fails after the config is saved,
+press Save again to retry; retries preserve running and completed backfills.
+Slash commands still apply immediately. Startup does not backfill existing defaults.
+
+Defaults are stored as a flat channel-ID list in `DefaultChannels_Custom`.
+Configure categories in Mattermost's channel settings. Existing members' personal
+placement is not changed by adding them again. Avoid simultaneous System Console edits and commands,
 since the server's configuration API does not support compare-and-swap updates.
 
 ## Default channel category synchronization

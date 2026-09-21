@@ -17,6 +17,7 @@ import (
 )
 
 const defaultChannelJobPrefix = "default_channel_add_"
+const defaultChannelCompletedSavePrefix = "default_channel_completed_save_"
 const defaultChannelDescription = "Default channels automatically add new team members. Setting a channel as default also adds all current team members."
 
 // Default channels are a flat ID list. Categories belong to Mattermost's channels.
@@ -47,6 +48,7 @@ func (ids defaultChannelList) MarshalJSON() ([]byte, error) {
 type defaultChannelJob struct {
 	TeamID, ChannelID           string
 	RequesterID, ReplyChannelID string
+	ConsoleSaveID               string
 	Page                        int
 	Scanned                     bool
 	Pending                     []string
@@ -352,6 +354,13 @@ func (p *Plugin) processDefaultChannelJob(ctx context.Context, key string) error
 				Message: "Default channel setup complete. All current active team members have been added to ~" + channel.Name + ".",
 			}) == nil {
 				return fmt.Errorf("could not deliver default channel completion message")
+			}
+		}
+		if job.ConsoleSaveID != "" {
+			// Keep one receipt per channel so a retried console Save cannot restart
+			// an already completed backfill after a lost HTTP response.
+			if err := p.API.KVSet(defaultChannelCompletedSavePrefix+job.ChannelID, []byte(job.ConsoleSaveID)); err != nil {
+				return err
 			}
 		}
 		if err := p.API.KVDelete(key); err != nil {

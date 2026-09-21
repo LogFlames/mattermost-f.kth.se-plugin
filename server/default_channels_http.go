@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"maps"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -39,7 +39,7 @@ func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Use the command/worker lock, so two console edits cannot lose one another.
+	// Serialize backfill queueing with commands and membership work.
 	lock, err := cluster.NewMutex(p.API, "default_channels")
 	if err != nil {
 		fail(http.StatusInternalServerError, "Could not lock default channels.")
@@ -52,49 +52,79 @@ func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 	defer lock.Unlock()
-	settings := maps.Clone(p.API.GetPluginConfig())
-	data, err := json.Marshal(settings)
+	data, err := json.Marshal(p.API.GetPluginConfig())
 	var config configuration
 	if err != nil || json.Unmarshal(data, &config) != nil {
 		fail(http.StatusInternalServerError, "Could not read default channel configuration.")
 		return
 	}
-	message := ""
 	if r.Method == http.MethodPost {
 		var change struct {
-			ChannelID string `json:"channel_id"`
-			Action    string `json:"action"`
+			SaveID             string   `json:"save_id"`
+			ExpectedChannelIDs []string `json:"expected_channel_ids"`
+			AddedChannelIDs    []string `json:"added_channel_ids"`
 		}
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&change); err != nil || change.ChannelID == "" || (change.Action != "set" && change.Action != "unset") {
-			fail(http.StatusBadRequest, "Specify a channel and set or unset.")
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&change); err != nil || change.SaveID == "" || len(change.SaveID) > 64 || change.ExpectedChannelIDs == nil || change.AddedChannelIDs == nil {
+			fail(http.StatusBadRequest, "Specify the saved channel list and newly added channels.")
 			return
 		}
-		if !config.DefaultChannels_OnOffBool {
-			fail(http.StatusConflict, "Enable and save the Default Channels module first.")
+		// Mattermost invokes custom save actions even when its config PATCH fails.
+		// Never enqueue a backfill until the saved selection matches the draft.
+		saved := config.defaultChannelIDs()
+		slices.Sort(saved)
+		slices.Sort(change.ExpectedChannelIDs)
+		if !slices.Equal(saved, change.ExpectedChannelIDs) {
+			fail(http.StatusConflict, "The default channel list was not saved or changed elsewhere. Press Save to retry, or reload the settings.")
 			return
 		}
-		channel, appErr := p.API.GetChannel(change.ChannelID)
-		if appErr != nil {
-			fail(appErr.StatusCode, "Could not load the channel.")
-			return
+		var channels []*model.Channel
+		for _, id := range change.AddedChannelIDs {
+			if !slices.Contains(saved, id) {
+				fail(http.StatusBadRequest, "Only saved default channels can add current members.")
+				return
+			}
+			channel, appErr := p.API.GetChannel(id)
+			if appErr != nil {
+				fail(appErr.StatusCode, "Could not load a channel. Press Save to retry.")
+				return
+			}
+			if channel == nil || channel.TeamId == "" || !eligibleDefaultChannel(channel, channel.TeamId) || channel.Name == model.DefaultChannelName {
+				fail(http.StatusBadRequest, "Choose active public or private channels other than Town Square.")
+				return
+			}
+			channels = append(channels, channel)
 		}
-		if channel == nil || channel.TeamId == "" || (change.Action == "set" && !eligibleDefaultChannel(channel, channel.TeamId)) {
-			fail(http.StatusBadRequest, "Choose an active public or private team channel.")
-			return
+		for _, channel := range channels {
+			completed, appErr := p.API.KVGet(defaultChannelCompletedSavePrefix + channel.Id)
+			if appErr != nil {
+				fail(appErr.StatusCode, "Could not read completed additions. Press Save to retry.")
+				return
+			}
+			if string(completed) == change.SaveID {
+				continue
+			}
+			key := defaultChannelJobPrefix + "bulk_" + channel.Id
+			pending, appErr := p.API.KVGet(key)
+			if appErr != nil {
+				fail(appErr.StatusCode, "Could not read pending additions. Press Save to retry.")
+				return
+			}
+			if len(pending) != 0 {
+				var job defaultChannelJob
+				if err := json.Unmarshal(pending, &job); err != nil {
+					fail(http.StatusInternalServerError, "Could not read pending additions.")
+					return
+				}
+				if job.ConsoleSaveID == change.SaveID {
+					continue // Retrying must not reset progress; a new save gets a new pass.
+				}
+			}
+			if appErr := p.saveDefaultChannelJob(key, &defaultChannelJob{TeamID: channel.TeamId, ChannelID: channel.Id, ConsoleSaveID: change.SaveID}); appErr != nil {
+				fail(appErr.StatusCode, "Defaults were saved, but adding current members could not be queued. Press Save to retry.")
+				return
+			}
 		}
-		if channel.Name == model.DefaultChannelName {
-			fail(http.StatusBadRequest, "Town Square is managed by Mattermost, not this plugin.")
-			return
-		}
-		// No requester/reply channel: console edits do not send ephemeral command replies.
-		response, appErr := p.setDefaultChannel(&model.CommandArgs{TeamId: channel.TeamId, ChannelId: channel.Id}, change.Action == "set", settings, &config)
-		if appErr != nil {
-			fail(appErr.StatusCode, "Could not save default channels. Please try again.")
-			return
-		}
-		message = response.Text
-		// Return the committed value even if a later metadata lookup would fail.
-		_ = json.NewEncoder(w).Encode(map[string]any{"value": config.DefaultChannels_Custom, "message": message})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "OK"})
 		return
 	}
 	channels, appErr := p.defaultChannelsForConsole(&config)
@@ -104,7 +134,7 @@ func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Req
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"channels": channels, "enabled": config.DefaultChannels_OnOffBool,
-		"value": config.DefaultChannels_Custom, "message": message,
+		"value": config.DefaultChannels_Custom,
 	})
 }
 
