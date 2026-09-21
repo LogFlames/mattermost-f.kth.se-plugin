@@ -15,7 +15,8 @@ Enable **Default Channels: Module enabled?** in the plugin settings. Team admins
 - `/default_channel unset`: stop automatic additions without removing members or
   changing sidebar categories.
 - `/default_channel list`: list this team's active default channels and their
-  current Mattermost default categories (`Channels` when no category is set).
+  current Mattermost default categories (`Channels` when no category is set),
+  including the built-in Town Square channel even if it isn't in the plugin config.
 
 New team members are added automatically. Additions run in the background, retry
 failures, and resume after restarts. Archived channels, deactivated users, and

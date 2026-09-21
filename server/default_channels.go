@@ -91,8 +91,16 @@ func (p *Plugin) defaultChannelCommand(args *model.CommandArgs) (*model.CommandR
 }
 
 func (p *Plugin) listDefaultChannels(teamID string, config *configuration) (*model.CommandResponse, *model.AppError) {
+	ids := config.defaultChannelIDs()
+	townSquare, err := p.API.GetChannelByName(teamID, model.DefaultChannelName, false)
+	if err != nil && err.StatusCode != http.StatusNotFound {
+		return nil, err
+	}
+	if townSquare != nil && !slices.Contains(ids, townSquare.Id) {
+		ids = append(ids, townSquare.Id)
+	}
 	var lines []string
-	for _, id := range config.defaultChannelIDs() {
+	for _, id := range ids {
 		channel, err := p.API.GetChannel(id)
 		if err != nil {
 			if err.StatusCode == http.StatusNotFound {

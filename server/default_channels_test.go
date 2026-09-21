@@ -46,6 +46,14 @@ func newDefaultChannelTestPlugin(t *testing.T) (*Plugin, *defaultChannelTestAPI)
 }
 
 func (a *defaultChannelTestAPI) GetPluginConfig() map[string]any { return a.settings }
+func (a *defaultChannelTestAPI) GetChannelByName(teamID, name string, includeDeleted bool) (*model.Channel, *model.AppError) {
+	for _, channel := range a.channels {
+		if channel.TeamId == teamID && channel.Name == name && (includeDeleted || channel.DeleteAt == 0) {
+			return a.GetChannel(channel.Id)
+		}
+	}
+	return nil, testAppError(http.StatusNotFound)
+}
 func (a *defaultChannelTestAPI) LoadPluginConfiguration(target any) error {
 	data, err := json.Marshal(a.settings)
 	if err != nil {
@@ -263,6 +271,33 @@ func TestDefaultChannelListAndUnset(t *testing.T) {
 	}
 	if got := defaultCommand(t, p, "unset"); !strings.Contains(got, "not a default") || api.saves != 1 || len(api.added) != 0 {
 		t.Fatal("unset was not idempotent")
+	}
+}
+
+func TestDefaultChannelListIncludesTownSquare(t *testing.T) {
+	for _, tc := range []struct {
+		name, category, want string
+		configured           bool
+	}{
+		{"no configured defaults", "", "Channels", false},
+		{"native category", "Information", "Information", false},
+		{"already configured", "Information", "Information", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, api := newDefaultChannelTestPlugin(t)
+			api.channels["town"] = model.Channel{Id: "town", Name: "town-square", TeamId: "team", Type: model.ChannelTypeOpen, DefaultCategoryName: tc.category}
+			api.channels["other-town"] = model.Channel{Id: "other-town", Name: "town-square", TeamId: "other", Type: model.ChannelTypeOpen, DefaultCategoryName: "Wrong team"}
+			if tc.configured {
+				api.settings["defaultchannels_custom"] = []defaultChannelEntry{{ChannelIDs: []string{"town"}}}
+			}
+			want := defaultChannelDescription + "\n\n* ~town-square (category: " + tc.want + ")"
+			if got := defaultCommand(t, p, "list"); got != want {
+				t.Fatalf("list=%q want=%q", got, want)
+			}
+			if api.saves != 0 || len(api.kv) != 0 || len(api.added) != 0 {
+				t.Fatal("listing Town Square changed config or membership")
+			}
+		})
 	}
 }
 
