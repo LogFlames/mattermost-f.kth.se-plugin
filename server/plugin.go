@@ -110,6 +110,8 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		}
 	case "force_sync_categories":
 		return p.forceSyncCategories(args)
+	case "default_channel":
+		return p.defaultChannelCommand(args)
 	default:
 		return &model.CommandResponse{
 			ResponseType: model.CommandResponseTypeEphemeral,
@@ -145,6 +147,14 @@ func (p *Plugin) OnActivate() error {
 		Trigger:          "force_sync_categories",
 		AutoComplete:     true,
 		AutoCompleteDesc: "Sync default categories for all public and private channels in this team (team admins only)",
+	}); err != nil {
+		return err
+	}
+	if err := p.API.RegisterCommand(&model.Command{
+		Trigger:          "default_channel",
+		AutoComplete:     true,
+		AutoCompleteHint: "set|unset|list",
+		AutoCompleteDesc: "Manage this team's default channels (team admins only)",
 	}); err != nil {
 		return err
 	}

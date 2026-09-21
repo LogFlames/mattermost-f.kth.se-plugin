@@ -4,6 +4,34 @@ Customizes things in mattermost.fysiksektionen.se. Currently inserts zero-width 
 
 To easily deploy create `set_secret.sh` which exports MM\_ADMIN\_TOKEN as an environment variable. The script `deploy.sh` will then raise the file upload limit, build and upload, and lower the upload limit to the old value.
 
+## Default channels
+
+Enable **Default Channels: Module enabled?** in the plugin settings. Team admins
+(including system admins) can run:
+
+- `/default_channel set`: make the current public or private channel a default
+  for its team and queue a one-time addition of all active team members, including
+  guests. An ephemeral message confirms completion. Repeating `set` is a no-op.
+- `/default_channel unset`: stop automatic additions without removing members or
+  changing sidebar categories.
+- `/default_channel list`: list this team's active default channels and their
+  current Mattermost default categories (`Channels` when no category is set).
+
+New team members are added automatically. Additions run in the background, retry
+failures, and resume after restarts. Archived channels, deactivated users, and
+users who have left the team are skipped. Mattermost membership restrictions still
+apply; failed additions are logged and remain pending rather than reporting success.
+Disabling the module pauses pending work and ignores new join events. Members may
+leave channels after being added; membership is not continuously enforced.
+
+Commands update the existing `DefaultChannels_Custom` setting. Channels already
+selected there are used for future joins, without a bulk addition on startup or
+settings edits; unset then set a channel to backfill existing members. The old
+category text in that setting is preserved but ignored: configure categories in
+Mattermost's channel settings instead. Existing members' personal placement is not
+changed by adding them again. Avoid simultaneous System Console edits and commands,
+since the server's configuration API does not support compare-and-swap updates.
+
 ## Default channel category synchronization
 
 Requires Mattermost 11.11.0+, a reachable `ServiceSettings.SiteURL`, and the Go version in `go.mod`.

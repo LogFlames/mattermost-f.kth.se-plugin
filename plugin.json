@@ -138,20 +138,20 @@
                 "key": "default-channels",
                 "title": "Default Channels Module",
                 "subtitle": "Sort users into standard channels for teams",
-                "header": "UNDER IMPLEMENTATION",
+                "header": null,
                 "footer": null,
                 "settings": [
                     {
                         "key": "DefaultChannels_OnOffBool",
                         "display_name": "Default Channels: Module enabled?",
                         "type": "bool",
-                        "help_text": "This module controls which default channels to create for users who join a team"
+                        "help_text": "Automatically add new team members to configured channels. Team admins can use /default_channel set, unset, and list."
                     },
                     {
                         "key": "DefaultChannels_Custom",
                         "display_name": "Default Channels: Configuration",
                         "type": "custom",
-                        "help_text": "Configuration for default channels, one line per team."
+                        "help_text": "Selected channels are defaults for their own teams. Categories come from each channel's default category setting; the legacy category text here is ignored. Use /default_channel set to also add current team members."
                     }
                 ]
             },

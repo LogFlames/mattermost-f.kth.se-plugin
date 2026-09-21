@@ -140,6 +140,7 @@ func (p *Plugin) startCategoryWorker() error {
 				}
 				p.runCategoryJobs(ctx)
 				lock.Unlock()
+				p.runDefaultChannelJobs(ctx)
 			}
 		}
 	}()
