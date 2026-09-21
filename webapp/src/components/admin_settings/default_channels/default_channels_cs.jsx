@@ -21,6 +21,7 @@ export default class DefaultChannelsSettings extends React.PureComponent {
 
     constructor(props) {
         super(props);
+        this.container = React.createRef();
         this.client = new Client4();
         this.client.setUrl((props.config.ServiceSettings?.SiteURL || '').replace(/\/$/, ''));
         this.url = `${this.client.getUrl()}/plugins/${manifest.id}/default-channels`;
@@ -151,12 +152,12 @@ export default class DefaultChannelsSettings extends React.PureComponent {
     isDisabled = () => Boolean(this.state.busy || !this.state.enabled || this.props.disabled || this.props.setByEnv);
 
     renderTeam = (team) => (
-        <section
+        <details
             key={team.id}
             style={styles.team}
             aria-label={`Team: ${team.name}`}
         >
-            <h4 style={styles.teamHeading}>{team.name}</h4>
+            <summary style={styles.teamHeading}>{team.name}</summary>
             {Array.from(team.categories).sort(([a], [b]) => a.localeCompare(b)).map(([category, channels]) => (
                 <div
                     key={category}
@@ -170,10 +171,9 @@ export default class DefaultChannelsSettings extends React.PureComponent {
                 <p style={styles.builtIn}>
                     <strong>{'Default channel (town-square): '}</strong>
                     {`${team.townSquare.display_name} (category: ${team.townSquare.default_category_name || 'Channels'})`}
-                    <small style={styles.meta}>{' · Managed by Mattermost'}</small>
                 </p>
             )}
-        </section>
+        </details>
     );
 
     render() {
@@ -197,7 +197,10 @@ export default class DefaultChannelsSettings extends React.PureComponent {
             }
         }
         return (
-            <div aria-busy={this.state.busy}>
+            <div
+                ref={this.container}
+                aria-busy={this.state.busy}
+            >
                 <div style={styles.heading}>
                     <strong>{'Default Channels'}</strong>
                     <button
@@ -213,16 +216,51 @@ export default class DefaultChannelsSettings extends React.PureComponent {
                 <p className='help-text'>
                     {'Default channels add all current and new team members. Press Save to apply additions and removals. Removing a default keeps its members. Categories come from each channel’s settings.'}
                 </p>
-                {!this.state.busy && !this.state.enabled && <p role='status'>{'Enable and save this module, then refresh to manage default channels.'}</p>}
-                {this.hasChanges() && <p role='status'>{'Unsaved changes. Press Save to apply.'}</p>}
-                {this.state.error && <p role='alert'>{this.state.error}</p>}
-                {this.state.message && <p role='status'>{this.state.message}</p>}
+                {!this.state.busy && !this.state.enabled && (
+                    <p
+                        role='status'
+                        style={styles.notice}
+                    >
+                        {'Enable and save this module, then refresh to manage default channels.'}
+                    </p>
+                )}
+                {this.hasChanges() && (
+                    <p
+                        role='status'
+                        style={styles.notice}
+                    >
+                        {'Unsaved changes. Press Save to apply.'}
+                    </p>
+                )}
+                {this.state.error && (
+                    <p
+                        role='alert'
+                        style={{...styles.notice, ...styles.error}}
+                    >
+                        {this.state.error}
+                    </p>
+                )}
+                {this.state.message && (
+                    <p
+                        role='status'
+                        style={styles.notice}
+                    >
+                        {this.state.message}
+                    </p>
+                )}
                 {!this.state.busy && !this.state.error && teams.size === 0 && <p>{'No additional default channels configured. Town Square is managed by Mattermost.'}</p>}
                 {Array.from(teams.values()).sort((a, b) => a.name.localeCompare(b.name)).map(this.renderTeam)}
                 <label htmlFor='default-channel-search'>{'Add a default channel'}</label>
                 <AsyncSelect
                     inputId='default-channel-search'
                     placeholder='Search channels across teams…'
+                    menuPortalTarget={document.body}
+                    menuPosition='fixed'
+                    menuPlacement='top'
+                    maxMenuHeight={240}
+                    menuShouldScrollIntoView={false}
+                    closeMenuOnScroll={(event) => event.target.contains(this.container.current)}
+                    styles={selectStyles}
                     loadOptions={this.search}
                     getOptionValue={(channel) => channel.id}
                     getOptionLabel={(channel) => `${channel.team_display_name} › ${channel.default_category_name || 'Channels'} › ${channel.display_name}${channel.type === 'P' ? ' (Private)' : ''}`}
@@ -248,7 +286,9 @@ export default class DefaultChannelsSettings extends React.PureComponent {
 const styles = {
     heading: {display: 'flex', alignItems: 'center', justifyContent: 'space-between'},
     team: {border: '1px solid #ddd', borderRadius: 4, margin: '16px 0', overflowWrap: 'anywhere'},
-    teamHeading: {margin: 0, padding: '12px 16px', background: 'rgba(0, 0, 0, .03)', borderBottom: '1px solid #ddd'},
+    teamHeading: {display: 'list-item', padding: '12px 16px', background: 'rgba(0, 0, 0, .03)', fontWeight: 600, cursor: 'pointer'},
+    notice: {margin: '20px 0', padding: '14px 16px', border: '1px solid rgba(22, 109, 224, .3)', borderRadius: 4, background: 'rgba(22, 109, 224, .06)'},
+    error: {borderColor: 'rgba(194, 48, 48, .4)', background: 'rgba(194, 48, 48, .06)'},
     category: {margin: '16px 16px 12px', paddingLeft: 12, borderLeft: '2px solid #ddd'},
     list: {listStyle: 'none', padding: 0, margin: '4px 0 0'},
     channel: {display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '4px 0'},
@@ -257,4 +297,8 @@ const styles = {
     builtIn: {margin: 0, padding: '12px 16px', borderTop: '1px solid #ddd'},
     button: {minHeight: 44, flexShrink: 0},
     add: {marginTop: 12, minHeight: 44},
+};
+
+const selectStyles = {
+    menuPortal: (base) => ({...base, zIndex: 9999}),
 };

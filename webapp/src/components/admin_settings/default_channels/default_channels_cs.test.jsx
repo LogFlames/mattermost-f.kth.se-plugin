@@ -88,6 +88,22 @@ it('does not change the form if the saved configuration cannot be read', async (
     expect(container.querySelector('[role="alert"]').textContent).toBe('Unavailable');
 });
 
+it('starts each team collapsed and keeps Town Square separate without redundant text', async () => {
+    client.doFetch.mockResolvedValue({
+        channels: [channel('a'), channel('town-square'), {...channel('b'), team_id: 'other', team_display_name: 'Other'}],
+        value: ['a', 'b'],
+        enabled: true,
+    });
+    await mount(['a', 'b']);
+    const teams = container.querySelectorAll('details');
+    expect(teams).toHaveLength(2);
+    expect(Array.from(teams, (team) => team.open)).toEqual([false, false]);
+    expect(Array.from(teams, (team) => team.querySelector('summary').textContent)).toEqual(['Other', 'Team']);
+    expect(container.textContent).toContain('Default channel (town-square): TOWN-SQUARE (category: Channels)');
+    expect(container.textContent).not.toContain('Managed by Mattermost');
+    expect(container.querySelector('[aria-label="Remove TOWN-SQUARE as a default channel"]')).toBeNull();
+});
+
 it('stages additions and removals and queues only new channels on Save', async () => {
     await mount();
     add('c');
