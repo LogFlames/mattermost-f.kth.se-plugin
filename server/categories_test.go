@@ -21,25 +21,28 @@ import (
 // Embedding API makes any unexpected call fail instead of silently succeeding.
 type categoryTestAPI struct {
 	plugin.API
-	kv           map[string][]byte
-	channel      model.Channel
-	channels     map[string]model.Channel
-	members      model.ChannelMembers
-	categories   map[string][]*model.SidebarCategoryWithChannels
-	bot          *model.Bot
-	user         *model.User
-	siteURL      string
-	created      int
-	updates      int
-	deleted      []string
-	sessions     []*model.Session
-	revoked      []string
-	pages        []int
-	failSave     bool
-	failUser     string
-	failChannel  string
-	deleteStatus int
-	afterUpdate  func()
+	kv             map[string][]byte
+	channel        model.Channel
+	channels       map[string]model.Channel
+	members        model.ChannelMembers
+	categories     map[string][]*model.SidebarCategoryWithChannels
+	bot            *model.Bot
+	user           *model.User
+	siteURL        string
+	created        int
+	updates        int
+	deleted        []string
+	sessions       []*model.Session
+	revoked        []string
+	pages          []int
+	failSave       bool
+	failUser       string
+	failChannel    string
+	deleteStatus   int
+	afterUpdate    func()
+	adminTeam      string
+	channelMembers map[string]model.ChannelMembers
+	searchChannels func(*model.ChannelSearch) (*model.ChannelsWithCount, *model.AppError)
 }
 
 func newCategoryTestPlugin(t *testing.T) (*Plugin, *categoryTestAPI) {
@@ -56,13 +59,30 @@ func newCategoryTestPlugin(t *testing.T) (*Plugin, *categoryTestAPI) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scheme, token, _ := strings.Cut(r.Header.Get("Authorization"), " ")
-		if r.Method != http.MethodDelete || !strings.EqualFold(scheme, "Bearer") || token != "test-secret" {
+		if !strings.EqualFold(scheme, "Bearer") || token != "test-secret" {
 			t.Errorf("unexpected REST request: %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/channels/search" && api.searchChannels != nil {
+			var search model.ChannelSearch
+			if err := json.NewDecoder(r.Body).Decode(&search); err != nil {
+				t.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			result, err := api.searchChannels(&search)
+			w.Header().Set("Content-Type", "application/json")
+			if err != nil {
+				w.WriteHeader(err.StatusCode)
+				_ = json.NewEncoder(w).Encode(err)
+			} else {
+				_ = json.NewEncoder(w).Encode(result)
+			}
+			return
+		}
 		parts := strings.Split(r.URL.Path, "/")
-		if len(parts) != 10 || parts[1] != "api" || parts[2] != "v4" || parts[3] != "users" || parts[5] != "teams" || parts[6] != "team" || parts[7] != "channels" || parts[8] != "categories" {
+		if r.Method != http.MethodDelete || len(parts) != 10 || parts[1] != "api" || parts[2] != "v4" || parts[3] != "users" || parts[5] != "teams" || parts[6] != "team" || parts[7] != "channels" || parts[8] != "categories" {
 			t.Errorf("incorrect category deletion URL: %s", r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -101,6 +121,9 @@ func newCategoryTestPlugin(t *testing.T) (*Plugin, *categoryTestAPI) {
 
 func (a *categoryTestAPI) LogError(string, ...any) {}
 func (a *categoryTestAPI) GetPluginID() string     { return "plugin-id" }
+func (a *categoryTestAPI) HasPermissionToTeam(userID, teamID string, permission *model.Permission) bool {
+	return userID == "admin" && teamID == a.adminTeam && permission == model.PermissionManageTeam
+}
 func (a *categoryTestAPI) KVGet(key string) ([]byte, *model.AppError) {
 	return bytes.Clone(a.kv[key]), nil
 }
@@ -147,12 +170,20 @@ func (a *categoryTestAPI) GetChannel(id string) (*model.Channel, *model.AppError
 	}
 	return nil, testAppError(http.StatusNotFound)
 }
-func (a *categoryTestAPI) GetChannelMembers(_ string, page, perPage int) (model.ChannelMembers, *model.AppError) {
+func (a *categoryTestAPI) GetChannelMembers(channelID string, page, perPage int) (model.ChannelMembers, *model.AppError) {
 	a.pages = append(a.pages, page)
-	return a.members[min(page*perPage, len(a.members)):min((page+1)*perPage, len(a.members))], nil
+	members := a.members
+	if a.channelMembers != nil {
+		members = a.channelMembers[channelID]
+	}
+	return members[min(page*perPage, len(members)):min((page+1)*perPage, len(members))], nil
 }
-func (a *categoryTestAPI) GetChannelMember(_, userID string) (*model.ChannelMember, *model.AppError) {
-	for _, member := range a.members {
+func (a *categoryTestAPI) GetChannelMember(channelID, userID string) (*model.ChannelMember, *model.AppError) {
+	members := a.members
+	if a.channelMembers != nil {
+		members = a.channelMembers[channelID]
+	}
+	for _, member := range members {
 		if member.UserId == userID {
 			return &member, nil
 		}

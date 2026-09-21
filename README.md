@@ -12,9 +12,11 @@ Changing a channel's default category moves it for all members, overriding Favor
 and personal placement, then deletes affected custom categories with no active channels.
 Archived channels are kept and fall back to Channels if restored. Clearing the default
 moves the channel to Channels. Sync runs in the background, retries failures, and
-resumes after restarts; it does not backfill existing defaults or enforce placement continuously.
+resumes after restarts; it does not enforce placement continuously. Team admins can run
+`/force_sync_categories` to apply existing defaults to all members of all active public
+and private channels in the current team, with the same placement and cleanup behavior.
 
-Startup ensures `f.kth.se-plugin-bot` exists with `system_admin`. REST deletion uses
+Startup ensures `f.kth.se-plugin-bot` exists with `system_admin`. REST requests use
 short-lived bot sessions; tokens stay in memory and existing access tokens are untouched.
 Concurrent manual sidebar edits can race with synchronization, including empty-category deletion.
 

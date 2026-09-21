@@ -21,9 +21,11 @@ const (
 	categoryPageSize  = 100
 )
 
-// Each proposed change has its own key: hooks must not overwrite a worker's
-// progress or another concurrent channel update. No credentials are stored here.
+// Each request has its own key: hooks and commands must not overwrite a worker's
+// progress. A team request expands into individual channel jobs. No credentials
+// are stored here.
 type categoryJob struct {
+	TeamID      string `json:"team_id,omitempty"`
 	ChannelID   string `json:"channel_id"`
 	OldName     string `json:"old_name"`
 	NewName     string `json:"new_name"`
@@ -37,6 +39,26 @@ type categoryJob struct {
 	// A failed user remains here while subsequent members/pages are processed.
 	// Save source IDs before moving so deletion can be retried after a crash.
 	Pending map[string][]string `json:"pending"`
+}
+
+func (p *Plugin) forceSyncCategories(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	if args.TeamId == "" {
+		response.Text = "Run /force_sync_categories from a team."
+	} else if !p.API.HasPermissionToTeam(args.UserId, args.TeamId, model.PermissionManageTeam) {
+		response.Text = "Only team admins can run /force_sync_categories."
+	} else if len(strings.Fields(args.Command)) != 1 {
+		response.Text = "Usage: /force_sync_categories (no arguments)."
+	} else {
+		job := &categoryJob{TeamID: args.TeamId, CreatedAt: time.Now().UnixMilli()}
+		if err := p.saveCategoryJob(categoryJobPrefix+model.NewId(), job); err != nil {
+			p.API.LogError("Cannot queue team category synchronization", "team_id", args.TeamId, "error", err.Error())
+			response.Text = "Could not queue category synchronization. Please try again."
+		} else {
+			response.Text = "Queued category synchronization for all members of this team's public and private channels with a default category. Archived channels are skipped. This runs in the background and overrides personal placement, including Favorites."
+		}
+	}
+	return response, nil
 }
 
 func (p *Plugin) ChannelWillBeUpdated(_ *plugin.Context, newChannel, oldChannel *model.Channel) (*model.Channel, string) {
@@ -162,7 +184,7 @@ func (p *Plugin) runCategoryJobs(ctx context.Context) {
 		}
 		done, err := p.runCategoryJob(ctx, rest, key, &job)
 		if err != nil {
-			p.API.LogError("Category synchronization will retry", "channel_id", job.ChannelID, "error", err.Error())
+			p.API.LogError("Category synchronization will retry", "channel_id", job.ChannelID, "team_id", job.TeamID, "error", err.Error())
 			job.Attempts++
 			job.NextAttempt = time.Now().Add(time.Second * time.Duration(1<<min(job.Attempts, 8))).UnixMilli()
 			if saveErr := p.saveCategoryJob(key, &job); saveErr != nil {
@@ -177,6 +199,9 @@ func (p *Plugin) runCategoryJobs(ctx context.Context) {
 }
 
 func (p *Plugin) runCategoryJob(ctx context.Context, rest *categoryREST, key string, job *categoryJob) (bool, error) {
+	if job.ChannelID == "" {
+		return p.queueTeamCategoryJobs(ctx, rest, key, job)
+	}
 	channel, appErr := p.API.GetChannel(job.ChannelID)
 	if appErr != nil {
 		if appErr.StatusCode == http.StatusNotFound {
@@ -185,6 +210,12 @@ func (p *Plugin) runCategoryJob(ctx context.Context, rest *categoryREST, key str
 		return false, appErr
 	}
 	if channel.DeleteAt != 0 {
+		return true, nil
+	}
+	// Commands only affect channels that still belong to the requested team and
+	// still have a default. Hook jobs must also handle explicitly clearing it.
+	if job.TeamID != "" && (channel.TeamId != job.TeamID || channel.DefaultCategoryName == "" ||
+		(channel.Type != model.ChannelTypeOpen && channel.Type != model.ChannelTypePrivate)) {
 		return true, nil
 	}
 	if !job.Confirmed {
@@ -273,6 +304,47 @@ func (p *Plugin) runCategoryJob(ctx context.Context, rest *categoryREST, key str
 			return false, err
 		}
 	}
+}
+
+func (p *Plugin) queueTeamCategoryJobs(ctx context.Context, rest *categoryREST, key string, job *categoryJob) (bool, error) {
+	if err := rest.ensureSession(); err != nil {
+		return false, err
+	}
+	perPage := categoryPageSize
+	result, _, err := rest.client.SearchAllChannelsPaged(ctx, &model.ChannelSearch{
+		TeamIds: []string{job.TeamID}, Public: true, Private: true,
+		Page: &job.Page, PerPage: &perPage,
+	})
+	if err != nil {
+		return false, err
+	}
+	for _, channel := range result.Channels {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		if channel.TeamId != job.TeamID || channel.DeleteAt != 0 || channel.DefaultCategoryName == "" ||
+			(channel.Type != model.ChannelTypeOpen && channel.Type != model.ChannelTypePrivate) {
+			continue
+		}
+		// Retrying a partially queued page must not overwrite a child's progress.
+		childKey := key + "_" + channel.Id
+		if data, appErr := p.API.KVGet(childKey); appErr != nil {
+			return false, appErr
+		} else if len(data) != 0 {
+			continue
+		}
+		if err := p.saveCategoryJob(childKey, &categoryJob{
+			TeamID: job.TeamID, ChannelID: channel.Id, NewName: channel.DefaultCategoryName,
+			CreatedAt: time.Now().UnixMilli(), Confirmed: true, Pending: make(map[string][]string),
+		}); err != nil {
+			return false, err
+		}
+	}
+	if len(result.Channels) < perPage {
+		return true, nil
+	}
+	job.Page++
+	return false, p.saveCategoryJob(key, job)
 }
 
 func (p *Plugin) syncMemberCategory(ctx context.Context, rest *categoryREST, key string, job *categoryJob, teamID, userID string) error {
@@ -367,8 +439,8 @@ func (p *Plugin) syncMemberCategory(ctx context.Context, rest *categoryREST, key
 	return nil
 }
 
-// REST is needed only for deletion. Sessions expire even if the plugin crashes;
-// normal shutdown and job completion explicitly revoke them.
+// REST provides category deletion and administrative channel enumeration.
+// Sessions expire after a crash and are explicitly revoked after processing.
 type categoryREST struct {
 	plugin  *Plugin
 	client  *model.Client4
@@ -385,7 +457,7 @@ func (r *categoryREST) close() {
 	}
 }
 
-func (r *categoryREST) deleteCategory(ctx context.Context, userID, teamID, categoryID string) error {
+func (r *categoryREST) ensureSession() error {
 	if r.session == nil || r.session.ExpiresAt < time.Now().Add(time.Minute).UnixMilli() {
 		r.close()
 		siteURL, err := r.plugin.categorySiteURL()
@@ -408,6 +480,13 @@ func (r *categoryREST) deleteCategory(ctx context.Context, userID, teamID, categ
 			Timeout:       15 * time.Second,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
 		}
+	}
+	return nil
+}
+
+func (r *categoryREST) deleteCategory(ctx context.Context, userID, teamID, categoryID string) error {
+	if err := r.ensureSession(); err != nil {
+		return err
 	}
 	_, err := r.client.DeleteSidebarCategoryForTeamForUser(ctx, userID, teamID, categoryID)
 	var appErr *model.AppError
