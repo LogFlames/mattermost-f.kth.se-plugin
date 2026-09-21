@@ -146,7 +146,7 @@ func (p *Plugin) setDefaultChannel(args *model.CommandArgs, set bool, settings m
 	if err != nil {
 		return nil, err
 	}
-	if !eligibleDefaultChannel(channel, args.TeamId) {
+	if channel == nil || channel.TeamId != args.TeamId || (set && !eligibleDefaultChannel(channel, args.TeamId)) {
 		response.Text = "Use this command in an active public or private channel in this team."
 		return response, nil
 	}
@@ -203,6 +203,9 @@ func (p *Plugin) setDefaultChannel(args *model.CommandArgs, set bool, settings m
 	}
 	if set {
 		response.Text = "This channel is now a default channel. Adding current team members in the background; you'll receive a completion message here. New team members will be added automatically."
+		if args.UserId == "" {
+			response.Text = "Default channel added. Current team members are being added in the background; new team members will be added automatically."
+		}
 	} else {
 		response.Text = "This channel is no longer a default channel. Existing members have not been removed."
 	}

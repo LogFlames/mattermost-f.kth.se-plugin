@@ -151,7 +151,7 @@
                         "key": "DefaultChannels_Custom",
                         "display_name": "Default Channels: Configuration",
                         "type": "custom",
-                        "help_text": "Selected channels are defaults for their own teams. Set categories in each channel's settings. Use /default_channel set to also add current team members."
+                        "help_text": "Manage default channels by team and native category. Add and Remove apply immediately, just like /default_channel set and unset."
                     }
                 ]
             },
