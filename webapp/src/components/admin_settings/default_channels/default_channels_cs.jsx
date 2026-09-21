@@ -157,7 +157,12 @@ export default class DefaultChannelsSettings extends React.PureComponent {
             style={styles.team}
             aria-label={`Team: ${team.name}`}
         >
-            <summary style={styles.teamHeading}>{team.name}</summary>
+            <summary
+                style={styles.teamHeading}
+                className='fkth-default-channel-team-heading'
+            >
+                {team.name}
+            </summary>
             {Array.from(team.categories).sort(([a], [b]) => a.localeCompare(b)).map(([category, channels]) => (
                 <div
                     key={category}
@@ -201,6 +206,9 @@ export default class DefaultChannelsSettings extends React.PureComponent {
                 ref={this.container}
                 aria-busy={this.state.busy}
             >
+                <style>
+                    {'.fkth-default-channel-team-heading::marker {content: "";} .fkth-default-channel-team-heading::-webkit-details-marker {display: none;}'}
+                </style>
                 <div style={styles.heading}>
                     <strong>{'Default Channels'}</strong>
                     <button
@@ -286,7 +294,7 @@ export default class DefaultChannelsSettings extends React.PureComponent {
 const styles = {
     heading: {display: 'flex', alignItems: 'center', justifyContent: 'space-between'},
     team: {border: '1px solid #ddd', borderRadius: 4, margin: '16px 0', overflowWrap: 'anywhere'},
-    teamHeading: {display: 'list-item', padding: '12px 16px', background: 'rgba(0, 0, 0, .03)', fontWeight: 600, cursor: 'pointer'},
+    teamHeading: {display: 'block', margin: 0, padding: '12px 16px 12px 28px', background: 'rgba(0, 0, 0, .03)', fontWeight: 600, cursor: 'pointer'},
     notice: {margin: '20px 0', padding: '14px 16px', border: '1px solid rgba(22, 109, 224, .3)', borderRadius: 4, background: 'rgba(22, 109, 224, .06)'},
     error: {borderColor: 'rgba(194, 48, 48, .4)', background: 'rgba(194, 48, 48, .06)'},
     category: {margin: '16px 16px 12px', paddingLeft: 12, borderLeft: '2px solid #ddd'},
