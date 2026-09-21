@@ -9,8 +9,9 @@ To easily deploy create `set_secret.sh` which exports MM\_ADMIN\_TOKEN as an env
 Requires Mattermost 11.11.0+, a reachable `ServiceSettings.SiteURL`, and the Go version in `go.mod`.
 
 Changing a channel's default category moves it for all members, overriding Favorites
-and personal placement, then deletes affected empty custom categories. Clearing the
-default moves it to Channels. Sync runs in the background, retries failures, and
+and personal placement, then deletes affected custom categories with no active channels.
+Archived channels are kept and fall back to Channels if restored. Clearing the default
+moves the channel to Channels. Sync runs in the background, retries failures, and
 resumes after restarts; it does not backfill existing defaults or enforce placement continuously.
 
 Startup ensures `f.kth.se-plugin-bot` exists with `system_admin`. REST deletion uses

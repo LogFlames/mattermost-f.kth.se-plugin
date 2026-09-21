@@ -23,6 +23,7 @@ type categoryTestAPI struct {
 	plugin.API
 	kv           map[string][]byte
 	channel      model.Channel
+	channels     map[string]model.Channel
 	members      model.ChannelMembers
 	categories   map[string][]*model.SidebarCategoryWithChannels
 	bot          *model.Bot
@@ -36,6 +37,7 @@ type categoryTestAPI struct {
 	pages        []int
 	failSave     bool
 	failUser     string
+	failChannel  string
 	deleteStatus int
 	afterUpdate  func()
 }
@@ -47,6 +49,10 @@ func newCategoryTestPlugin(t *testing.T) (*Plugin, *categoryTestAPI) {
 		channel: model.Channel{Id: "channel", TeamId: "team", Type: model.ChannelTypeOpen, DefaultCategoryName: "New", UpdateAt: 20},
 		members: model.ChannelMembers{{UserId: "user", ChannelId: "channel"}},
 		user:    &model.User{Id: "bot", Username: "f.kth.se-plugin-bot", IsBot: true, Roles: "system_user system_admin"},
+		channels: map[string]model.Channel{
+			"unrelated-channel":  {Id: "unrelated-channel"},
+			"added-concurrently": {Id: "added-concurrently"},
+		},
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scheme, token, _ := strings.Cut(r.Header.Get("Authorization"), " ")
@@ -69,8 +75,17 @@ func newCategoryTestPlugin(t *testing.T) (*Plugin, *categoryTestAPI) {
 		}
 		userID, categoryID := parts[4], parts[9]
 		for _, category := range api.categories[userID] {
-			if category.Id == categoryID && (category.Type != model.SidebarCategoryCustom || len(category.Channels) != 0) {
-				t.Errorf("attempt to delete protected/nonempty category: %+v", category)
+			if category.Id != categoryID {
+				continue
+			}
+			if category.Type != model.SidebarCategoryCustom {
+				t.Errorf("attempt to delete protected category: %+v", category)
+			}
+			for _, id := range category.Channels {
+				channel, err := api.GetChannel(id)
+				if err != nil || channel.DeleteAt == 0 {
+					t.Errorf("attempt to delete category with active or unknown channel %s", id)
+				}
 			}
 		}
 		api.deleted = append(api.deleted, categoryID)
@@ -119,9 +134,18 @@ func (a *categoryTestAPI) KVList(page, perPage int) ([]string, *model.AppError) 
 	slices.Sort(keys)
 	return keys[min(page*perPage, len(keys)):min((page+1)*perPage, len(keys))], nil
 }
-func (a *categoryTestAPI) GetChannel(string) (*model.Channel, *model.AppError) {
-	channel := a.channel
-	return &channel, nil
+func (a *categoryTestAPI) GetChannel(id string) (*model.Channel, *model.AppError) {
+	if id == a.failChannel {
+		return nil, testAppError(http.StatusInternalServerError)
+	}
+	if id == a.channel.Id {
+		channel := a.channel
+		return &channel, nil
+	}
+	if channel, ok := a.channels[id]; ok {
+		return &channel, nil
+	}
+	return nil, testAppError(http.StatusNotFound)
 }
 func (a *categoryTestAPI) GetChannelMembers(_ string, page, perPage int) (model.ChannelMembers, *model.AppError) {
 	a.pages = append(a.pages, page)
@@ -279,6 +303,50 @@ func TestCategoryCreateFavoritesAndClear(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestCategoryCleanupIgnoresArchivedChannels(t *testing.T) {
+	for _, state := range []string{"archived-only", "mixed", "lookup-error", "missing"} {
+		t.Run(state, func(t *testing.T) {
+			p, api := newCategoryTestPlugin(t)
+			archived := model.Channel{Id: "archived", DeleteAt: 123}
+			api.channels[archived.Id] = archived
+			source := testCategory("old", "Old", model.SidebarCategoryCustom, "channel", "archived")
+			switch state {
+			case "mixed":
+				source.Channels = append(source.Channels, "unrelated-channel")
+			case "lookup-error":
+				source.Channels = append(source.Channels, "unavailable")
+				api.failChannel = "unavailable"
+			case "missing":
+				source.Channels = append(source.Channels, "missing")
+			}
+			api.categories["user"] = []*model.SidebarCategoryWithChannels{
+				source,
+				testCategory("unrelated", "Unrelated", model.SidebarCategoryCustom, "archived"),
+				testCategory("favorites", "Favorites", model.SidebarCategoryFavorites, "archived"),
+			}
+			rest := &categoryREST{plugin: p}
+			defer rest.close()
+			err := p.syncMemberCategory(context.Background(), rest, "job", testCategoryJob(), "team", "user")
+			wantError := state == "lookup-error" || state == "missing"
+			if (err != nil) != wantError {
+				t.Fatalf("error = %v, want error = %t", err, wantError)
+			}
+			if state == "archived-only" {
+				if !slices.Equal(api.deleted, []string{"old"}) {
+					t.Fatalf("archived-only source was not deleted: %v", api.deleted)
+				}
+			} else if len(api.deleted) != 0 || len(categoryByID(t, api, "user", "old").Channels) != 2 {
+				t.Fatal("source with active or unknown channels was not preserved")
+			}
+			if !reflect.DeepEqual(api.channels["archived"], archived) {
+				t.Fatal("cleanup modified the archived channel")
+			}
+			categoryByID(t, api, "user", "unrelated")
+			categoryByID(t, api, "user", "favorites")
+		})
 	}
 }
 

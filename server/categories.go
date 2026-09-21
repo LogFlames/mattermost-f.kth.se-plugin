@@ -340,8 +340,25 @@ func (p *Plugin) syncMemberCategory(ctx context.Context, rest *categoryREST, key
 		return appErr
 	}
 	for _, category := range categories.Categories {
-		if category.Id != target.Id && category.Type == model.SidebarCategoryCustom && len(category.Channels) == 0 &&
-			slices.Contains(job.Pending[userID], category.Id) {
+		if category.Id == target.Id || category.Type != model.SidebarCategoryCustom ||
+			!slices.Contains(job.Pending[userID], category.Id) {
+			continue
+		}
+		// Sidebar categories include archived IDs even though the sidebar hides
+		// them. Deleting their category removes assignments, not the channels;
+		// restored channels will fall back to the built-in Channels category.
+		hasActiveChannel := false
+		for _, channelID := range category.Channels {
+			channel, err := p.API.GetChannel(channelID)
+			if err != nil {
+				return err // Keep the category when its contents cannot be verified.
+			}
+			if channel.DeleteAt == 0 {
+				hasActiveChannel = true
+				break
+			}
+		}
+		if !hasActiveChannel {
 			if err := rest.deleteCategory(ctx, userID, teamID, category.Id); err != nil {
 				return err
 			}
