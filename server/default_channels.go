@@ -19,11 +19,37 @@ import (
 const defaultChannelJobPrefix = "default_channel_add_"
 const defaultChannelDescription = "Default channels automatically add new team members. Setting a channel as default also adds all current team members."
 
-// Keep the existing custom setting's format. String1 is a legacy label, not a
-// sidebar category override: Mattermost's channel.DefaultCategoryName owns that.
-type defaultChannelEntry struct {
-	String1    string
-	ChannelIDs []string
+// Read legacy category-labelled groups as well as the current flat ID list.
+// Categories belong to Mattermost's channels and are never saved here.
+type defaultChannelList []string
+
+func (ids *defaultChannelList) UnmarshalJSON(data []byte) error {
+	var flat []string
+	if err := json.Unmarshal(data, &flat); err != nil {
+		var legacy []struct{ ChannelIDs []string }
+		if err := json.Unmarshal(data, &legacy); err != nil {
+			return err
+		}
+		flat = nil // A failed string-slice decode can leave partially decoded elements.
+		for _, entry := range legacy {
+			flat = append(flat, entry.ChannelIDs...)
+		}
+	}
+	normalized := make(defaultChannelList, 0, len(flat))
+	for _, id := range flat {
+		if !slices.Contains(normalized, id) {
+			normalized = append(normalized, id)
+		}
+	}
+	*ids = normalized
+	return nil
+}
+
+func (ids defaultChannelList) MarshalJSON() ([]byte, error) {
+	if ids == nil {
+		return []byte("[]"), nil
+	}
+	return json.Marshal([]string(ids))
 }
 
 type defaultChannelJob struct {
@@ -36,15 +62,7 @@ type defaultChannelJob struct {
 }
 
 func (c *configuration) defaultChannelIDs() []string {
-	var ids []string
-	for _, entry := range c.DefaultChannels_Custom {
-		for _, id := range entry.ChannelIDs {
-			if !slices.Contains(ids, id) {
-				ids = append(ids, id)
-			}
-		}
-	}
-	return ids
+	return slices.Clone(c.DefaultChannels_Custom)
 }
 
 func (p *Plugin) defaultChannelCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
@@ -169,11 +187,9 @@ func (p *Plugin) setDefaultChannel(args *model.CommandArgs, set bool, settings m
 		if err := p.saveDefaultChannelJob(key, job); err != nil {
 			return nil, err
 		}
-		config.DefaultChannels_Custom = append(config.DefaultChannels_Custom, defaultChannelEntry{ChannelIDs: []string{channel.Id}})
+		config.DefaultChannels_Custom = append(config.DefaultChannels_Custom, channel.Id)
 	} else {
-		for i := range config.DefaultChannels_Custom {
-			config.DefaultChannels_Custom[i].ChannelIDs = slices.DeleteFunc(config.DefaultChannels_Custom[i].ChannelIDs, func(id string) bool { return id == channel.Id })
-		}
+		config.DefaultChannels_Custom = slices.DeleteFunc(config.DefaultChannels_Custom, func(id string) bool { return id == channel.Id })
 	}
 	// The System Console lowercases schema keys. Remove other spellings to
 	// avoid ambiguous duplicate keys when LoadPluginConfiguration folds case.
@@ -182,17 +198,12 @@ func (p *Plugin) setDefaultChannel(args *model.CommandArgs, set bool, settings m
 			delete(settings, key)
 		}
 	}
-	// Plugin RPC only registers generic JSON containers for interface values,
-	// not this plugin's Go structs. Keep the wire format identical to config.json.
-	entries := make([]any, len(config.DefaultChannels_Custom))
-	for i, entry := range config.DefaultChannels_Custom {
-		ids := make([]any, len(entry.ChannelIDs))
-		for j, id := range entry.ChannelIDs {
-			ids[j] = id
-		}
-		entries[i] = map[string]any{"String1": entry.String1, "ChannelIDs": ids}
+	// Keep plugin RPC values generic: gob does not register our named Go types.
+	ids := make([]any, len(config.DefaultChannels_Custom))
+	for i, id := range config.DefaultChannels_Custom {
+		ids[i] = id
 	}
-	settings["defaultchannels_custom"] = entries
+	settings["defaultchannels_custom"] = ids
 	if err := p.API.SavePluginConfig(settings); err != nil {
 		if set {
 			if deleteErr := p.API.KVDelete(key); deleteErr != nil {

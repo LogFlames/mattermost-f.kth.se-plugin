@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"slices"
 
 	"github.com/pkg/errors"
 )
@@ -31,7 +32,7 @@ type configuration struct {
 	Reactions_OnOffBool bool
 
 	DefaultChannels_OnOffBool bool
-	DefaultChannels_Custom    []defaultChannelEntry
+	DefaultChannels_Custom    defaultChannelList
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -42,10 +43,7 @@ func (c *configuration) Clone() *configuration {
 	clone.ModeratorBot_Channels = make([]string, len(c.ModeratorBot_Channels))
 	copy(clone.ModeratorBot_Channels, c.ModeratorBot_Channels)
 
-	clone.DefaultChannels_Custom = append([]defaultChannelEntry(nil), c.DefaultChannels_Custom...)
-	for i := range clone.DefaultChannels_Custom {
-		clone.DefaultChannels_Custom[i].ChannelIDs = append([]string(nil), c.DefaultChannels_Custom[i].ChannelIDs...)
-	}
+	clone.DefaultChannels_Custom = slices.Clone(c.DefaultChannels_Custom)
 
 	return &clone
 }

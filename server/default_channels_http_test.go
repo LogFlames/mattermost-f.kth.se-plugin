@@ -105,8 +105,43 @@ func TestDefaultChannelsConsoleSharesCommandJobs(t *testing.T) {
 	if w.Code != http.StatusOK || !slices.Equal(p.getConfiguration().defaultChannelIDs(), []string{"other"}) || len(base.added) != 2 {
 		t.Fatalf("unset failed: %d %s", w.Code, w.Body)
 	}
-	if base.settings["UnrelatedSetting"] != "keep" || p.getConfiguration().DefaultChannels_Custom[0].String1 != "Old category" {
-		t.Fatal("damaged unrelated or legacy configuration")
+	data, err := json.Marshal(base.settings["defaultchannels_custom"])
+	if base.settings["UnrelatedSetting"] != "keep" || err != nil || string(data) != `["other"]` {
+		t.Fatalf("damaged unrelated configuration or failed to migrate: %s, err=%v", data, err)
+	}
+}
+
+func TestDefaultChannelsConsoleMigrationOnSave(t *testing.T) {
+	p, base := newDefaultChannelTestPlugin(t)
+	p.SetAPI(&defaultChannelsHTTPTestAPI{defaultChannelTestAPI: base})
+	legacy := []defaultChannelEntry{{String1: "Old category", ChannelIDs: []string{"channel", "channel"}}}
+	base.settings["defaultchannels_custom"] = legacy
+	if err := p.OnConfigurationChange(); err != nil {
+		t.Fatal(err)
+	}
+	w := consoleRequest(p, http.MethodGet, "system-admin", "")
+	var result map[string]any
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &result) != nil {
+		t.Fatalf("GET failed: %d %s", w.Code, w.Body)
+	}
+	value, err := json.Marshal(result["value"])
+	if err != nil || string(value) != `["channel"]` || base.saves != 0 || len(base.kv) != 0 {
+		t.Fatalf("GET must normalize without saving/queuing jobs: %s", w.Body)
+	}
+	if _, ok := base.settings["defaultchannels_custom"].([]defaultChannelEntry); !ok {
+		t.Fatal("reading config migrated persisted settings")
+	}
+	// Simulate the enclosing console's Save using the staged API value.
+	base.settings["defaultchannels_custom"] = result["value"]
+	if err := base.SavePluginConfig(base.settings); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(p.getConfiguration().defaultChannelIDs(), []string{"channel"}) || len(base.kv) != 0 || len(base.added) != 0 {
+		t.Fatal("format migration changed defaults or queued a backfill")
+	}
+	defaultCommand(t, p, "set")
+	if base.saves != 1 || len(base.kv) != 0 {
+		t.Fatal("re-setting a migrated default queued another backfill")
 	}
 }
 

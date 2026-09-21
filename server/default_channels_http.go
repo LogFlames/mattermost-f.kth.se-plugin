@@ -119,7 +119,7 @@ func (p *Plugin) defaultChannelsForConsole(config *configuration) ([]*model.Chan
 			}
 			return nil, err
 		}
-		if channel == nil || channel.TeamId == "" || channel.Name == model.DefaultChannelName {
+		if channel == nil || channel.TeamId == "" {
 			continue
 		}
 		team := teams[channel.TeamId]
@@ -131,7 +131,9 @@ func (p *Plugin) defaultChannelsForConsole(config *configuration) ([]*model.Chan
 			}
 			teams[channel.TeamId] = team
 		}
-		channels = append(channels, &model.ChannelWithTeamData{Channel: *channel, TeamDisplayName: team.DisplayName, TeamName: team.Name})
+		if channel.Name != model.DefaultChannelName {
+			channels = append(channels, &model.ChannelWithTeamData{Channel: *channel, TeamDisplayName: team.DisplayName, TeamName: team.Name})
+		}
 	}
 	for id, team := range teams {
 		channel, err := p.API.GetChannelByName(id, model.DefaultChannelName, false)

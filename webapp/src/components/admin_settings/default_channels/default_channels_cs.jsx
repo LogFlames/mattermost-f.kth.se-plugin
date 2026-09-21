@@ -12,6 +12,7 @@ export default class DefaultChannelsSettings extends React.PureComponent {
         config: PropTypes.object.isRequired,
         disabled: PropTypes.bool,
         setByEnv: PropTypes.bool,
+        value: PropTypes.array,
         onChange: PropTypes.func.isRequired,
     };
 
@@ -47,6 +48,12 @@ export default class DefaultChannelsSettings extends React.PureComponent {
             const result = await this.client.doFetch(this.url, {method: 'get'});
             if (!this.unmounted) {
                 this.setState({channels: result.channels, enabled: result.enabled, message, selected: null});
+
+                // Stage legacy-format conversion for the console's next Save.
+                // Reading settings never persists config or starts a backfill.
+                if (!this.props.disabled && !this.props.setByEnv && JSON.stringify(this.props.value || []) !== JSON.stringify(result.value)) {
+                    this.props.onChange(this.props.id, result.value);
+                }
             }
         } catch (error) {
             if (!this.unmounted) {

@@ -15,6 +15,39 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
+// Legacy wire-format fixture; production code only uses a flat list internally.
+type defaultChannelEntry struct {
+	String1    string
+	ChannelIDs []string
+}
+
+func TestDefaultChannelListFormats(t *testing.T) {
+	for _, tc := range []struct{ name, input, want string }{
+		{"legacy", `[{"String1":"Ignored","ChannelIDs":["b","a"]},{"ChannelIDs":["a","c"]},{"ChannelIDs":null}]`, `["b","a","c"]`},
+		{"flat", `["b","a","b","c"]`, `["b","a","c"]`},
+		{"empty", `[]`, `[]`},
+		{"null", `null`, `[]`},
+		{"empty groups", `[{"String1":"Empty","ChannelIDs":[]}]`, `[]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ids := defaultChannelList{"previous"}
+			if err := json.Unmarshal([]byte(tc.input), &ids); err != nil {
+				t.Fatal(err)
+			}
+			data, err := json.Marshal(ids)
+			if err != nil || string(data) != tc.want {
+				t.Fatalf("got %s, want %s, err=%v", data, tc.want, err)
+			}
+		})
+	}
+	for _, input := range []string{`{}`, `[42]`, `["a",{"ChannelIDs":["b"]}]`, `[{"ChannelIDs":"a"}]`} {
+		ids := defaultChannelList{"keep"}
+		if err := json.Unmarshal([]byte(input), &ids); err == nil || !slices.Equal(ids, []string{"keep"}) {
+			t.Fatalf("invalid input %s was accepted or changed existing IDs: %v", input, ids)
+		}
+	}
+}
+
 type defaultChannelTestAPI struct {
 	*categoryTestAPI
 	p          *Plugin
@@ -265,12 +298,12 @@ func TestDefaultChannelListAndUnset(t *testing.T) {
 		t.Fatal(got)
 	}
 	config := p.getConfiguration()
-	if slices.Contains(config.defaultChannelIDs(), "channel") || !slices.Contains(config.defaultChannelIDs(), "foreign") || config.DefaultChannels_Custom[0].String1 != "Legacy category" {
+	if !slices.Equal(config.defaultChannelIDs(), []string{"foreign", "b", "archived", "missing"}) {
 		t.Fatal("unset failed to remove duplicates or damaged other configuration")
 	}
 	clone := config.Clone()
-	clone.DefaultChannels_Custom[0].ChannelIDs[0] = "changed"
-	if config.DefaultChannels_Custom[0].ChannelIDs[0] != "foreign" {
+	clone.DefaultChannels_Custom[0] = "changed"
+	if config.DefaultChannels_Custom[0] != "foreign" {
 		t.Fatal("configuration clone shares channel ID slices")
 	}
 	if got := defaultCommand(t, p, "unset"); !strings.Contains(got, "not a default") || api.saves != 1 || len(api.added) != 0 {
@@ -402,6 +435,10 @@ func TestDefaultChannelConfigKeyCasing(t *testing.T) {
 			defaultCommand(t, p, "set")
 			if !slices.Equal(p.getConfiguration().defaultChannelIDs(), []string{"other", "channel"}) {
 				t.Fatal("lost saved channel IDs")
+			}
+			data, err := json.Marshal(api.settings["defaultchannels_custom"])
+			if err != nil || string(data) != `["other","channel"]` {
+				t.Fatalf("did not save flat IDs: %s, err=%v", data, err)
 			}
 			for savedKey := range api.settings {
 				if strings.EqualFold(savedKey, "defaultchannels_custom") && savedKey != "defaultchannels_custom" {
