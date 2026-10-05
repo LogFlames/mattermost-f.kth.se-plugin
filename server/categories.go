@@ -152,6 +152,11 @@ func (p *Plugin) OnDeactivate() error {
 		p.categoryCancel()
 		<-p.categoryDone
 	}
+	p.statsLock.Lock()
+	defer p.statsLock.Unlock()
+	if p.statsStore != nil {
+		return p.statsStore.Store.Close()
+	}
 	return nil
 }
 

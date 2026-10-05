@@ -4,6 +4,21 @@ Customizes things in mattermost.fysiksektionen.se. Currently inserts zero-width 
 
 To easily deploy create `set_secret.sh` which exports MM\_ADMIN\_TOKEN as an environment variable. The script `deploy.sh` will then raise the file upload limit, build and upload, and lower the upload limit to the old value.
 
+## Message statistics
+
+Signed-in users can open `/plug/se.fysiksektionen.mattermost.plugin/stats` to compare
+message counts, character totals, and characters per message. Filter by team or public
+channel and select users individually, by channel membership, or by thread authors.
+Press **Show** to load results. The URL preserves the filters for sharing.
+
+Defaults to **All time** and cumulative totals; **Per day** shows daily counts.
+Days use UTC. Deleted and system posts are excluded. Custom ranges allow up to
+366 days, with a maximum of 200 users per query.
+
+All/team totals include private channels, and **Include DMs** adds all selected users'
+direct and group messages. Channel selectors only list active public channels across
+all teams; thread selection requires read access. Reports return aggregates, not message text.
+
 ## Default channels
 
 Enable **Default Channels: Module enabled?** in the plugin settings. Team admins

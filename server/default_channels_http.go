@@ -12,10 +12,13 @@ import (
 	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 )
 
-// Only system admins may inspect or edit defaults across teams, including private channels.
 func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
+	if r.URL.Path == "/stats" || r.URL.Path == "/stats/channels" {
+		p.serveStats(w, r)
+		return
+	}
 	fail := func(status int, message string) {
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(map[string]string{"message": message})

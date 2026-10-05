@@ -9,6 +9,7 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 )
 
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
@@ -23,6 +24,9 @@ type Plugin struct {
 
 	categoryCancel context.CancelFunc
 	categoryDone   chan struct{}
+
+	statsLock  sync.Mutex
+	statsStore *pluginapi.Client
 
 	// Join-Leave-Free
 	join_leave_free_channel_ids map[string]bool
