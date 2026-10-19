@@ -29,6 +29,7 @@ func (p *Plugin) compileEmojiRegexes() []*regexp.Regexp {
 	regexes = append(regexes, regexp.MustCompile(`(?i)(:-?p)`))
 	// rage
 	regexes = append(regexes, regexp.MustCompile(`(:-?[[@])`))
+	regexes = append(regexes, regexp.MustCompile(`>:\(`))
 	// slightly_frowning_face
 	regexes = append(regexes, regexp.MustCompile(`(:-?\()`))
 	// cry
@@ -69,9 +70,14 @@ func (p *Plugin) InsertZeroWidthSpaces(post *model.Post, configuration *configur
 					continue
 				}
 
-				newMessage = newMessage[:left+1] + "\u200b" + newMessage[left+1:]
-				offset += 3
-				l += 3
+				replacement := newMessage[left:left+1] + "\u200b" + newMessage[left+1:right]
+				if newMessage[left:right] == ">:(" {
+					replacement = "\u200b>:\u200b("
+				}
+				newMessage = newMessage[:left] + replacement + newMessage[right:]
+				inserted := len(replacement) - (right - left)
+				offset += inserted
+				l += inserted
 			}
 		}
 
