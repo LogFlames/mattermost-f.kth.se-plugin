@@ -240,6 +240,27 @@
                 ]
             },
             {
+                "key": "oidc-onboarding",
+                "title": "OIDC Onboarding",
+                "subtitle": "Adds newly created OIDC users to configured teams.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "OIDCOnboarding_OnOffBool",
+                        "display_name": "OIDC Onboarding: Module enabled?",
+                        "type": "bool",
+                        "help_text": "When enabled, newly created OIDC users are added to the configured teams."
+                    },
+                    {
+                        "key": "OIDCOnboarding_DefaultTeams",
+                        "display_name": "OIDC Onboarding: Default teams",
+                        "type": "custom",
+                        "help_text": "OIDC users are added to these teams in the configured order, with Fysiksektionen prioritized first."
+                    }
+                ]
+            },
+            {
                 "key": "translator",
                 "title": "Translator Module",
                 "subtitle": "Translates messages into english",

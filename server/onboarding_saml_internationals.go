@@ -14,7 +14,6 @@ import (
 
 const (
 	internationalStudentsUsersKey = "internationalstudents_users"
-	internationalStudentLocale    = "en"
 )
 
 var internationalStudentsConfigLock sync.Mutex
@@ -24,10 +23,7 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 		return nil
 	}
 
-	if user.Locale != internationalStudentLocale {
-		return fmt.Errorf("international student setup ignored for user %q because their language was %q", user.Username, user.Locale)
-	}
-
+	// add international students to the correct teams and channels and mute Swedish channels
 	configuration := p.getConfiguration()
 	englishTeams, err := p.internationalStudentsTeams(configuration.InternationalStudents_DefaultEnglishTeams)
 	if err != nil {
@@ -42,30 +38,37 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 	teams := make([]*model.Team, 0, len(englishTeams)+len(swedishTeams))
 	teams = append(teams, englishTeams...)
 	teams = append(teams, swedishTeams...)
-	var firstErr error
-	for _, team := range teams {
-		if _, err := p.API.GetTeamMember(team.Id, user.Id); err != nil {
-			if err.StatusCode != http.StatusNotFound {
-				if firstErr == nil {
-					firstErr = fmt.Errorf("check membership in team %q: %w", team.Name, err)
-				}
-				continue
-			}
-			if _, err := p.API.CreateTeamMember(team.Id, user.Id); err != nil && firstErr == nil {
-				firstErr = fmt.Errorf("add user to team %q: %w", team.Name, err)
-			}
-		}
-	}
+	firstErr := p.addUserToTeams(user.Id, teams)
 
 	if err := p.addInternationalStudentToChannels(user.Id, configuration.InternationalStudents_DefaultChannels); err != nil {
 		firstErr = firstError(firstErr, err)
 	}
-	if err := p.addInternationalStudent(user.Id); err != nil {
+	if err := p.addInternationalStudentToConfig(user.Id); err != nil {
 		firstErr = firstError(firstErr, err)
 	}
 
 	if err := p.muteExistingDefaultChannels(user.Id); err != nil && firstErr == nil {
 		firstErr = err
+	}
+	return firstErr
+}
+
+func (p *Plugin) addUserToTeams(userID string, teams []*model.Team) error {
+	var firstErr error
+	for _, team := range teams {
+		if team == nil {
+			firstErr = firstError(firstErr, fmt.Errorf("configured team lookup returned no team"))
+			continue
+		}
+		if _, err := p.API.GetTeamMember(team.Id, userID); err != nil {
+			if err.StatusCode != http.StatusNotFound {
+				firstErr = firstError(firstErr, fmt.Errorf("check membership in team %q: %w", team.Name, err))
+				continue
+			}
+			if _, err := p.API.CreateTeamMember(team.Id, userID); err != nil {
+				firstErr = firstError(firstErr, fmt.Errorf("add user to team %q: %w", team.Name, err))
+			}
+		}
 	}
 	return firstErr
 }
@@ -156,6 +159,9 @@ func (p *Plugin) internationalStudentsTeams(teamIDs []string) ([]*model.Team, er
 		if err != nil {
 			return nil, fmt.Errorf("get configured default team %q: %w", teamID, err)
 		}
+		if team == nil {
+			return nil, fmt.Errorf("get configured default team %q returned no team", teamID)
+		}
 		teams = append(teams, team)
 	}
 	return teams, nil
@@ -192,7 +198,7 @@ func (p *Plugin) InternationalStudents_UserJoinedChannel(channelMember *model.Ch
 	}
 }
 
-func (p *Plugin) addInternationalStudent(userID string) error {
+func (p *Plugin) addInternationalStudentToConfig(userID string) error {
 	internationalStudentsConfigLock.Lock()
 	defer internationalStudentsConfigLock.Unlock()
 
@@ -278,6 +284,9 @@ func (p *Plugin) muteChannelForUser(channelID, userID string) *model.AppError {
 	member, err := p.API.GetChannelMember(channelID, userID)
 	if err != nil {
 		return err
+	}
+	if member == nil {
+		return model.NewAppError("muteChannelForUser", "channel member lookup returned no member", nil, "", http.StatusNotFound)
 	}
 	if member.IsChannelMuted() {
 		return nil

@@ -3,6 +3,7 @@ dist/
 webapp/src/manifest.ts
 server/manifest.go
 set_secret.sh
+.keycloak-admin-token
 
 # Mac
 .DS_Store

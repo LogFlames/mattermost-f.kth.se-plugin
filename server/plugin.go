@@ -109,6 +109,11 @@ func (p *Plugin) UserHasBeenCreated(_ *plugin.Context, user *model.User) {
 			p.API.LogError("International student setup failed", "user_id", user.Id, "error", err.Error())
 		}
 	}
+	if p.getConfiguration().OIDCOnboarding_OnOffBool {
+		if err := p.OIDCOnboarding_UserCreated(user); err != nil {
+			p.API.LogError("OIDC onboarding failed", "user_id", user.Id, "error", err.Error())
+		}
+	}
 }
 
 func (p *Plugin) UserHasLeftChannel(_ *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {

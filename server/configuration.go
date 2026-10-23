@@ -40,6 +40,9 @@ type configuration struct {
 	InternationalStudents_DefaultEnglishTeams []string
 	InternationalStudents_DefaultChannels     []string
 	InternationalStudents_OnOffBool           bool
+
+	OIDCOnboarding_OnOffBool    bool
+	OIDCOnboarding_DefaultTeams []string
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -56,6 +59,7 @@ func (c *configuration) Clone() *configuration {
 	clone.InternationalStudents_DefaultSwedishTeams = slices.Clone(c.InternationalStudents_DefaultSwedishTeams)
 	clone.InternationalStudents_DefaultEnglishTeams = slices.Clone(c.InternationalStudents_DefaultEnglishTeams)
 	clone.InternationalStudents_DefaultChannels = slices.Clone(c.InternationalStudents_DefaultChannels)
+	clone.OIDCOnboarding_DefaultTeams = slices.Clone(c.OIDCOnboarding_DefaultTeams)
 
 	return &clone
 }
