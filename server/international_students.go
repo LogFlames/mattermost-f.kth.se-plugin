@@ -38,7 +38,9 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 		return err
 	}
 
-	teams := append(englishTeams, swedishTeams...)
+	teams := make([]*model.Team, 0, len(englishTeams)+len(swedishTeams))
+	teams = append(teams, englishTeams...)
+	teams = append(teams, swedishTeams...)
 	var firstErr error
 	for _, team := range teams {
 		if _, err := p.API.GetTeamMember(team.Id, user.Id); err != nil {
@@ -65,6 +67,62 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 		firstErr = err
 	}
 	return firstErr
+}
+
+func (p *Plugin) forceSyncInternationals(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	if args.TeamId == "" {
+		response.Text = "Run /force_sync_internationals from a team."
+		return response, nil
+	}
+	if !p.API.HasPermissionToTeam(args.UserId, args.TeamId, model.PermissionManageTeam) {
+		response.Text = "Only team admins can run /force_sync_internationals."
+		return response, nil
+	}
+	if len(strings.Fields(args.Command)) != 1 {
+		response.Text = "Usage: /force_sync_internationals (no arguments)."
+		return response, nil
+	}
+
+	configuration := p.getConfiguration()
+	tracked := make(map[string]struct{}, len(configuration.InternationalStudents_Users))
+	for _, userID := range configuration.InternationalStudents_Users {
+		tracked[userID] = struct{}{}
+	}
+
+	added := 0
+	var firstErr error
+	for page := 0; ; page++ {
+		members, err := p.API.GetTeamMembers(args.TeamId, page, 100)
+		if err != nil {
+			firstErr = firstError(firstErr, fmt.Errorf("list team members: %w", err))
+			break
+		}
+		for _, member := range members {
+			if member == nil || member.DeleteAt != 0 {
+				continue
+			}
+			if _, ok := tracked[member.UserId]; !ok {
+				continue
+			}
+			if err := p.addInternationalStudentToChannels(member.UserId, configuration.InternationalStudents_DefaultChannels); err != nil {
+				firstErr = firstError(firstErr, fmt.Errorf("sync user %q: %w", member.UserId, err))
+			} else {
+				added++
+			}
+		}
+		if len(members) < 100 {
+			break
+		}
+	}
+
+	if firstErr != nil {
+		p.API.LogError("International student channel synchronization failed", "team_id", args.TeamId, "error", firstErr.Error())
+		response.Text = fmt.Sprintf("International student channel synchronization completed with errors after processing %d users. Check the server logs.", added)
+	} else {
+		response.Text = fmt.Sprintf("Re-added %d international students in this team to the configured international channels.", added)
+	}
+	return response, nil
 }
 
 func (p *Plugin) addInternationalStudentToChannels(userID string, channelIDs []string) error {

@@ -130,6 +130,8 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		}
 	case "force_sync_categories":
 		return p.forceSyncCategories(args)
+	case "force_sync_internationals":
+		return p.forceSyncInternationals(args)
 	case "default_channel":
 		return p.defaultChannelCommand(args)
 	default:
@@ -167,6 +169,13 @@ func (p *Plugin) OnActivate() error {
 		Trigger:          "force_sync_categories",
 		AutoComplete:     true,
 		AutoCompleteDesc: "Sync default categories for all public and private channels in this team (team admins only)",
+	}); err != nil {
+		return err
+	}
+	if err := p.API.RegisterCommand(&model.Command{
+		Trigger:          "force_sync_internationals",
+		AutoComplete:     true,
+		AutoCompleteDesc: "Re-add international students in this team to configured international channels (team admins only)",
 	}); err != nil {
 		return err
 	}
