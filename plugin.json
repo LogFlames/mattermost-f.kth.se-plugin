@@ -218,19 +218,6 @@
                         "display_name": "International Students: English channels (Whitelist)",
                         "type": "custom",
                         "help_text": "In Swedish teams (configured above), these whitelisted channels are not muted for tracked SAML users."
-                    },
-                    {
-                        "key": "KeycloakClientID",
-                        "display_name": "Keycloak: Client ID",
-                        "type": "text",
-                        "help_text": "Client ID used to request access tokens for checking international status."
-                    },
-                    {
-                        "key": "KeycloakClientSecret",
-                        "display_name": "Keycloak: Client secret",
-                        "type": "text",
-                        "help_text": "Client secret used to request access tokens. This value is hidden after saving.",
-                        "secret": true
                     }
                 ]
             },
@@ -291,6 +278,28 @@
                         "display_name": "Translator: Channels Monitored by the Bot",
                         "type": "custom",
                         "help_text": "A list of channels where the bot will monitor for messages to suggest translations of, as well as its behavior per channel."
+                    }
+                ]
+            },
+            {
+                "key": "keycloak",
+                "title": "Keycloak Integration",
+                "subtitle": "Credentials used to check SAML users before international-student onboarding.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "KeycloakClientID",
+                        "display_name": "Keycloak: Client ID",
+                        "type": "text",
+                        "help_text": "Client ID used to request access tokens for checking international status."
+                    },
+                    {
+                        "key": "KeycloakClientSecret",
+                        "display_name": "Keycloak: Client secret",
+                        "type": "text",
+                        "help_text": "Client secret used to request access tokens. This value is hidden after saving.",
+                        "secret": true
                     }
                 ]
             }
