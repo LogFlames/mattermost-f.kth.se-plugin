@@ -156,6 +156,27 @@
                 ]
             },
             {
+                "key": "oidc-onboarding",
+                "title": "OIDC Onboarding",
+                "subtitle": "Adds newly created OIDC users to configured teams.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "OIDCOnboarding_OnOffBool",
+                        "display_name": "OIDC Onboarding: Module enabled?",
+                        "type": "bool",
+                        "help_text": "When enabled, newly created OIDC users are added to the configured teams."
+                    },
+                    {
+                        "key": "OIDCOnboarding_DefaultTeams",
+                        "display_name": "OIDC Onboarding: Default teams",
+                        "type": "custom",
+                        "help_text": "OIDC users are added to these teams in the configured order, with Fysiksektionen prioritized first."
+                    }
+                ]
+            },
+            {
                 "key": "international-students",
                 "title": "International Students Module",
                 "subtitle": "Adds SAML users to the international-student teams and mutes configured default channels.",
@@ -166,13 +187,7 @@
                         "key": "InternationalStudents_OnOffBool",
                         "display_name": "International Students: Module enabled?",
                         "type": "bool",
-                        "help_text": "When enabled, newly created SAML users are added to the configured teams and muted in non-English default public channels."
-                    },
-                    {
-                        "key": "InternationalStudents_DefaultSwedishTeams",
-                        "display_name": "International Students: Default Swedish teams",
-                        "type": "custom",
-                        "help_text": "SAML users are added to these teams and muted in non-whitelisted default public channels."
+                        "help_text": "When enabled, newly created SAML users are added to the configured teams and non-English default public channels are muted."
                     },
                     {
                         "key": "InternationalStudents_DefaultEnglishTeams",
@@ -181,22 +196,28 @@
                         "help_text": "SAML users are added to these teams without channel muting."
                     },
                     {
+                        "key": "InternationalStudents_DefaultSwedishTeams",
+                        "display_name": "International Students: Default Swedish teams",
+                        "type": "custom",
+                        "help_text": "SAML users are added to these teams; non-whitelisted default public channels in the teams are muted for international users."
+                    },
+                    {
                         "key": "InternationalStudents_DefaultChannels",
                         "display_name": "International Students: Default channels",
                         "type": "custom",
-                        "help_text": "SAML users are added to these channels when they are handled by the international-student workflow."
+                        "help_text": "SAML users are added to these channels."
                     },
                     {
                         "key": "InternationalStudents_Users",
                         "display_name": "International Students: Tracked SAML users",
                         "type": "custom",
-                        "help_text": "Maintained automatically when SAML users are created. The list can be reviewed in the System Console."
+                        "help_text": "Maintained automatically when SAML users are created. Do not change unnecessarily."
                     },
                     {
                         "key": "InternationalStudents_EnglishChannels",
-                        "display_name": "International Students: English channels",
+                        "display_name": "International Students: English channels (Whitelist)",
                         "type": "custom",
-                        "help_text": "Whitelisted channels are not muted for tracked SAML users."
+                        "help_text": "In Swedish teams (configured above), these whitelisted channels are not muted for tracked SAML users."
                     }
                 ]
             },
@@ -236,27 +257,6 @@
                         "display_name": "Website Publisher: Admins (can post as all committees)",
                         "type": "custom",
                         "help_text": "A list of users who have permission to post as all committees."
-                    }
-                ]
-            },
-            {
-                "key": "oidc-onboarding",
-                "title": "OIDC Onboarding",
-                "subtitle": "Adds newly created OIDC users to configured teams.",
-                "header": null,
-                "footer": null,
-                "settings": [
-                    {
-                        "key": "OIDCOnboarding_OnOffBool",
-                        "display_name": "OIDC Onboarding: Module enabled?",
-                        "type": "bool",
-                        "help_text": "When enabled, newly created OIDC users are added to the configured teams."
-                    },
-                    {
-                        "key": "OIDCOnboarding_DefaultTeams",
-                        "display_name": "OIDC Onboarding: Default teams",
-                        "type": "custom",
-                        "help_text": "OIDC users are added to these teams in the configured order, with Fysiksektionen prioritized first."
                     }
                 ]
             },
