@@ -13,7 +13,7 @@ import (
 
 const keycloakRealm = "mattermost"
 
-var keycloakURL = "http://localhost:9001"
+var keycloakURL = "https://mattermost.fysiksektionen.se:9001"
 
 func (p *Plugin) getKeycloakAccessToken(clientID, clientSecret string) (string, error) {
 	endpoint := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", keycloakURL, url.PathEscape(keycloakRealm))

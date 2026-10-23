@@ -42,7 +42,10 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 	}
 
 	switch fields[1] {
-	case "migrate_to_google/keycloak":
+	case "migrate_to_google":
+		response.Text = "Keycloak account migration is not implemented yet."
+		return response, nil
+	case "migrate_to_keycloak":
 		response.Text = "Keycloak account migration is not implemented yet."
 		return response, nil
 	case "new_user":
@@ -52,7 +55,7 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 		}
 		switch strings.ToLower(fields[7]) {
 		case "yes":
-			response.Text = "International Keycloak accounts cannot be created with this command. Please create international accounts yourself."
+			response.Text = "International Keycloak accounts should not be created with this command. International students should create their accounts themselves."
 			return response, nil
 		case "no":
 		default:
@@ -68,7 +71,7 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 			response.Text = "Could not create the Keycloak account. Check the server logs for details."
 			return response, nil
 		}
-		response.Text = fmt.Sprintf("Keycloak account created for %s.", fields[2])
+		response.Text = fmt.Sprintf("Keycloak account created for %s with temporary password %s. Keycloak will require the password to be changed upon first log-in.", fields[2], fields[3])
 		return response, nil
 	default:
 		response.Text = keycloakNewUserUsage
@@ -76,7 +79,7 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 	}
 }
 
-const keycloakNewUserUsage = "Usage: /keycloak new_user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes|no>"
+const keycloakNewUserUsage = "Usage: /keycloak new_user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes or no>"
 
 func (p *Plugin) createKeycloakUser(email, password, firstName, lastName, mattermostUsername string) error {
 	if err := p.checkMattermostUserConflicts(email, mattermostUsername); err != nil {
@@ -101,10 +104,13 @@ func (p *Plugin) createKeycloakUser(email, password, firstName, lastName, matter
 		LastName:      lastName,
 		Attributes: map[string][]string{
 			"mattermostUsername":      {mattermostUsername},
-			"creationMethod":          {"MattermostPluginCommand"},
 			"id":                      {id},
 			"confirmsIsInternational": {"Yes"},
-			"isActuallyInternational": {"No"},
+			"isActuallyInternational": {"No"}, // international students should create their own accounts
+			"creationMethod":          {"MattermostPluginCommand"},
+			"accountType":             {"Unknown (created by Mattermost plugin)"},
+			"kthProgram":              {"None"},
+			"kthExpectedEndOfStudies": {"2099-12"},
 		},
 		Credentials: []keycloakCredential{{Type: "password", Value: password, Temporary: true}},
 	}
