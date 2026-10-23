@@ -1,10 +1,8 @@
 package main
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"net/http"
 	"net/url"
 	"strings"
@@ -48,12 +46,4 @@ func (p *Plugin) getKeycloakAccessToken(clientID, clientSecret string) (string, 
 		return "", fmt.Errorf("Keycloak token response did not contain an access token")
 	}
 	return tokenResponse.AccessToken, nil
-}
-
-func keycloakID() (string, error) {
-	value, err := rand.Int(rand.Reader, big.NewInt(100000000))
-	if err != nil {
-		return "", fmt.Errorf("generate Keycloak account ID: %w", err)
-	}
-	return fmt.Sprintf("keycloak%08d", value.Int64()), nil
 }

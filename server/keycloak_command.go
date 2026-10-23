@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"strings"
 	"time"
@@ -62,6 +64,10 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 			response.Text = keycloakNewUserUsage
 			return response, nil
 		}
+		if err := validateKeycloakEmail(fields[2]); err != nil {
+			response.Text = err.Error()
+			return response, nil
+		}
 		if err := p.createKeycloakUser(fields[2], fields[3], fields[4], fields[5], fields[6]); err != nil {
 			p.API.LogError("Keycloak user creation failed", "email", fields[2], "error", err.Error())
 			if strings.HasSuffix(strings.SplitN(err.Error(), ":", 2)[0], "account conflict") {
@@ -81,7 +87,18 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 
 const keycloakNewUserUsage = "Usage: /keycloak new_user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes or no>"
 
+func validateKeycloakEmail(email string) error {
+	parsedEmail, err := mail.ParseAddress(email)
+	if err != nil || parsedEmail.Address != email {
+		return fmt.Errorf("Invalid e-mail address %q. Use an address such as name@example.com.", email)
+	}
+	return nil
+}
+
 func (p *Plugin) createKeycloakUser(email, password, firstName, lastName, mattermostUsername string) error {
+	if err := validateKeycloakEmail(email); err != nil {
+		return err
+	}
 	if err := p.checkMattermostUserConflicts(email, mattermostUsername); err != nil {
 		return err
 	}
@@ -91,10 +108,6 @@ func (p *Plugin) createKeycloakUser(email, password, firstName, lastName, matter
 		return fmt.Errorf("Keycloak client credentials are not configured")
 	}
 
-	id, err := keycloakID()
-	if err != nil {
-		return err
-	}
 	payload := keycloakNewUserRequest{
 		Username:      email,
 		Email:         email,
@@ -104,7 +117,6 @@ func (p *Plugin) createKeycloakUser(email, password, firstName, lastName, matter
 		LastName:      lastName,
 		Attributes: map[string][]string{
 			"mattermostUsername":      {mattermostUsername},
-			"id":                      {id},
 			"confirmsIsInternational": {"Yes"},
 			"isActuallyInternational": {"No"}, // international students should create their own accounts
 			"creationMethod":          {"MattermostPluginCommand"},
@@ -148,6 +160,13 @@ func (p *Plugin) createKeycloakUser(email, password, firstName, lastName, matter
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusCreated {
+		details, readErr := io.ReadAll(io.LimitReader(response.Body, 4096))
+		if readErr != nil {
+			return fmt.Errorf("Keycloak user endpoint returned HTTP %d (read error response: %w)", response.StatusCode, readErr)
+		}
+		if details := strings.TrimSpace(string(details)); details != "" {
+			return fmt.Errorf("Keycloak user endpoint returned HTTP %d: %s", response.StatusCode, details)
+		}
 		return fmt.Errorf("Keycloak user endpoint returned HTTP %d", response.StatusCode)
 	}
 	return nil
