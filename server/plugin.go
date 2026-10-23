@@ -90,8 +90,24 @@ func (p *Plugin) MessageWillBeUpdated(_ *plugin.Context, newPost *model.Post, _ 
 func (p *Plugin) UserHasJoinedChannel(_ *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
 	configuration := p.getConfiguration()
 
+	if configuration.InternationalStudents_OnOffBool {
+		p.InternationalStudents_UserJoinedChannel(channelMember, configuration)
+	}
+
 	if configuration.JoinLeaveFree_OnOffBool {
 		p.JoinLeaveFree_UserJoinedChannel(channelMember, configuration)
+	}
+}
+
+func (p *Plugin) UserHasBeenCreated(_ *plugin.Context, user *model.User) {
+	if user == nil {
+		return
+	}
+
+	if p.getConfiguration().InternationalStudents_OnOffBool {
+		if err := p.InternationalStudents_UserCreated(user); err != nil {
+			p.API.LogError("International student setup failed", "user_id", user.Id, "error", err.Error())
+		}
 	}
 }
 

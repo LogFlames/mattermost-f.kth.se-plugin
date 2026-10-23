@@ -33,6 +33,12 @@ type configuration struct {
 
 	DefaultChannels_OnOffBool bool
 	DefaultChannels_Custom    defaultChannelList
+
+	InternationalStudents_Users               []string
+	InternationalStudents_EnglishChannels     []string
+	InternationalStudents_DefaultSwedishTeams []string
+	InternationalStudents_DefaultEnglishTeams []string
+	InternationalStudents_OnOffBool           bool
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -44,6 +50,10 @@ func (c *configuration) Clone() *configuration {
 	copy(clone.ModeratorBot_Channels, c.ModeratorBot_Channels)
 
 	clone.DefaultChannels_Custom = slices.Clone(c.DefaultChannels_Custom)
+	clone.InternationalStudents_Users = slices.Clone(c.InternationalStudents_Users)
+	clone.InternationalStudents_EnglishChannels = slices.Clone(c.InternationalStudents_EnglishChannels)
+	clone.InternationalStudents_DefaultSwedishTeams = slices.Clone(c.InternationalStudents_DefaultSwedishTeams)
+	clone.InternationalStudents_DefaultEnglishTeams = slices.Clone(c.InternationalStudents_DefaultEnglishTeams)
 
 	return &clone
 }

@@ -156,6 +156,45 @@
                 ]
             },
             {
+                "key": "international-students",
+                "title": "International Students Module",
+                "subtitle": "Adds SAML users to the international-student teams and mutes configured default channels.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "InternationalStudents_OnOffBool",
+                        "display_name": "International Students: Module enabled?",
+                        "type": "bool",
+                        "help_text": "When enabled, newly created SAML users are added to the configured teams and muted in non-English default public channels."
+                    },
+                    {
+                        "key": "InternationalStudents_DefaultSwedishTeams",
+                        "display_name": "International Students: Default Swedish teams",
+                        "type": "custom",
+                        "help_text": "SAML users are added to these teams and muted in non-whitelisted default public channels."
+                    },
+                    {
+                        "key": "InternationalStudents_DefaultEnglishTeams",
+                        "display_name": "International Students: Default English teams",
+                        "type": "custom",
+                        "help_text": "SAML users are added to these teams without channel muting."
+                    },
+                    {
+                        "key": "InternationalStudents_Users",
+                        "display_name": "International Students: Tracked SAML users",
+                        "type": "custom",
+                        "help_text": "Maintained automatically when SAML users are created. The list can be reviewed in the System Console."
+                    },
+                    {
+                        "key": "InternationalStudents_EnglishChannels",
+                        "display_name": "International Students: English channels",
+                        "type": "custom",
+                        "help_text": "Whitelisted channels are not muted for tracked SAML users."
+                    }
+                ]
+            },
+            {
                 "key": "website-publisher",
                 "title": "Website Publisher Module",
                 "subtitle": "Posts messages from Mattermost to the f.kth.se website",
