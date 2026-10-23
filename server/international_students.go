@@ -14,13 +14,13 @@ import (
 
 const (
 	internationalStudentsUsersKey = "internationalstudents_users"
-	internationalStudentRole      = "International Student"
+	internationalStudentLocale    = "en"
 )
 
 var internationalStudentsConfigLock sync.Mutex
 
 func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
-	if user == nil || !user.IsSAMLUser() || user.Position != internationalStudentRole {
+	if user == nil || !user.IsSAMLUser() || user.Locale != internationalStudentLocale {
 		return nil
 	}
 
