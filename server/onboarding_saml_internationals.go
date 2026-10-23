@@ -25,15 +25,14 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 
 	// add international students to the correct teams and channels and mute Swedish channels
 	configuration := p.getConfiguration()
-	englishTeams, err := p.internationalStudentsTeams(configuration.InternationalStudents_DefaultEnglishTeams)
+	englishTeams, err := p.getTeamsFromTeamIDs(configuration.InternationalStudents_DefaultEnglishTeams)
 	if err != nil {
 		return err
 	}
-	swedishTeams, err := p.internationalStudentsTeams(configuration.InternationalStudents_DefaultSwedishTeams)
+	swedishTeams, err := p.getTeamsFromTeamIDs(configuration.InternationalStudents_DefaultSwedishTeams)
 	if err != nil {
 		return err
 	}
-	swedishTeams = prioritizeFysiksektionen(swedishTeams)
 
 	teams := make([]*model.Team, 0, len(englishTeams)+len(swedishTeams))
 	teams = append(teams, englishTeams...)
@@ -152,7 +151,7 @@ func firstError(current, candidate error) error {
 	return candidate
 }
 
-func (p *Plugin) internationalStudentsTeams(teamIDs []string) ([]*model.Team, error) {
+func (p *Plugin) getTeamsFromTeamIDs(teamIDs []string) ([]*model.Team, error) {
 	teams := make([]*model.Team, 0, len(teamIDs))
 	for _, teamID := range teamIDs {
 		team, err := p.API.GetTeam(teamID)
@@ -165,19 +164,6 @@ func (p *Plugin) internationalStudentsTeams(teamIDs []string) ([]*model.Team, er
 		teams = append(teams, team)
 	}
 	return teams, nil
-}
-
-func prioritizeFysiksektionen(teams []*model.Team) []*model.Team {
-	prioritized := make([]*model.Team, 0, len(teams))
-	remaining := make([]*model.Team, 0, len(teams))
-	for _, team := range teams {
-		if team != nil && team.Name == "Fysiksektionen" {
-			prioritized = append(prioritized, team)
-		} else {
-			remaining = append(remaining, team)
-		}
-	}
-	return append(prioritized, remaining...)
 }
 
 func (p *Plugin) InternationalStudents_UserJoinedChannel(channelMember *model.ChannelMember, configuration *configuration) {
@@ -230,7 +216,7 @@ func (p *Plugin) addInternationalStudentToConfig(userID string) error {
 
 func (p *Plugin) muteExistingDefaultChannels(userID string) error {
 	configuration := p.getConfiguration()
-	teams, err := p.internationalStudentsTeams(configuration.InternationalStudents_DefaultSwedishTeams)
+	teams, err := p.getTeamsFromTeamIDs(configuration.InternationalStudents_DefaultSwedishTeams)
 	if err != nil {
 		return err
 	}

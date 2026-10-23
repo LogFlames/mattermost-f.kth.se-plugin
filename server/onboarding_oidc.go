@@ -8,9 +8,9 @@ func (p *Plugin) OIDCOnboarding_UserCreated(user *model.User) error {
 	}
 
 	configuration := p.getConfiguration()
-	teams, err := p.internationalStudentsTeams(configuration.OIDCOnboarding_DefaultTeams)
+	teams, err := p.getTeamsFromTeamIDs(configuration.OIDCOnboarding_DefaultTeams)
 	if err != nil {
 		return err
 	}
-	return p.addUserToTeams(user.Id, prioritizeFysiksektionen(teams))
+	return p.addUserToTeams(user.Id, teams)
 }
