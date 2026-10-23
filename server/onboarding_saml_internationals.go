@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
@@ -14,12 +17,25 @@ import (
 
 const (
 	internationalStudentsUsersKey = "internationalstudents_users"
+	keycloakURL                   = "http://localhost:9001"
+	keycloakRealm                 = "mattermost"
+	keycloakServiceAccountToken   = ".keycloak-admin-token"
 )
 
 var internationalStudentsConfigLock sync.Mutex
 
 func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 	if user == nil || !user.IsSAMLUser() {
+		return nil
+	}
+
+	// if the user is not actually international, do nothing
+	// note: if the Keycloak check fails, treat account as international
+	actuallyInternational, err := isActuallyInternational(user.Email)
+	firstErr := err
+	if err != nil {
+		firstErr = fmt.Errorf("check Keycloak international status for %q: %w", user.Email, err)
+	} else if !actuallyInternational {
 		return nil
 	}
 
@@ -37,7 +53,7 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 	teams := make([]*model.Team, 0, len(englishTeams)+len(swedishTeams))
 	teams = append(teams, englishTeams...)
 	teams = append(teams, swedishTeams...)
-	firstErr := p.addUserToTeams(user.Id, teams)
+	firstErr = firstError(firstErr, p.addUserToTeams(user.Id, teams))
 
 	if err := p.addInternationalStudentToChannels(user.Id, configuration.InternationalStudents_DefaultChannels); err != nil {
 		firstErr = firstError(firstErr, err)
@@ -50,6 +66,55 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 		firstErr = err
 	}
 	return firstErr
+}
+
+func isActuallyInternational(email string) (bool, error) {
+	if email == "" {
+		return false, fmt.Errorf("user has no email address")
+	}
+
+	token, err := os.ReadFile(keycloakServiceAccountToken)
+	if err != nil {
+		return false, fmt.Errorf("read service-account token from %q: %w", keycloakServiceAccountToken, err)
+	}
+	bearerToken := strings.TrimSpace(string(token))
+	if bearerToken == "" {
+		return false, fmt.Errorf("service-account token file %q is empty", keycloakServiceAccountToken)
+	}
+
+	endpoint := fmt.Sprintf("%s/admin/realms/%s/users", keycloakURL, url.PathEscape(keycloakRealm))
+	query := url.Values{"email": {email}, "exact": {"true"}}
+	request, err := http.NewRequest(http.MethodGet, endpoint+"?"+query.Encode(), nil)
+	if err != nil {
+		return false, fmt.Errorf("create Keycloak request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+bearerToken)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		return false, fmt.Errorf("call Keycloak: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("Keycloak returned HTTP %d", response.StatusCode)
+	}
+
+	// note: Keycloak is configured to have username=email, so duplicate users are impossible
+	var users []struct {
+		Attributes map[string][]string `json:"attributes"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&users); err != nil {
+		return false, fmt.Errorf("decode Keycloak response: %w", err)
+	}
+
+	for _, keycloakUser := range users {
+		if slices.Contains(keycloakUser.Attributes["isActuallyInternational"], "Yes") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (p *Plugin) addUserToTeams(userID string, teams []*model.Team) error {
