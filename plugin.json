@@ -181,6 +181,12 @@
                         "help_text": "SAML users are added to these teams without channel muting."
                     },
                     {
+                        "key": "InternationalStudents_DefaultChannels",
+                        "display_name": "International Students: Default channels",
+                        "type": "custom",
+                        "help_text": "SAML users are added to these channels when they are handled by the international-student workflow."
+                    },
+                    {
                         "key": "InternationalStudents_Users",
                         "display_name": "International Students: Tracked SAML users",
                         "type": "custom",

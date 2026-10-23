@@ -20,8 +20,12 @@ const (
 var internationalStudentsConfigLock sync.Mutex
 
 func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
-	if user == nil || !user.IsSAMLUser() || user.Locale != internationalStudentLocale {
+	if user == nil || !user.IsSAMLUser() {
 		return nil
+	}
+
+	if user.Locale != internationalStudentLocale {
+		return fmt.Errorf("international student setup ignored for user %q because their language was %q", user.Username, user.Locale)
 	}
 
 	configuration := p.getConfiguration()
@@ -33,6 +37,7 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 	if err != nil {
 		return err
 	}
+
 	teams := append(englishTeams, swedishTeams...)
 	var firstErr error
 	for _, team := range teams {
@@ -49,16 +54,40 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 		}
 	}
 
+	if err := p.addInternationalStudentToChannels(user.Id, configuration.InternationalStudents_DefaultChannels); err != nil {
+		firstErr = firstError(firstErr, err)
+	}
 	if err := p.addInternationalStudent(user.Id); err != nil {
-		if firstErr == nil {
-			firstErr = err
-		}
+		firstErr = firstError(firstErr, err)
 	}
 
 	if err := p.muteExistingDefaultChannels(user.Id); err != nil && firstErr == nil {
 		firstErr = err
 	}
 	return firstErr
+}
+
+func (p *Plugin) addInternationalStudentToChannels(userID string, channelIDs []string) error {
+	var firstErr error
+	for _, channelID := range channelIDs {
+		if _, err := p.API.GetChannelMember(channelID, userID); err != nil {
+			if err.StatusCode != http.StatusNotFound {
+				firstErr = firstError(firstErr, fmt.Errorf("check membership in channel %q: %w", channelID, err))
+				continue
+			}
+			if _, err := p.API.AddChannelMember(channelID, userID); err != nil {
+				firstErr = firstError(firstErr, fmt.Errorf("add user to channel %q: %w", channelID, err))
+			}
+		}
+	}
+	return firstErr
+}
+
+func firstError(current, candidate error) error {
+	if current != nil {
+		return current
+	}
+	return candidate
 }
 
 func (p *Plugin) internationalStudentsTeams(teamIDs []string) ([]*model.Team, error) {
@@ -173,7 +202,7 @@ func (p *Plugin) isDefaultPublicInternationalStudentChannel(channel *model.Chann
 		!slices.Contains(configuration.InternationalStudents_EnglishChannels, channel.Id)
 }
 
-func (p *Plugin) muteChannelForUser(channelID, userID string) error {
+func (p *Plugin) muteChannelForUser(channelID, userID string) *model.AppError {
 	member, err := p.API.GetChannelMember(channelID, userID)
 	if err != nil {
 		return err

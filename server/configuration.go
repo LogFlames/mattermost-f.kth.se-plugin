@@ -38,6 +38,7 @@ type configuration struct {
 	InternationalStudents_EnglishChannels     []string
 	InternationalStudents_DefaultSwedishTeams []string
 	InternationalStudents_DefaultEnglishTeams []string
+	InternationalStudents_DefaultChannels     []string
 	InternationalStudents_OnOffBool           bool
 }
 
@@ -54,6 +55,7 @@ func (c *configuration) Clone() *configuration {
 	clone.InternationalStudents_EnglishChannels = slices.Clone(c.InternationalStudents_EnglishChannels)
 	clone.InternationalStudents_DefaultSwedishTeams = slices.Clone(c.InternationalStudents_DefaultSwedishTeams)
 	clone.InternationalStudents_DefaultEnglishTeams = slices.Clone(c.InternationalStudents_DefaultEnglishTeams)
+	clone.InternationalStudents_DefaultChannels = slices.Clone(c.InternationalStudents_DefaultChannels)
 
 	return &clone
 }

@@ -18,6 +18,7 @@ export default class Plugin {
         registry.registerAdminConsoleCustomSetting('InternationalStudents_Users', SelectUsers, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_DefaultSwedishTeams', SelectTeams, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_DefaultEnglishTeams', SelectTeams, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('InternationalStudents_DefaultChannels', SelectChannels, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_EnglishChannels', SelectChannels, {showTitle: true});
     }
 }
