@@ -5,7 +5,7 @@ import {getUser} from 'mattermost-redux/actions/users';
 import {getTeam} from 'mattermost-redux/actions/teams';
 import {getChannel} from 'mattermost-redux/actions/channels';
 
-import ModeratorBotChannels from './moderator_bot_channels.jsx';
+import SelectChannels from './select_channels.jsx';
 
 function mapDispatchToProps(dispatch) {
     return {
@@ -17,4 +17,4 @@ function mapDispatchToProps(dispatch) {
     };
 }
 
-export default connect(null, mapDispatchToProps)(ModeratorBotChannels);
+export default connect(null, mapDispatchToProps)(SelectChannels);
