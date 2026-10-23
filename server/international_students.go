@@ -37,6 +37,7 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 	if err != nil {
 		return err
 	}
+	swedishTeams = prioritizeFysiksektionen(swedishTeams)
 
 	teams := make([]*model.Team, 0, len(englishTeams)+len(swedishTeams))
 	teams = append(teams, englishTeams...)
@@ -158,6 +159,19 @@ func (p *Plugin) internationalStudentsTeams(teamIDs []string) ([]*model.Team, er
 		teams = append(teams, team)
 	}
 	return teams, nil
+}
+
+func prioritizeFysiksektionen(teams []*model.Team) []*model.Team {
+	prioritized := make([]*model.Team, 0, len(teams))
+	remaining := make([]*model.Team, 0, len(teams))
+	for _, team := range teams {
+		if team != nil && team.Name == "Fysiksektionen" {
+			prioritized = append(prioritized, team)
+		} else {
+			remaining = append(remaining, team)
+		}
+	}
+	return append(prioritized, remaining...)
 }
 
 func (p *Plugin) InternationalStudents_UserJoinedChannel(channelMember *model.ChannelMember, configuration *configuration) {
