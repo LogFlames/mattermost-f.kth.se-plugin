@@ -139,6 +139,8 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		return p.forceSyncInternationals(args)
 	case "default_channel":
 		return p.defaultChannelCommand(args)
+	case "keycloak":
+		return p.keycloakCommand(args)
 	default:
 		return &model.CommandResponse{
 			ResponseType: model.CommandResponseTypeEphemeral,
@@ -189,6 +191,14 @@ func (p *Plugin) OnActivate() error {
 		AutoComplete:     true,
 		AutoCompleteHint: "set|unset|list",
 		AutoCompleteDesc: "Manage this team's default channels (team admins only)",
+	}); err != nil {
+		return err
+	}
+	if err := p.API.RegisterCommand(&model.Command{
+		Trigger:          "keycloak",
+		AutoComplete:     true,
+		AutoCompleteHint: "new_user|migrate_to_google/keycloak",
+		AutoCompleteDesc: "Create or migrate a Keycloak account",
 	}); err != nil {
 		return err
 	}
