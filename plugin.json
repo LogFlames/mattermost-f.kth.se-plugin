@@ -218,6 +218,19 @@
                         "display_name": "International Students: English channels (Whitelist)",
                         "type": "custom",
                         "help_text": "In Swedish teams (configured above), these whitelisted channels are not muted for tracked SAML users."
+                    },
+                    {
+                        "key": "KeycloakClientID",
+                        "display_name": "Keycloak: Client ID",
+                        "type": "text",
+                        "help_text": "Client ID used to request access tokens for checking international status."
+                    },
+                    {
+                        "key": "KeycloakClientSecret",
+                        "display_name": "Keycloak: Client secret",
+                        "type": "text",
+                        "help_text": "Client secret used to request access tokens. This value is hidden after saving.",
+                        "secret": true
                     }
                 ]
             },

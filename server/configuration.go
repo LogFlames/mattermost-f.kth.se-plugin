@@ -40,6 +40,8 @@ type configuration struct {
 	InternationalStudents_DefaultEnglishTeams []string
 	InternationalStudents_DefaultChannels     []string
 	InternationalStudents_OnOffBool           bool
+	KeycloakClientID                          string
+	KeycloakClientSecret                      string
 
 	OIDCOnboarding_OnOffBool    bool
 	OIDCOnboarding_DefaultTeams []string

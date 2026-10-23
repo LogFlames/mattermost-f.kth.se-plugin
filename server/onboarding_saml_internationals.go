@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -19,7 +18,6 @@ const (
 	internationalStudentsUsersKey = "internationalstudents_users"
 	keycloakURL                   = "http://localhost:9001"
 	keycloakRealm                 = "mattermost"
-	keycloakServiceAccountToken   = ".keycloak-admin-token"
 )
 
 var internationalStudentsConfigLock sync.Mutex
@@ -31,7 +29,7 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 
 	// if the user is not actually international, do nothing
 	// note: if the Keycloak check fails, treat account as international
-	actuallyInternational, err := isActuallyInternational(user.Email)
+	actuallyInternational, err := p.isActuallyInternational(user.Email)
 	firstErr := err
 	if err != nil {
 		firstErr = fmt.Errorf("check Keycloak international status for %q: %w", user.Email, err)
@@ -68,18 +66,19 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 	return firstErr
 }
 
-func isActuallyInternational(email string) (bool, error) {
+func (p *Plugin) isActuallyInternational(email string) (bool, error) {
 	if email == "" {
 		return false, fmt.Errorf("user has no email address")
 	}
 
-	token, err := os.ReadFile(keycloakServiceAccountToken)
-	if err != nil {
-		return false, fmt.Errorf("read service-account token from %q: %w", keycloakServiceAccountToken, err)
+	configuration := p.getConfiguration()
+	if configuration.KeycloakClientID == "" || configuration.KeycloakClientSecret == "" {
+		return false, fmt.Errorf("Keycloak client credentials are not configured")
 	}
-	bearerToken := strings.TrimSpace(string(token))
-	if bearerToken == "" {
-		return false, fmt.Errorf("service-account token file %q is empty", keycloakServiceAccountToken)
+
+	token, err := p.getKeycloakAccessToken(configuration.KeycloakClientID, configuration.KeycloakClientSecret)
+	if err != nil {
+		return false, err
 	}
 
 	endpoint := fmt.Sprintf("%s/admin/realms/%s/users", keycloakURL, url.PathEscape(keycloakRealm))
@@ -88,7 +87,7 @@ func isActuallyInternational(email string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("create Keycloak request: %w", err)
 	}
-	request.Header.Set("Authorization", "Bearer "+bearerToken)
+	request.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	response, err := client.Do(request)
@@ -115,6 +114,41 @@ func isActuallyInternational(email string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func (p *Plugin) getKeycloakAccessToken(clientID, clientSecret string) (string, error) {
+	endpoint := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", keycloakURL, url.PathEscape(keycloakRealm))
+	form := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {clientID},
+		"client_secret": {clientSecret},
+	}
+	request, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("create Keycloak token request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	if err != nil {
+		return "", fmt.Errorf("request Keycloak access token: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Keycloak token endpoint returned HTTP %d", response.StatusCode)
+	}
+
+	var tokenResponse struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&tokenResponse); err != nil {
+		return "", fmt.Errorf("decode Keycloak token response: %w", err)
+	}
+	if tokenResponse.AccessToken == "" {
+		return "", fmt.Errorf("Keycloak token response did not contain an access token")
+	}
+	return tokenResponse.AccessToken, nil
 }
 
 func (p *Plugin) addUserToTeams(userID string, teams []*model.Team) error {
