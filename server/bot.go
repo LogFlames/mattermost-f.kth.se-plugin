@@ -136,3 +136,31 @@ func (p *Plugin) EnsureReactionsBot() error {
 
 	return nil
 }
+
+func (p *Plugin) EnsureTranslatorBot() error {
+	const username = "translator-bot"
+
+	user, err := p.API.GetUserByUsername(username)
+	if err == nil {
+		if !user.IsBot {
+			return fmt.Errorf("translator bot username belongs to a non-bot user")
+		}
+		p.translatorBot = model.Bot{UserId: user.Id, Username: username}
+		return nil
+	}
+	if err.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("look up translator bot: %w", err)
+	}
+
+	bot, appErr := p.API.CreateBot(&model.Bot{
+		Username:    username,
+		DisplayName: "Translator",
+		Description: "Translates Swedish Mattermost messages into English.",
+		OwnerId:     p.API.GetPluginID(),
+	})
+	if appErr != nil {
+		return fmt.Errorf("create translator bot: %w", appErr)
+	}
+	p.translatorBot = *bot
+	return nil
+}

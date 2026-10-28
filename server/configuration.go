@@ -45,6 +45,16 @@ type configuration struct {
 
 	OIDCOnboarding_OnOffBool    bool
 	OIDCOnboarding_DefaultTeams []string
+
+	TranslatorBot_OnOffBool               bool
+	TranslatorBot_APIKey                  string
+	TranslatorBot_SystemPrompt            string
+	TranslatorBot_UserPrompt              string
+	TranslatorBot_TestChannelID           string
+	TranslatorBot_AuditChannelID          string
+	TranslatorBot_DictionaryPostID        string
+	TranslatorBot_Custom_ChannelList      []translatorChannel
+	TranslatorBot_Custom_ExcludedChannels []string
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -62,6 +72,8 @@ func (c *configuration) Clone() *configuration {
 	clone.InternationalStudents_DefaultEnglishTeams = slices.Clone(c.InternationalStudents_DefaultEnglishTeams)
 	clone.InternationalStudents_DefaultChannels = slices.Clone(c.InternationalStudents_DefaultChannels)
 	clone.OIDCOnboarding_DefaultTeams = slices.Clone(c.OIDCOnboarding_DefaultTeams)
+	clone.TranslatorBot_Custom_ChannelList = slices.Clone(c.TranslatorBot_Custom_ChannelList)
+	clone.TranslatorBot_Custom_ExcludedChannels = slices.Clone(c.TranslatorBot_Custom_ExcludedChannels)
 
 	return &clone
 }
@@ -114,6 +126,10 @@ func (p *Plugin) OnConfigurationChange() error {
 	// Load the public configuration fields from the Mattermost server configuration.
 	if err := p.API.LoadPluginConfiguration(configuration); err != nil {
 		return errors.Wrap(err, "failed to load plugin configuration")
+	}
+
+	if err := validateTranslatorConfiguration(configuration); err != nil {
+		return err
 	}
 
 	p.setConfiguration(configuration)

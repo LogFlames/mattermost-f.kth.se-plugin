@@ -263,8 +263,8 @@
             {
                 "key": "translator",
                 "title": "Translator Module",
-                "subtitle": "Translates messages into english",
-                "header": "NOT IMPLEMENTED",
+                "subtitle": "Translates messages into English. NOTE: The bot account must be a member of the channels to monitor or translate messages in.",
+                "header": null,
                 "footer": null,
                 "settings": [
                     {
@@ -278,6 +278,42 @@
                         "display_name": "Translator: Channels Monitored by the Bot",
                         "type": "custom",
                         "help_text": "A list of channels where the bot will monitor for messages to suggest translations of, as well as its behavior per channel."
+                    },
+                    {
+                        "key": "TranslatorBot_Custom_ExcludedChannels",
+                        "display_name": "Translator: Reaction Translation Excluded Channels",
+                        "type": "custom",
+                        "help_text": "Channels where the :english: reaction must not trigger a translation."
+                    },
+                    {
+                        "key": "TranslatorBot_SystemPrompt",
+                        "display_name": "Translator: System prompt",
+                        "type": "longtext",
+                        "help_text": "Required system prompt sent to Mistral. Translation requests fail if this is empty."
+                    },
+                    {
+                        "key": "TranslatorBot_UserPrompt",
+                        "display_name": "Translator: User prompt",
+                        "type": "longtext",
+                        "help_text": "Required user prompt template sent to Mistral. Use {message} for the Mattermost message. Translation requests fail if this is empty."
+                    },
+                    {
+                        "key": "TranslatorBot_DictionaryPostID",
+                        "display_name": "Translator: Mattermost dictionary post ID",
+                        "type": "text",
+                        "help_text": "Required post containing the Swedish-English dictionary. It is fetched for every translation, and requests fail if this is not set or cannot be read."
+                    },
+                    {
+                        "key": "TranslatorBot_TestChannelID",
+                        "display_name": "Translator: Test/error channel ID",
+                        "type": "custom",
+                        "help_text": "Optional channel for translation test and error reports."
+                    },
+                    {
+                        "key": "TranslatorBot_AuditChannelID",
+                        "display_name": "Translator: Audit channel ID",
+                        "type": "custom",
+                        "help_text": "Optional channel receiving successful translation audit messages."
                     }
                 ]
             },
@@ -299,6 +335,22 @@
                         "display_name": "Keycloak: Client secret",
                         "type": "text",
                         "help_text": "Client secret used to request access tokens. This value is hidden after saving.",
+                        "secret": true
+                    }
+                ]
+            },
+            {
+                "key": "mistral-credentials",
+                "title": "Mistral Credentials",
+                "subtitle": "Credentials used by Mistral integrations",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "TranslatorBot_APIKey",
+                        "display_name": "Translator: Mistral API key",
+                        "type": "text",
+                        "help_text": "Secret API key used with Mistral.",
                         "secret": true
                     }
                 ]

@@ -20,7 +20,8 @@ type Plugin struct {
 	configuration     *configuration
 
 	// Global
-	pluginBot model.Bot
+	pluginBot     model.Bot
+	translatorBot model.Bot
 
 	categoryCancel context.CancelFunc
 	categoryDone   chan struct{}
@@ -79,8 +80,13 @@ func (p *Plugin) MessageWillBePosted(_ *plugin.Context, post *model.Post) (*mode
 
 func (p *Plugin) MessageHasBeenPosted(_ *plugin.Context, post *model.Post) {
 	if p.configuration.ModeratorBot_OnOffBool {
-		p.Moderator_MessageHasBeenPosted(post, p.configuration)
+		p.Moderator_MessageHasBeenPosted(post, p.getConfiguration())
 	}
+	p.translatorMessageHasBeenPosted(post)
+}
+
+func (p *Plugin) ReactionHasBeenAdded(_ *plugin.Context, reaction *model.Reaction) {
+	p.translatorReactionHasBeenAdded(reaction)
 }
 
 func (p *Plugin) MessageWillBeUpdated(_ *plugin.Context, newPost *model.Post, _ *model.Post) (*model.Post, string) {
@@ -159,6 +165,9 @@ func (p *Plugin) OnActivate() error {
 	}
 
 	if err := p.EnsureReactionsBot(); err != nil {
+		return err
+	}
+	if err := p.EnsureTranslatorBot(); err != nil {
 		return err
 	}
 

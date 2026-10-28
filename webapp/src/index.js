@@ -7,6 +7,7 @@ import JoinLeaveFreeBotUserId from './components/admin_settings/single_type_inpu
 import LoggingChannelId from './components/admin_settings/single_type_input/logging_channel_id';
 import SelectUsers from './components/admin_settings/single_type_input/select_users';
 import StatsPage from './components/stats/stats_page';
+import TranslatorChannels from './components/admin_settings/translator_channels';
 
 export default class Plugin {
     initialize(registry) {
@@ -21,6 +22,10 @@ export default class Plugin {
         registry.registerAdminConsoleCustomSetting('InternationalStudents_DefaultChannels', SelectChannels, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_EnglishChannels', SelectChannels, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('OIDCOnboarding_DefaultTeams', SelectTeams, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('TranslatorBot_Custom_ChannelList', TranslatorChannels, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('TranslatorBot_Custom_ExcludedChannels', SelectChannels, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('TranslatorBot_TestChannelID', SelectChannels, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('TranslatorBot_AuditChannelID', SelectChannels, {showTitle: true});
     }
 }
 
