@@ -85,7 +85,7 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 	}
 }
 
-const keycloakNewUserUsage = "Usage: /keycloak new_user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes or no>"
+const keycloakNewUserUsage = "Usage: `/keycloak new_user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes|no>`"
 
 func validateKeycloakEmail(email string) error {
 	parsedEmail, err := mail.ParseAddress(email)
