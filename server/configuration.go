@@ -48,6 +48,7 @@ type configuration struct {
 
 	TranslatorBot_OnOffBool               bool
 	TranslatorBot_APIKey                  string
+	TranslatorBot_MistralModel            string
 	TranslatorBot_SystemPrompt            string
 	TranslatorBot_UserPrompt              string
 	TranslatorBot_TestChannelID           string

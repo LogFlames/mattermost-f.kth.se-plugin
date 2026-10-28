@@ -32,7 +32,7 @@ func TestMistralClientComplete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewMistralClient("test-key")
+	client := NewMistralClient("test-key", mistralSmall4Model)
 	client.apiURL = server.URL
 
 	result, err := client.Complete("Instructions", "Translate this")
@@ -74,7 +74,7 @@ func TestMistralClientCompleteErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			client := NewMistralClient(test.apiKey)
+			client := NewMistralClient(test.apiKey, mistralSmall4Model)
 			if test.statusCode != 0 {
 				server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 					writer.WriteHeader(test.statusCode)

@@ -48,7 +48,7 @@ func (p *Plugin) translatorMessageHasBeenPosted(post *model.Post) {
 			break
 		}
 	}
-	if channelConfiguration == nil || !p.translatorBotIsMember(post.ChannelId) {
+	if channelConfiguration == nil {
 		return
 	}
 	if post.UserId == p.translatorBot.UserId || strings.HasPrefix(post.Type, "system") ||
@@ -161,7 +161,7 @@ func (p *Plugin) translate(message string, configuration *configuration) (string
 	if userPrompt == configuration.TranslatorBot_UserPrompt {
 		userPrompt += message
 	}
-	return NewMistralClient(configuration.TranslatorBot_APIKey).Complete(
+	return NewMistralClient(configuration.TranslatorBot_APIKey, configuration.TranslatorBot_MistralModel).Complete(
 		configuration.TranslatorBot_SystemPrompt+"\n"+dictionaryPost.Message,
 		userPrompt,
 	)

@@ -16,6 +16,7 @@ const (
 
 type MistralClient struct {
 	apiKey     string
+	model      string
 	httpClient *http.Client
 	apiURL     string
 }
@@ -39,9 +40,10 @@ type mistralResponse struct {
 	} `json:"error,omitempty"`
 }
 
-func NewMistralClient(apiKey string) *MistralClient {
+func NewMistralClient(apiKey, model string) *MistralClient {
 	return &MistralClient{
 		apiKey:     apiKey,
+		model:      model,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		apiURL:     mistralAPIURL,
 	}
@@ -51,9 +53,12 @@ func (c *MistralClient) Complete(systemPrompt, userPrompt string) (string, error
 	if strings.TrimSpace(c.apiKey) == "" {
 		return "", fmt.Errorf("Mistral API key is not configured")
 	}
+	if strings.TrimSpace(c.model) == "" {
+		return "", fmt.Errorf("Mistral model is not configured")
+	}
 
 	requestBody, err := json.Marshal(mistralRequest{
-		Model: mistralSmall4Model,
+		Model: c.model,
 		Messages: []mistralMessage{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: userPrompt},
