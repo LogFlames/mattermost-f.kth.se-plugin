@@ -64,6 +64,10 @@ OuterLoop:
 	if channelConfiguration == nil {
 		return
 	}
+	// Letting the translator translate posts in channels it is not a member in is quite invisible behavior: this suggests that the translator should be a member of the channel, so we warn if it is not.
+	if !p.translatorBotIsMember(post.ChannelId) {
+		p.translatorError("translate post", fmt.Errorf("Warning: @translator-bot is not a member of channel %s, but translation is configured for it. It is suggested that you invite the bot to the channel.", post.ChannelId))
+	}
 	if post.UserId == p.translatorBot.UserId || strings.HasPrefix(post.Type, "system") ||
 		post.RootId != "" || strings.TrimSpace(post.Message) == "" {
 		return
@@ -177,7 +181,7 @@ func (p *Plugin) translate(message string, configuration *configuration, modelOv
 }
 
 func (p *Plugin) notifyTranslationFailure(userID string, post *model.Post, delivery string, error string) {
-	message := "The translation of post" + post.Id + " could not be produced. The error was: ```text\n" + error + "\n```\n Please contact the Mattermost administrators for assistance. You can reach us in Mattermost or at mattermaster@f.kth.se."
+	message := "The translation of post [" + post.Id + "](https://mattermost.fysiksektionen.se/fysiksektionen/pl/" + post.Id + ") could not be produced. The error was: \n\n```text\n" + error + "\n```\n\n Please contact the Mattermost administrators for assistance. You can reach us in Mattermost or at mattermaster@f.kth.se."
 
 	switch delivery {
 	case "reply":

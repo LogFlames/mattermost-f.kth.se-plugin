@@ -65,6 +65,7 @@ export default function TranslatorChannels(props) {
                 <div
                     className='has-error'
                     role='alert'
+                    style={{color: 'red'}}
                 >
                     {error}
                 </div>}
