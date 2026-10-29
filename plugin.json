@@ -263,7 +263,7 @@
             {
                 "key": "translator",
                 "title": "Translator Module",
-                "subtitle": "Translates messages into English. NOTE: The bot account must be a member of the channels to translate messages in.",
+                "subtitle": "Translates messages into English. NOTE: The bot account must be a member of the channel to react to :english: reactions.",
                 "header": null,
                 "footer": null,
                 "settings": [
@@ -308,13 +308,13 @@
                     },
                     {
                         "key": "TranslatorBot_ErrorChannelID",
-                        "display_name": "Translator: Error channel ID",
+                        "display_name": "Translator: Error channel",
                         "type": "custom",
-                        "help_text": "Optional channel for translation test and error reports."
+                        "help_text": "Optional channel for translation error reports."
                     },
                     {
                         "key": "TranslatorBot_AuditChannelID",
-                        "display_name": "Translator: Audit channel ID",
+                        "display_name": "Translator: Audit channel",
                         "type": "custom",
                         "help_text": "Optional channel receiving successful translation audit messages."
                     }
@@ -358,10 +358,10 @@
                     },
                     {
                         "key": "TranslatorBot_MistralModel",
-                        "display_name": "Translator: Mistral model",
+                        "display_name": "Translator: Default Mistral model",
                         "type": "text",
-                        "help_text": "Mistral model identifier used by the Translator.",
-                        "default": "mistral-small-4-0"
+                        "help_text": "Default Mistral model identifier used by the Translator, can be overriden per-channel.",
+                        "default": "ministral-14b-2512"
                     }
                 ]
             }

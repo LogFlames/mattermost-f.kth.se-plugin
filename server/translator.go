@@ -8,15 +8,16 @@ import (
 )
 
 type translatorChannel struct {
-	Name                string   `json:"name"`
-	ChannelIDs          []string `json:"channel_ids"`
-	Delivery            string   `json:"delivery"`
-	AddToChannelIDs     []string `json:"add_to_channel_ids"`
-	DirectMessagePrefix string   `json:"direct_message_prefix"`
+	Name                 string   `json:"name"`
+	ChannelIDs           []string `json:"channel_ids"`
+	Delivery             string   `json:"delivery"`
+	AddToChannelIDs      []string `json:"add_to_channel_ids"`
+	DirectMessagePrefix  string   `json:"direct_message_prefix"`
+	MistralModelOverride string   `json:"model-override"`
 }
 
+/* Checks that required fields are set and non-conflicting. Note: this validation is also performed in the webapp. */
 func validateTranslatorConfiguration(configuration *configuration) error {
-	// Note: this validation is also performed in the webapp
 	seen := make(map[string]struct{})
 	for index, channel := range configuration.TranslatorBot_Custom_ChannelList {
 		if len(channel.ChannelIDs) == 0 {
@@ -43,6 +44,7 @@ func validateTranslatorConfiguration(configuration *configuration) error {
 	return nil
 }
 
+/* If a message is sent in a channel with autotranslation configured, translate it. */
 func (p *Plugin) translatorMessageHasBeenPosted(post *model.Post) {
 	configuration := p.getConfiguration()
 	if post == nil {
@@ -75,10 +77,10 @@ OuterLoop:
 		}
 	}
 
-	translation, err := p.translate(post.Message, configuration)
+	translation, err := p.translate(post.Message, configuration, channelConfiguration.MistralModelOverride)
 	if err != nil {
 		p.translatorErrorWithChannel("translate post", err, configuration.TranslatorBot_ErrorChannelID)
-		p.notifyTranslationFailure(post.UserId, post, channelConfiguration.Delivery)
+		p.notifyTranslationFailure(post.UserId, post, channelConfiguration.Delivery, err.Error())
 		return
 	}
 	p.deliverTranslation(post, translation, *channelConfiguration, configuration)
@@ -89,7 +91,6 @@ func (p *Plugin) translatorReactionHasBeenAdded(reaction *model.Reaction) {
 	if reaction == nil ||
 		reaction.EmojiName != "english" || reaction.UserId == p.translatorBot.UserId ||
 		!p.translatorBotIsMember(reaction.ChannelId) ||
-		translatorChannelConfigured(configuration, reaction.ChannelId) ||
 		contains(configuration.TranslatorBot_Custom_ExcludedChannels, reaction.ChannelId) {
 		return
 	}
@@ -117,10 +118,10 @@ func (p *Plugin) translatorReactionHasBeenAdded(reaction *model.Reaction) {
 		}
 		return
 	}
-	translation, err := p.translate(post.Message, configuration)
+	translation, err := p.translate(post.Message, configuration, "")
 	if err != nil {
 		p.translatorErrorWithChannel("translate reaction target", err, configuration.TranslatorBot_ErrorChannelID)
-		p.notifyTranslationFailure(reaction.UserId, post, "dm")
+		p.notifyTranslationFailure(reaction.UserId, post, "dm", err.Error())
 		return
 	}
 	quoted := "> ###### :english: Translation by @translator-bot\n>\n"
@@ -135,17 +136,6 @@ func (p *Plugin) translatorReactionHasBeenAdded(reaction *model.Reaction) {
 	p.translatorAudit(post, translation, configuration)
 }
 
-func translatorChannelConfigured(configuration *configuration, channelID string) bool {
-	for _, channel := range configuration.TranslatorBot_Custom_ChannelList {
-		for _, id := range channel.ChannelIDs {
-			if id == channelID {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (p *Plugin) translatorBotIsMember(channelID string) bool {
 	if p.translatorBot.UserId == "" {
 		return false
@@ -154,7 +144,7 @@ func (p *Plugin) translatorBotIsMember(channelID string) bool {
 	return err == nil
 }
 
-func (p *Plugin) translate(message string, configuration *configuration) (string, error) {
+func (p *Plugin) translate(message string, configuration *configuration, modelOverride string) (string, error) {
 	if strings.TrimSpace(configuration.TranslatorBot_SystemPrompt) == "" {
 		return "", fmt.Errorf("Mistral system prompt is not configured")
 	}
@@ -176,14 +166,18 @@ func (p *Plugin) translate(message string, configuration *configuration) (string
 	if userPrompt == configuration.TranslatorBot_UserPrompt {
 		userPrompt += message
 	}
-	return NewMistralClient(configuration.TranslatorBot_APIKey, configuration.TranslatorBot_MistralModel).Complete(
+	model := modelOverride
+	if model == "" {
+		model = configuration.TranslatorBot_MistralModel
+	}
+	return NewMistralClient(configuration.TranslatorBot_APIKey, model).Complete(
 		configuration.TranslatorBot_SystemPrompt+"\n"+dictionaryPost.Message,
 		userPrompt,
 	)
 }
 
-func (p *Plugin) notifyTranslationFailure(userID string, post *model.Post, delivery string) {
-	const message = "The translation could not be produced. Please contact the Mattermost administrators for assistance. You can reach us in Mattermost or at mattermaster@f.kth.se."
+func (p *Plugin) notifyTranslationFailure(userID string, post *model.Post, delivery string, error string) {
+	message := "The translation of post" + post.Id + " could not be produced. The error was: ```text\n" + error + "\n```\n Please contact the Mattermost administrators for assistance. You can reach us in Mattermost or at mattermaster@f.kth.se."
 
 	switch delivery {
 	case "reply":

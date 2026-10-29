@@ -1,6 +1,7 @@
 import manifest from './manifest';
 
 import DefaultChannelsSettings from './components/admin_settings/default_channels/default_channels_cs';
+import SelectChannel from './components/admin_settings/single_type_input/select_channel';
 import SelectChannels from './components/admin_settings/single_type_input/select_channels';
 import SelectTeams from './components/admin_settings/single_type_input/select_teams';
 import JoinLeaveFreeBotUserId from './components/admin_settings/single_type_input/join_leave_free_bot_user_id';
@@ -24,8 +25,8 @@ export default class Plugin {
         registry.registerAdminConsoleCustomSetting('OIDCOnboarding_DefaultTeams', SelectTeams, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('TranslatorBot_Custom_ChannelList', TranslatorChannels, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('TranslatorBot_Custom_ExcludedChannels', SelectChannels, {showTitle: true});
-        registry.registerAdminConsoleCustomSetting('TranslatorBot_TestChannelID', SelectChannels, {showTitle: true});
-        registry.registerAdminConsoleCustomSetting('TranslatorBot_AuditChannelID', SelectChannels, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('TranslatorBot_ErrorChannelID', SelectChannel, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('TranslatorBot_AuditChannelID', SelectChannel, {showTitle: true});
     }
 }
 

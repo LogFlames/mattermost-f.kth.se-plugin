@@ -6,30 +6,35 @@ import createMatrixSetting from './matrix_setting_factory';
 const TranslatorChannelMatrix = createMatrixSetting({
     title: 'Translator channels',
     fields: [
-        {name: 'name', label: 'Name', type: 'string'},
-        {name: 'channel_ids', label: 'Monitored channels', type: 'channels', className: 'col-xs-12 col-sm-3'},
-        {name: 'delivery', label: 'reply|dm', type: 'string', className: 'col-xs-12 col-sm-3'},
-        {name: 'add_to_channel_ids', label: 'Add author to', type: 'channels', className: 'col-xs-12 col-sm-3'},
-        {name: 'direct_message_prefix', label: 'DM prefix', type: 'string', className: 'col-xs-12 col-sm-3'},
+        {name: 'name', label: 'Name', type: 'string', className: 'col-xs-12 col-sm-3'},
+        {name: 'channel_ids', label: 'Monitored channels', type: 'channels', className: 'col-xs-12 col-sm-4'},
+        {name: 'delivery', label: 'reply|dm', type: 'string', className: 'col-xs-12 col-sm-2'},
+        {name: 'add_to_channel_ids', label: 'Add author to', type: 'channels', className: 'col-xs-12 col-sm-4'},
+        {name: 'direct_message_prefix', label: 'DM prefix', type: 'string', className: 'col-xs-12 col-sm-6'},
+        {name: 'model-override', label: 'Mistral model override', type: 'string', className: 'col-xs-12 col-sm-4'}
     ],
 });
 
 const validate = (entries) => {
     if (!Array.isArray(entries)) {
-        return 'Translator channels must be a JSON array.';
+        return 'Configuration type error';
     }
     const channelIDs = new Set();
     for (const [index, entry] of entries.entries()) {
-        if (!entry || typeof entry !== 'object' || typeof entry.channel_ids !== 'string' || !entry.channel_ids.trim()) {
+        if (!entry || typeof entry !== 'object') {
+            return `Configuration ${index + 1} type error.`;
+        }
+        if (!Array.isArray(entry.channel_ids) || entry.channel_ids.length === 0) {
             return `Configuration ${index + 1} must have a channel.`;
         }
         if (!entry.name || !entry.name.trim()) {
             return `Configuration ${index + 1} must have an identifying name.`;
         }
-        if (channelIDs.has(entry.channel_ids)) {
-            return `Configuration ${index + 1} duplicates another channel.`;
+        const key = [...entry.channel_ids].sort().join(',');
+        if (channelIDs.has(key)) {
+            return `Configuration ${index + 1} duplicates another already configured channel.`;
         }
-        channelIDs.add(entry.channel_ids);
+        channelIDs.add(key);
         if (entry.delivery !== 'reply' && entry.delivery !== 'dm') {
             return `Configuration ${index + 1} delivery must be reply or dm.`;
         }
