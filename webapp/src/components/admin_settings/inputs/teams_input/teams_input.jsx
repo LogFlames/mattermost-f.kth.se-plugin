@@ -73,6 +73,7 @@ export default class TeamsInput extends React.PureComponent {
                 placeholder={this.props.placeholder}
                 value={this.props.teams}
                 components={{DropdownIndicator: () => null, IndicatorSeparator: () => null}}
+                menuPortalTarget={document.body}
                 styles={customStyles}
             />
         );
@@ -83,5 +84,9 @@ const customStyles = {
     control: (provided) => ({
         ...provided,
         minHeight: 34,
+    }),
+    menuPortal: (provided) => ({
+        ...provided,
+        zIndex: 9999,
     }),
 };

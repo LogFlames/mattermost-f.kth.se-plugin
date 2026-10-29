@@ -170,7 +170,7 @@ const MatrixEntry = ({fields, id, value, onChange, onDelete, hideDelete, actions
 
     return (
         <div style={styles.attributeRow}>
-            <div className='row'>
+            <div className='row' style={{ display: 'flex', flexWrap: 'nowrap', width: 'max-content', minWidth: '100%' }}>
                 {fields.map((field) => (
                     <FieldInput
                         key={field.name}
@@ -180,7 +180,7 @@ const MatrixEntry = ({fields, id, value, onChange, onDelete, hideDelete, actions
                     />
                 ))}
                 {!hideDelete &&
-                    <div className='col-xs-12 col-sm-1'>
+                    <div style={{ flexShrink: 0, padding: '0 15px' }}>
                         <a style={styles.deleteIcon} onClick={() => onDelete(id)}>
                             <i className='fa fa-trash'/>
                         </a>
@@ -294,19 +294,24 @@ export default function createMatrixSetting({fields, title}) {
                 <div>
                     <strong>{title}</strong>
                     {this.state.entries.length === 0 && <div style={styles.emptyState}>You have no entries for this setting yet.</div>}
-                    {this.state.entries.map(this.renderEntry)}
-                    {this.state.showAddEntry ?
-                        <div>
-                            <Entry
-                                id={this.state.entries.length}
-                                value={this.state.draft}
-                                hideDelete={true}
-                                onChange={(entry) => this.setState({draft: entry})}
-                            />
-                            <button className='btn btn-primary' onClick={this.addDraft}>Add Entry</button>
-                            <button className='btn btn-link' onClick={this.cancelAdding}>Cancel</button>
-                        </div> :
-                        <a onClick={this.startAdding}><strong>+ Add Entry</strong></a>}
+                    
+                    <div style={{ overflowX: 'auto' }}>
+                        <div style={{ minWidth: 'max-content' }}>
+                            {this.state.entries.map(this.renderEntry)}
+                            {this.state.showAddEntry ?
+                                <div>
+                                    <Entry
+                                        id={this.state.entries.length}
+                                        value={this.state.draft}
+                                        hideDelete={true}
+                                        onChange={(entry) => this.setState({draft: entry})}
+                                    />
+                                    <button className='btn btn-primary' onClick={this.addDraft}>Add Entry</button>
+                                    <button className='btn btn-link' onClick={this.cancelAdding}>Cancel</button>
+                                </div> :
+                                <a onClick={this.startAdding}><strong>+ Add Entry</strong></a>}
+                        </div>
+                    </div>
                 </div>
             );
         }
