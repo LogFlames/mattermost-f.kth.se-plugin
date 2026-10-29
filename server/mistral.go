@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 )
 
 const (
-	mistralAPIURL      = "https://api.mistral.ai/v1/chat/completions"
-	mistralSmall4Model = "mistral-small-4-0"
+	mistralAPIURL = "https://api.mistral.ai/v1/chat/completions"
+
+	mistralMaxRetries    = 5
+	mistralRetryInterval = 5 * time.Second
 )
 
 type MistralClient struct {
@@ -75,24 +78,46 @@ func (c *MistralClient) Complete(systemPrompt, userPrompt string) (string, error
 	request.Header.Set("Authorization", "Bearer "+c.apiKey)
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := c.httpClient.Do(request)
-	if err != nil {
-		return "", fmt.Errorf("call Mistral: %w", err)
-	}
-	defer response.Body.Close()
-
-	var result mistralResponse
-	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("decode Mistral response: %w", err)
-	}
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		if result.Error != nil {
-			return "", fmt.Errorf("Mistral returned HTTP %d: %s", response.StatusCode, result.Error.Message)
+	var lastErr error
+	for attempt := 0; attempt <= mistralMaxRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(mistralRetryInterval)
 		}
-		return "", fmt.Errorf("Mistral returned HTTP %d", response.StatusCode)
+
+		response, err := c.httpClient.Do(request)
+		if err != nil {
+			return "", fmt.Errorf("call Mistral: %w", err)
+		}
+
+		var result mistralResponse
+		if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+			response.Body.Close()
+			return "", fmt.Errorf("decode Mistral response: %w", err)
+		}
+		response.Body.Close()
+
+		if response.StatusCode == http.StatusTooManyRequests {
+			if result.Error != nil {
+				lastErr = fmt.Errorf("Mistral returned HTTP 429: %s", result.Error.Message)
+			} else {
+				lastErr = fmt.Errorf("Mistral returned HTTP 429")
+			}
+			// Re-create the request body reader for the next attempt.
+			request.Body = io.NopCloser(bytes.NewReader(requestBody))
+			continue
+		}
+
+		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+			if result.Error != nil {
+				return "", fmt.Errorf("Mistral returned HTTP %d: %s", response.StatusCode, result.Error.Message)
+			}
+			return "", fmt.Errorf("Mistral returned HTTP %d", response.StatusCode)
+		}
+		if len(result.Choices) == 0 || strings.TrimSpace(result.Choices[0].Message.Content) == "" {
+			return "", fmt.Errorf("Mistral returned no completion")
+		}
+		return result.Choices[0].Message.Content, nil
 	}
-	if len(result.Choices) == 0 || strings.TrimSpace(result.Choices[0].Message.Content) == "" {
-		return "", fmt.Errorf("Mistral returned no completion")
-	}
-	return result.Choices[0].Message.Content, nil
+
+	return "", fmt.Errorf("Mistral rate limited after %d retries: %w", mistralMaxRetries, lastErr)
 }
