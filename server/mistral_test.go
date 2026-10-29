@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const mistralTestModel = "ministral-14b-2512"
+
 func TestMistralClientComplete(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
@@ -20,8 +22,8 @@ func TestMistralClientComplete(t *testing.T) {
 		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if body.Model != mistralSmall4Model {
-			t.Errorf("model = %q, want %q", body.Model, mistralSmall4Model)
+		if body.Model != mistralTestModel {
+			t.Errorf("model = %q, want %q", body.Model, mistralTestModel)
 		}
 		if len(body.Messages) != 2 || body.Messages[0].Role != "system" || body.Messages[1].Content != "Translate this" {
 			t.Errorf("messages = %#v", body.Messages)
@@ -32,7 +34,7 @@ func TestMistralClientComplete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewMistralClient("test-key", mistralSmall4Model)
+	client := NewMistralClient("test-key", mistralTestModel)
 	client.apiURL = server.URL
 
 	result, err := client.Complete("Instructions", "Translate this")
@@ -74,7 +76,7 @@ func TestMistralClientCompleteErrors(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			client := NewMistralClient(test.apiKey, mistralSmall4Model)
+			client := NewMistralClient(test.apiKey, mistralTestModel)
 			if test.statusCode != 0 {
 				server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 					writer.WriteHeader(test.statusCode)
