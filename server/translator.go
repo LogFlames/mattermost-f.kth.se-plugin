@@ -155,15 +155,8 @@ func (p *Plugin) translate(message string, configuration *configuration, modelOv
 	if strings.TrimSpace(configuration.TranslatorBot_UserPrompt) == "" {
 		return "", fmt.Errorf("Mistral user prompt is not configured")
 	}
-	if strings.TrimSpace(configuration.TranslatorBot_DictionaryPostID) == "" {
-		return "", fmt.Errorf("Mattermost dictionary post ID is not configured")
-	}
-	dictionaryPost, appErr := p.API.GetPost(configuration.TranslatorBot_DictionaryPostID)
-	if appErr != nil || dictionaryPost == nil || strings.TrimSpace(dictionaryPost.Message) == "" {
-		if appErr != nil {
-			return "", fmt.Errorf("dictionary post %s: %w", configuration.TranslatorBot_DictionaryPostID, appErr)
-		}
-		return "", fmt.Errorf("dictionary post %s was not found or is empty", configuration.TranslatorBot_DictionaryPostID)
+	if strings.TrimSpace(configuration.TranslatorBot_Dictionary) == "" {
+		return "", fmt.Errorf("Translator dictionary is not configured")
 	}
 
 	userPrompt := strings.ReplaceAll(configuration.TranslatorBot_UserPrompt, "{message}", message)
@@ -179,7 +172,7 @@ func (p *Plugin) translate(message string, configuration *configuration, modelOv
 		client.reasoningEffort = configuration.TranslatorBot_MistralModel.ReasoningEffort
 	}
 	return client.Complete(
-		configuration.TranslatorBot_SystemPrompt+"\n"+dictionaryPost.Message,
+		configuration.TranslatorBot_SystemPrompt+"\n"+configuration.TranslatorBot_Dictionary,
 		userPrompt,
 	)
 }

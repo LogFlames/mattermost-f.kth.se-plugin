@@ -53,7 +53,7 @@ type configuration struct {
 	TranslatorBot_UserPrompt              string
 	TranslatorBot_ErrorChannelID          string
 	TranslatorBot_AuditChannelID          string
-	TranslatorBot_DictionaryPostID        string
+	TranslatorBot_Dictionary              string
 	TranslatorBot_Custom_ChannelList      []translatorChannel
 	TranslatorBot_Custom_ExcludedChannels []string
 }

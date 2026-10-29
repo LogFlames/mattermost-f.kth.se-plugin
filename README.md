@@ -26,7 +26,7 @@ Mattermost posts and posts marked with the `english` reaction. The
 `translator-bot` account must be a member of a channel for the module to
 process reactions, but this is not required for explicitly configured channels. Automatic translations can be replies or direct messages.
 
-Configure the Mistral API key and model, the Mattermost dictionary post ID,
+Configure the Mistral API key and model, the dictionary text,
 system and user prompts, and optional test/error and audit channel IDs in the
 Mistral and Translator settings. The model selector loads chat models from `/models`
 using the saved key and shows context, capabilities, and pricing when provided.
@@ -34,9 +34,9 @@ Reasoning levels follow Mistral's documentation, since `/models` does not list t
 Large 4 defaults to `low`; it cannot disable thinking. Save to apply changes.
 The default model is `ministral-14b-2512`. Requests allow 120 seconds; translations
 include final-answer text only.
-System prompt, user prompt, and dictionary post ID are required when
-a translation is requested. The dictionary post is read for every translation
-and a missing or empty post is an error. Errors are written to the Mattermost
+System prompt, user prompt, and dictionary are required when a translation is
+requested. Copy the current dictionary post into **Translator: Dictionary** and
+save; the bot no longer reads that post. Errors are written to the Mattermost
 log, posted to the test/error channel when configured, and reported to the
 requesting user in the configured reply or direct-message context.
 Successful translations are posted to the audit channel only when an audit

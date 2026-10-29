@@ -210,3 +210,68 @@ func TestMistralModelConfigurationCompatibility(t *testing.T) {
 		}
 	}
 }
+
+type mistralTestTransport func(*http.Request) (*http.Response, error)
+
+func (f mistralTestTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestTranslatorDictionary(t *testing.T) {
+	var config configuration
+	if err := json.Unmarshal([]byte(`{
+		"translatorbot_apikey":"test-key",
+		"translatorbot_mistralmodel":"ministral-14b-2512",
+		"translatorbot_systemprompt":"Use this dictionary:",
+		"translatorbot_userprompt":"Translate: {message}",
+		"translatorbot_dictionary":"  mottagning = reception\nsektionslokal = chapter room\n"
+	}`), &config); err != nil {
+		t.Fatal(err)
+	}
+	wantSystem := "Use this dictionary:\n  mottagning = reception\nsektionslokal = chapter room\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body mistralRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		want := []mistralMessage{
+			{Role: "system", Content: wantSystem},
+			{Role: "user", Content: "Translate: Hej mottagningen!"},
+		}
+		if !reflect.DeepEqual(body.Messages, want) {
+			t.Errorf("messages = %#v, want %#v", body.Messages, want)
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"Hello reception!"}}]}`))
+	}))
+	defer server.Close()
+	originalTransport := http.DefaultTransport
+	http.DefaultTransport = mistralTestTransport(func(r *http.Request) (*http.Response, error) {
+		if r.URL.String() != mistralAPIURL {
+			t.Errorf("unexpected request URL: %s", r.URL)
+		}
+		r = r.Clone(r.Context())
+		r.URL.Scheme = "http"
+		r.URL.Host = strings.TrimPrefix(server.URL, "http://")
+		return originalTransport.RoundTrip(r)
+	})
+	t.Cleanup(func() { http.DefaultTransport = originalTransport })
+
+	p := &Plugin{}
+	for _, test := range []struct{ dictionary, systemPrompt string }{
+		{config.TranslatorBot_Dictionary, "Use this dictionary:\n  mottagning = reception\nsektionslokal = chapter room\n"},
+		{"mottagning = welcome week", "Use this dictionary:\nmottagning = welcome week"},
+	} {
+		config.TranslatorBot_Dictionary = test.dictionary
+		wantSystem = test.systemPrompt
+		got, err := p.translate("Hej mottagningen!", &config, "")
+		if err != nil || got != "Hello reception!" {
+			t.Fatalf("translation = %q, error = %v", got, err)
+		}
+	}
+	for _, dictionary := range []string{"", " \n\t"} {
+		config.TranslatorBot_Dictionary = dictionary
+		if _, err := p.translate("Hej mottagningen!", &config, ""); err == nil || err.Error() != "Translator dictionary is not configured" {
+			t.Fatalf("empty dictionary error = %v", err)
+		}
+	}
+}
