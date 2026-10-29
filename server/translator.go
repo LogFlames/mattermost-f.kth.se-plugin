@@ -172,9 +172,13 @@ func (p *Plugin) translate(message string, configuration *configuration, modelOv
 	}
 	model := modelOverride
 	if model == "" {
-		model = configuration.TranslatorBot_MistralModel
+		model = configuration.TranslatorBot_MistralModel.ID
 	}
-	return NewMistralClient(configuration.TranslatorBot_APIKey, model).Complete(
+	client := NewMistralClient(configuration.TranslatorBot_APIKey, model)
+	if model == configuration.TranslatorBot_MistralModel.ID && configuration.TranslatorBot_MistralModel.ReasoningEffort != "" {
+		client.reasoningEffort = configuration.TranslatorBot_MistralModel.ReasoningEffort
+	}
+	return client.Complete(
 		configuration.TranslatorBot_SystemPrompt+"\n"+dictionaryPost.Message,
 		userPrompt,
 	)

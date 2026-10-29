@@ -19,6 +19,10 @@ func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Req
 		p.serveStats(w, r)
 		return
 	}
+	if r.URL.Path == "/mistral/models" {
+		p.serveMistralModels(w, r)
+		return
+	}
 	fail := func(status int, message string) {
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(map[string]string{"message": message})

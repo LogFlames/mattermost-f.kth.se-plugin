@@ -9,6 +9,7 @@ import LoggingChannelId from './components/admin_settings/single_type_input/logg
 import SelectUsers from './components/admin_settings/single_type_input/select_users';
 import StatsPage from './components/stats/stats_page';
 import TranslatorChannels from './components/admin_settings/translator_channels';
+import MistralModelSetting from './components/admin_settings/mistral_model';
 
 export default class Plugin {
     initialize(registry) {
@@ -27,6 +28,7 @@ export default class Plugin {
         registry.registerAdminConsoleCustomSetting('TranslatorBot_Custom_ExcludedChannels', SelectChannels, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('TranslatorBot_ErrorChannelID', SelectChannel, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('TranslatorBot_AuditChannelID', SelectChannel, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('TranslatorBot_MistralModel', MistralModelSetting, {showTitle: true});
     }
 }
 

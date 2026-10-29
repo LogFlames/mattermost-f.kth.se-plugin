@@ -198,3 +198,27 @@ func TestDefaultChannelsConsoleUsesLiveTeamAndCategory(t *testing.T) {
 		}
 	}
 }
+
+func TestMistralModelsConsoleAuthorization(t *testing.T) {
+	for _, test := range []struct {
+		user   string
+		method string
+		status int
+	}{
+		{"", http.MethodGet, http.StatusUnauthorized},
+		{"member", http.MethodGet, http.StatusForbidden},
+		{"admin", http.MethodGet, http.StatusForbidden},
+		{"system-admin", http.MethodPost, http.StatusMethodNotAllowed},
+		{"system-admin", http.MethodGet, http.StatusBadGateway},
+	} {
+		p, base := newDefaultChannelTestPlugin(t)
+		p.SetAPI(&defaultChannelsHTTPTestAPI{defaultChannelTestAPI: base})
+		r := httptest.NewRequest(test.method, "/mistral/models", nil)
+		r.Header.Set("Mattermost-User-Id", test.user)
+		w := httptest.NewRecorder()
+		p.ServeHTTP(nil, w, r)
+		if w.Code != test.status || w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("user %q: status=%d, body=%s", test.user, w.Code, w.Body)
+		}
+	}
+}

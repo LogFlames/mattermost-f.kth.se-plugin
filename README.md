@@ -28,7 +28,12 @@ process reactions, but this is not required for explicitly configured channels. 
 
 Configure the Mistral API key and model, the Mattermost dictionary post ID,
 system and user prompts, and optional test/error and audit channel IDs in the
-Mistral and Translator settings. The model defaults to Mistral Small 4.
+Mistral and Translator settings. The model selector loads chat models from `/models`
+using the saved key and shows context, capabilities, and pricing when provided.
+Reasoning levels follow Mistral's documentation, since `/models` does not list them.
+Large 4 defaults to `low`; it cannot disable thinking. Save to apply changes.
+The default model is `ministral-14b-2512`. Requests allow 120 seconds; translations
+include final-answer text only.
 System prompt, user prompt, and dictionary post ID are required when
 a translation is requested. The dictionary post is read for every translation
 and a missing or empty post is an error. Errors are written to the Mattermost

@@ -358,9 +358,9 @@
                     },
                     {
                         "key": "TranslatorBot_MistralModel",
-                        "display_name": "Translator: Default Mistral model",
-                        "type": "text",
-                        "help_text": "Default Mistral model identifier used by the Translator, can be overriden per-channel.",
+                        "display_name": "Translator: Model and reasoning",
+                        "type": "custom",
+                        "help_text": "Chat models available to the saved Mistral API key. Per-channel model overrides remain available in Translator settings.",
                         "default": "ministral-14b-2512"
                     }
                 ]
