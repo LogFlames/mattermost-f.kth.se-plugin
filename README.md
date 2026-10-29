@@ -21,10 +21,10 @@ all teams; thread selection requires read access. Reports return aggregates, not
 
 ## Translator
 
-The Translator module uses the Mistral Small 4 model to translate configured
+The Translator module uses a configurable Mistral model to translate configured
 Mattermost posts and posts marked with the `english` reaction. The
 `translator-bot` account must be a member of a channel for the module to
-process reactions, but this is not required for explicitly configured channels. Automatic translations can be replies or direct messages, and the channel list is configured through the selector-based JSON setting.
+process reactions, but this is not required for explicitly configured channels. Automatic translations can be replies or direct messages.
 
 Configure the Mistral API key and model, the Mattermost dictionary post ID,
 system and user prompts, and optional test/error and audit channel IDs in the
@@ -36,23 +36,6 @@ log, posted to the test/error channel when configured, and reported to the
 requesting user in the configured reply or direct-message context.
 Successful translations are posted to the audit channel only when an audit
 channel is configured.
-
-Configuring channels to monitor requires a custom JSON configuration. Here is an example that is also provided as the default setting:
-
-```
-[
-{
-    "identifier": "Name of Example Config",
-    "ChannelID": "id-of-channel-to-monitor",
-    "AddToChannelID": "id-of-channel-to-add-sender-to (optional)",
-    "Delivery": "dm", // can be "reply" or "dm"
-    "DirectMessagePrefix": "This is some example text that will prefix the actual translation: "
-},
-{
-    ...
-}
-]
-```
 
 ## Default channels
 
