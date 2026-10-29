@@ -53,11 +53,11 @@ export default class AbstractSelectInput extends React.Component {
         }
 
         var ret;
-        if (this.type === "teams") {
+        if (this.type === "teams" || this.type === "team") {
             ret = await this.fetchTeams(values);
-        } else if (this.type === "channels") {
+        } else if (this.type === "channels" || this.type === "channel") {
             ret = await this.fetchChannels(values);
-        } else if (this.type === "users") {
+        } else if (this.type === "users" || this.type === "user") {
             ret = await this.fetchUsers(values);
         } else {
             return [];
@@ -80,11 +80,11 @@ export default class AbstractSelectInput extends React.Component {
 
         this.setState({value: newV});
     
-        if (this.type === "users") {
+        if (this.type === "users" || this.type === "user") {
             newV = newV.map(user => user.id);
-        } else if (this.type === "channels") {
+        } else if (this.type === "channels" || this.type === "channel") {
             newV = newV.map(channel => channel.id);
-        } else if (this.type === "teams") {
+        } else if (this.type === "teams" || this.type === "team") {
             newV = newV.map(team => team.id);
         }
 
@@ -127,21 +127,21 @@ export default class AbstractSelectInput extends React.Component {
             <div>
                 <strong>{this.title}</strong>
                 <div>
-                    {this.type === "teams" && 
+                    {(this.type === "teams" || this.type === "team") && 
                     <TeamsInput
                         placeholder={this.placeholder}
                         teams={this.state.value}
                         onChange={this.newValue}
                         isMulti={this.isMulti}
                     />}
-                    {this.type === "channels" && 
+                    {(this.type === "channels" || this.type === "channel") && 
                     <ChannelsInput
                         placeholder={this.placeholder}
                         channels={this.state.value}
                         onChange={this.newValue}
                         isMulti={this.isMulti}
                     />}
-                    {this.type === "users" && 
+                    {(this.type === "users" || this.type === "user") && 
                     <UsersInput
                         placeholder={this.placeholder}
                         users={this.state.value}

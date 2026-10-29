@@ -19,6 +19,41 @@ All/team totals include private channels, and **Include DMs** adds all selected 
 direct and group messages. Channel selectors only list active public channels across
 all teams; thread selection requires read access. Reports return aggregates, not message text.
 
+## Translator
+
+The Translator module uses the Mistral Small 4 model to translate configured
+Mattermost posts and posts marked with the `english` reaction. The
+`translator-bot` account must be a member of a channel for the module to
+process reactions, but this is not required for explicitly configured channels. Automatic translations can be replies or direct messages, and the channel list is configured through the selector-based JSON setting.
+
+Configure the Mistral API key and model, the Mattermost dictionary post ID,
+system and user prompts, and optional test/error and audit channel IDs in the
+Mistral and Translator settings. The model defaults to Mistral Small 4.
+System prompt, user prompt, and dictionary post ID are required when
+a translation is requested. The dictionary post is read for every translation
+and a missing or empty post is an error. Errors are written to the Mattermost
+log, posted to the test/error channel when configured, and reported to the
+requesting user in the configured reply or direct-message context.
+Successful translations are posted to the audit channel only when an audit
+channel is configured.
+
+Configuring channels to monitor requires a custom JSON configuration. Here is an example that is also provided as the default setting:
+
+```
+[
+{
+    "identifier": "Name of Example Config",
+    "ChannelID": "id-of-channel-to-monitor",
+    "AddToChannelID": "id-of-channel-to-add-sender-to (optional)",
+    "Delivery": "dm", // can be "reply" or "dm"
+    "DirectMessagePrefix": "This is some example text that will prefix the actual translation: "
+},
+{
+    ...
+}
+]
+```
+
 ## Default channels
 
 Enable **Default Channels: Module enabled?** in the plugin settings. Team admins

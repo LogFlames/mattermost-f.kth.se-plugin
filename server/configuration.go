@@ -45,6 +45,17 @@ type configuration struct {
 
 	OIDCOnboarding_OnOffBool    bool
 	OIDCOnboarding_DefaultTeams []string
+
+	TranslatorBot_OnOffBool               bool
+	TranslatorBot_APIKey                  string
+	TranslatorBot_MistralModel            string
+	TranslatorBot_SystemPrompt            string
+	TranslatorBot_UserPrompt              string
+	TranslatorBot_ErrorChannelID          string
+	TranslatorBot_AuditChannelID          string
+	TranslatorBot_DictionaryPostID        string
+	TranslatorBot_Custom_ChannelList      []translatorChannel
+	TranslatorBot_Custom_ExcludedChannels []string
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -62,6 +73,8 @@ func (c *configuration) Clone() *configuration {
 	clone.InternationalStudents_DefaultEnglishTeams = slices.Clone(c.InternationalStudents_DefaultEnglishTeams)
 	clone.InternationalStudents_DefaultChannels = slices.Clone(c.InternationalStudents_DefaultChannels)
 	clone.OIDCOnboarding_DefaultTeams = slices.Clone(c.OIDCOnboarding_DefaultTeams)
+	clone.TranslatorBot_Custom_ChannelList = slices.Clone(c.TranslatorBot_Custom_ChannelList)
+	clone.TranslatorBot_Custom_ExcludedChannels = slices.Clone(c.TranslatorBot_Custom_ExcludedChannels)
 
 	return &clone
 }
@@ -117,6 +130,12 @@ func (p *Plugin) OnConfigurationChange() error {
 	}
 
 	p.setConfiguration(configuration)
+
+	if configuration.TranslatorBot_OnOffBool {
+		if err := validateTranslatorConfiguration(configuration); err != nil {
+			return err
+		}
+	}
 
 	if configuration.JoinLeaveFree_OnOffBool {
 		if err := p.JoinLeaveFree_SetupChannelIds(); err != nil {
