@@ -82,11 +82,15 @@ func (p *Plugin) MessageHasBeenPosted(_ *plugin.Context, post *model.Post) {
 	if p.configuration.ModeratorBot_OnOffBool {
 		p.Moderator_MessageHasBeenPosted(post, p.getConfiguration())
 	}
-	p.translatorMessageHasBeenPosted(post)
+	if p.configuration.TranslatorBot_OnOffBool {
+		p.translatorMessageHasBeenPosted(post)
+	}
 }
 
 func (p *Plugin) ReactionHasBeenAdded(_ *plugin.Context, reaction *model.Reaction) {
-	p.translatorReactionHasBeenAdded(reaction)
+	if p.configuration.TranslatorBot_OnOffBool {
+		p.translatorReactionHasBeenAdded(reaction)
+	}
 }
 
 func (p *Plugin) MessageWillBeUpdated(_ *plugin.Context, newPost *model.Post, _ *model.Post) (*model.Post, string) {

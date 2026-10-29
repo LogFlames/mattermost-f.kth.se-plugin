@@ -8,26 +8,34 @@ import (
 )
 
 type translatorChannel struct {
-	Name                string `json:"name"`
-	ChannelID           string `json:"channel_id"`
-	AddToChannelID      string `json:"add_to_channel_id"`
-	Delivery            string `json:"delivery"`
-	DirectMessagePrefix string `json:"direct_message_prefix"`
+	Name                string   `json:"name"`
+	ChannelIDs          []string `json:"channel_ids"`
+	Delivery            string   `json:"delivery"`
+	AddToChannelIDs     []string `json:"add_to_channel_ids"`
+	DirectMessagePrefix string   `json:"direct_message_prefix"`
 }
 
 func validateTranslatorConfiguration(configuration *configuration) error {
-	seen := make(map[string]struct{}, len(configuration.TranslatorBot_Custom_ChannelList))
+	// Note: this validation is also performed in the webapp
+	seen := make(map[string]struct{})
 	for index, channel := range configuration.TranslatorBot_Custom_ChannelList {
-		if strings.TrimSpace(channel.ChannelID) == "" {
-			return fmt.Errorf("translator channel %d has no channel ID", index+1)
+		if len(channel.ChannelIDs) == 0 {
+			return fmt.Errorf("translator channel %d has no channel IDs", index+1)
 		}
+
+		for _, id := range channel.ChannelIDs {
+			if strings.TrimSpace(id) == "" {
+				return fmt.Errorf("translator channel %d has an empty channel ID", index+1)
+			}
+			if _, ok := seen[id]; ok {
+				return fmt.Errorf("translator channel list contains duplicate channel ID %q", id)
+			}
+			seen[id] = struct{}{}
+		}
+
 		if channel.Delivery != "reply" && channel.Delivery != "dm" {
 			return fmt.Errorf("translator channel %q has invalid delivery %q; expected reply or dm", channel.Name, channel.Delivery)
 		}
-		if _, ok := seen[channel.ChannelID]; ok {
-			return fmt.Errorf("translator channel list contains duplicate channel ID %q", channel.ChannelID)
-		}
-		seen[channel.ChannelID] = struct{}{}
 		if channel.Delivery == "dm" && strings.TrimSpace(channel.DirectMessagePrefix) == "" {
 			return fmt.Errorf("translator channel %q requires a direct-message prefix", channel.Name)
 		}
@@ -37,15 +45,18 @@ func validateTranslatorConfiguration(configuration *configuration) error {
 
 func (p *Plugin) translatorMessageHasBeenPosted(post *model.Post) {
 	configuration := p.getConfiguration()
-	if !configuration.TranslatorBot_OnOffBool || post == nil {
+	if post == nil {
 		return
 	}
 
 	var channelConfiguration *translatorChannel
+OuterLoop:
 	for index := range configuration.TranslatorBot_Custom_ChannelList {
-		if configuration.TranslatorBot_Custom_ChannelList[index].ChannelID == post.ChannelId {
-			channelConfiguration = &configuration.TranslatorBot_Custom_ChannelList[index]
-			break
+		for _, id := range configuration.TranslatorBot_Custom_ChannelList[index].ChannelIDs {
+			if id == post.ChannelId {
+				channelConfiguration = &configuration.TranslatorBot_Custom_ChannelList[index]
+				break OuterLoop
+			}
 		}
 	}
 	if channelConfiguration == nil {
@@ -56,15 +67,17 @@ func (p *Plugin) translatorMessageHasBeenPosted(post *model.Post) {
 		return
 	}
 
-	if channelConfiguration.AddToChannelID != "" {
-		if _, err := p.API.AddUserToChannel(channelConfiguration.AddToChannelID, post.UserId, p.translatorBot.UserId); err != nil {
-			p.translatorError("add message author to configured channel", err)
+	for _, addToChannelID := range channelConfiguration.AddToChannelIDs {
+		if strings.TrimSpace(addToChannelID) != "" {
+			if _, err := p.API.AddUserToChannel(addToChannelID, post.UserId, p.translatorBot.UserId); err != nil {
+				p.translatorError("add message author to configured channel", err)
+			}
 		}
 	}
 
 	translation, err := p.translate(post.Message, configuration)
 	if err != nil {
-		p.translatorErrorWithChannel("translate post", err, configuration.TranslatorBot_TestChannelID)
+		p.translatorErrorWithChannel("translate post", err, configuration.TranslatorBot_ErrorChannelID)
 		p.notifyTranslationFailure(post.UserId, post, channelConfiguration.Delivery)
 		return
 	}
@@ -73,7 +86,7 @@ func (p *Plugin) translatorMessageHasBeenPosted(post *model.Post) {
 
 func (p *Plugin) translatorReactionHasBeenAdded(reaction *model.Reaction) {
 	configuration := p.getConfiguration()
-	if !configuration.TranslatorBot_OnOffBool || reaction == nil ||
+	if reaction == nil ||
 		reaction.EmojiName != "english" || reaction.UserId == p.translatorBot.UserId ||
 		!p.translatorBotIsMember(reaction.ChannelId) ||
 		translatorChannelConfigured(configuration, reaction.ChannelId) ||
@@ -106,7 +119,7 @@ func (p *Plugin) translatorReactionHasBeenAdded(reaction *model.Reaction) {
 	}
 	translation, err := p.translate(post.Message, configuration)
 	if err != nil {
-		p.translatorErrorWithChannel("translate reaction target", err, configuration.TranslatorBot_TestChannelID)
+		p.translatorErrorWithChannel("translate reaction target", err, configuration.TranslatorBot_ErrorChannelID)
 		p.notifyTranslationFailure(reaction.UserId, post, "dm")
 		return
 	}
@@ -124,8 +137,10 @@ func (p *Plugin) translatorReactionHasBeenAdded(reaction *model.Reaction) {
 
 func translatorChannelConfigured(configuration *configuration, channelID string) bool {
 	for _, channel := range configuration.TranslatorBot_Custom_ChannelList {
-		if channel.ChannelID == channelID {
-			return true
+		for _, id := range channel.ChannelIDs {
+			if id == channelID {
+				return true
+			}
 		}
 	}
 	return false
@@ -236,7 +251,7 @@ func (p *Plugin) translatorAudit(post *model.Post, translation string, configura
 }
 
 func (p *Plugin) translatorError(operation string, err error) {
-	p.translatorErrorWithChannel(operation, err, p.getConfiguration().TranslatorBot_TestChannelID)
+	p.translatorErrorWithChannel(operation, err, p.getConfiguration().TranslatorBot_ErrorChannelID)
 }
 
 func (p *Plugin) translatorErrorWithChannel(operation string, err error, channelID string) {

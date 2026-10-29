@@ -51,7 +51,7 @@ type configuration struct {
 	TranslatorBot_MistralModel            string
 	TranslatorBot_SystemPrompt            string
 	TranslatorBot_UserPrompt              string
-	TranslatorBot_TestChannelID           string
+	TranslatorBot_ErrorChannelID          string
 	TranslatorBot_AuditChannelID          string
 	TranslatorBot_DictionaryPostID        string
 	TranslatorBot_Custom_ChannelList      []translatorChannel
@@ -129,11 +129,13 @@ func (p *Plugin) OnConfigurationChange() error {
 		return errors.Wrap(err, "failed to load plugin configuration")
 	}
 
-	if err := validateTranslatorConfiguration(configuration); err != nil {
-		return err
-	}
-
 	p.setConfiguration(configuration)
+
+	if configuration.TranslatorBot_OnOffBool {
+		if err := validateTranslatorConfiguration(configuration); err != nil {
+			return err
+		}
+	}
 
 	if configuration.JoinLeaveFree_OnOffBool {
 		if err := p.JoinLeaveFree_SetupChannelIds(); err != nil {

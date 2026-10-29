@@ -13,7 +13,9 @@ import ChannelsInput from './inputs/channels_input';
 import TeamsInput from './inputs/teams_input';
 import UsersInput from './inputs/users_input';
 
-const SELECT_TYPES = new Set(['channels', 'teams', 'users']);
+const MULTISELECT_TYPES = new Set(['channels', 'teams', 'users']);
+const SINGLESELECT_TYPES = new Set(['channel', 'team', 'user']);
+const SELECT_TYPES = new Set([...MULTISELECT_TYPES, ...SINGLESELECT_TYPES]);
 const FIELD_TYPES = new Set(['string', 'number', 'int', 'boolean', 'bool', ...SELECT_TYPES]);
 
 const getId = (value) => {
@@ -36,7 +38,7 @@ const asArray = (value) => {
 
 const normalizeField = (field) => {
     const normalized = {
-        isMulti: SELECT_TYPES.has(field.type) ? field.type !== 'teams' : false,
+        isMulti: field.isMulti ?? MULTISELECT_TYPES.has(field.type),
         ...field,
     };
 
@@ -112,25 +114,29 @@ const hydrateField = async (field, value, actions) => {
         return field.isMulti ? [] : null;
     }
 
-    if (field.type === 'users') {
+    if (field.type === 'users' || field.type === 'user') {
         const response = await actions.getProfilesByIds(ids);
         return getError(response) ? value : response.data;
     }
 
-    if (field.type === 'teams') {
+    if (field.type === 'teams' || field.type === 'team') {
         const responses = await Promise.all(ids.map(actions.getTeam));
         return responses.filter((response) => !getError(response)).map((response) => response.data);
     }
 
-    const channelResponses = await Promise.all(ids.map(actions.getChannel));
-    const channels = channelResponses.filter((response) => !getError(response)).map((response) => response.data);
-    const teamsResponse = await actions.getTeams(0, 60);
-    const teams = getError(teamsResponse) ? [] : teamsResponse.data;
+    if (field.type === 'channels' || field.type === 'channel') {
+        const channelResponses = await Promise.all(ids.map(actions.getChannel));
+        const channels = channelResponses.filter((response) => !getError(response)).map((response) => response.data);
+        const teamsResponse = await actions.getTeams(0, 60);
+        const teams = getError(teamsResponse) ? [] : teamsResponse.data;
 
-    return channels.map((channel) => ({
-        ...channel,
-        team_display_name: (teams.find((team) => team.id === channel.team_id) || {}).display_name || '<Team Not Found>',
-    }));
+        return channels.map((channel) => ({
+            ...channel,
+            team_display_name: (teams.find((team) => team.id === channel.team_id) || {}).display_name || '<Team Not Found>',
+        }));
+    }
+
+    throw new Error(`hydrateField not implemented for matrix setting field type: ${field.type}`);
 };
 
 const MatrixEntry = ({fields, id, value, onChange, onDelete, hideDelete, actions}) => {
@@ -201,16 +207,16 @@ const FieldInput = ({field, value, onChange}) => {
         placeholder: field.placeholder || field.label || field.name,
     };
 
-    if (field.type === 'channels') {
-        return <div className={field.className || 'col-xs-12 col-sm-3'}><ChannelsInput {...commonProps} channels={value} isMulti={field.isMulti} onChange={onChange}/></div>;
+    if (field.type === 'channels' || field.type === 'channel') {
+        return <div className={field.className || 'col-xs-12 col-sm-3'}><ChannelsInput {...commonProps} channels={asArray(value)} isMulti={field.isMulti} onChange={onChange}/></div>;
     }
 
-    if (field.type === 'teams') {
+    if (field.type === 'teams' || field.type === 'team') {
         return <div className={field.className || 'col-xs-12 col-sm-3'}><TeamsInput {...commonProps} teams={asArray(value)} isMulti={field.isMulti} onChange={onChange}/></div>;
     }
 
-    if (field.type === 'users') {
-        return <div className={field.className || 'col-xs-12 col-sm-3'}><UsersInput {...commonProps} users={value} isMulti={field.isMulti} onChange={onChange}/></div>;
+    if (field.type === 'users' || field.type === 'user') {
+        return <div className={field.className || 'col-xs-12 col-sm-3'}><UsersInput {...commonProps} users={asArray(value)} isMulti={field.isMulti} onChange={onChange}/></div>;
     }
 
     if (field.type === 'boolean' || field.type === 'bool') {

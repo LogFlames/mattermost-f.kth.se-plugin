@@ -7,9 +7,9 @@ const TranslatorChannelMatrix = createMatrixSetting({
     title: 'Translator channels',
     fields: [
         {name: 'name', label: 'Name', type: 'string'},
-        {name: 'channel_id', label: 'Monitored channel', type: 'channels', className: 'col-xs-12 col-sm-3'},
-        {name: 'add_to_channel_id', label: 'Add author to', type: 'channels', className: 'col-xs-12 col-sm-3'},
-        {name: 'delivery', label: 'Delivery (reply or dm)', type: 'string'},
+        {name: 'channel_ids', label: 'Monitored channels', type: 'channels', className: 'col-xs-12 col-sm-3'},
+        {name: 'delivery', label: 'reply|dm', type: 'string', className: 'col-xs-12 col-sm-3'},
+        {name: 'add_to_channel_ids', label: 'Add author to', type: 'channels', className: 'col-xs-12 col-sm-3'},
         {name: 'direct_message_prefix', label: 'DM prefix', type: 'string', className: 'col-xs-12 col-sm-3'},
     ],
 });
@@ -20,18 +20,21 @@ const validate = (entries) => {
     }
     const channelIDs = new Set();
     for (const [index, entry] of entries.entries()) {
-        if (!entry || typeof entry !== 'object' || typeof entry.channel_id !== 'string' || !entry.channel_id.trim()) {
-            return `Translator channel ${index + 1} must have a channel.`;
+        if (!entry || typeof entry !== 'object' || typeof entry.channel_ids !== 'string' || !entry.channel_ids.trim()) {
+            return `Configuration ${index + 1} must have a channel.`;
         }
-        if (channelIDs.has(entry.channel_id)) {
-            return `Translator channel ${index + 1} duplicates another channel.`;
+        if (!entry.name || !entry.name.trim()) {
+            return `Configuration ${index + 1} must have an identifying name.`;
         }
-        channelIDs.add(entry.channel_id);
+        if (channelIDs.has(entry.channel_ids)) {
+            return `Configuration ${index + 1} duplicates another channel.`;
+        }
+        channelIDs.add(entry.channel_ids);
         if (entry.delivery !== 'reply' && entry.delivery !== 'dm') {
-            return `Translator channel ${index + 1} delivery must be reply or dm.`;
+            return `Configuration ${index + 1} delivery must be reply or dm.`;
         }
         if (entry.delivery === 'dm' && (!entry.direct_message_prefix || !entry.direct_message_prefix.trim())) {
-            return `Translator channel ${index + 1} needs a direct-message prefix.`;
+            return `Configuration ${index + 1} needs a direct-message prefix.`;
         }
     }
     return '';
