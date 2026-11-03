@@ -270,13 +270,14 @@ func (p *Plugin) validateGDPRCleanUser(fields []string, search_posts_files bool)
 			2. The last name will be changed to "User"
 			3. The email will be changed to %q
 			4. The username will be changed to %q
+			5. The AuthData will be set to %q+deactivated
 
 			> Validation checks passed.
 			> * :white_check_mark: User @%s exists.
 			> * :white_check_mark: Destination e-mail %q is available.
 			> * :white_check_mark: Destination username %q is available.
 			> * :white_check_mark: %s cleanup mode is valid.`,
-			username, destinationEmail, destinationUsername,
+			username, destinationEmail, destinationUsername, destinationID,
 			username, destinationEmail, destinationUsername, fields[3]), nil
 
 	case "soft": // Soft deletion: anonymize the user and mark all posts and files as deleted in the database
@@ -303,9 +304,10 @@ func (p *Plugin) validateGDPRCleanUser(fields []string, search_posts_files bool)
 			2. The last name will be changed to "User"
 			3. The email will be changed to %q
 			4. The username will be changed to %q
-			5. All posts will be marked as deleted in the database (but not removed from the filesystem)
+			5. The AuthData will be set to %q+deactivated
+			6. All posts will be marked as deleted in the database (but not removed from the filesystem)
 			  * There are %d undeleted posts in the database for this user. (-1 means not calculated.)
-			6. All files will be marked as deleted in the database (but not removed from the filesystem)
+			7. All files will be marked as deleted in the database (but not removed from the filesystem)
 			  * There are %d undeleted files in the database for this user. (-1 means not calculated.)
 
 			> Validation checks passed.
@@ -313,7 +315,7 @@ func (p *Plugin) validateGDPRCleanUser(fields []string, search_posts_files bool)
 			> * :white_check_mark: Destination e-mail %q is available.
 			> * :white_check_mark: Destination username %q is available.
 			> * :white_check_mark: %s cleanup mode is valid.`,
-			username, destinationEmail, destinationUsername, postCount, fileCount,
+			username, destinationEmail, destinationUsername, destinationID, postCount, fileCount,
 			username, destinationEmail, destinationUsername, fields[3]), nil
 	case "hard": // Hard deletion: anonymize the user and delete all posts and files in the database, and queue them for deletion from the filesystem.
 		return "", fmt.Errorf("The **hard** deletion mode is NOT implemented. Do so at your own risk if you need it.")
@@ -329,7 +331,7 @@ func (p *Plugin) validateGDPRCleanUser(fields []string, search_posts_files bool)
 			return "", fmt.Errorf("Could not count files for user @%s: %w", username, err)
 		}
 
-		return `# THIS IS A DANGEROUS METHOD. PROCEED WITH CAUTION.
+		return fmt.Sprintf(`# THIS IS A DANGEROUS METHOD. PROCEED WITH CAUTION.
 
 			Handle **HARD** GDPR deletion of user @%s.
 			With **HARD** deletion, the following changes will occur:
@@ -337,9 +339,10 @@ func (p *Plugin) validateGDPRCleanUser(fields []string, search_posts_files bool)
 			2. The last name will be changed to "User"
 			3. The email will be changed to %q
 			4. The username will be changed to %q
-			5. All posts will be marked as deleted in the database and queued for deletion from the filesystem.
+			5. The AuthData will be set to %q+deactivated
+			6. All posts will be marked as deleted in the database and queued for deletion from the filesystem.
 			  * There are %d undeleted posts in the database for this user. (-1 means not calculated.)
-			6. All files will be marked as deleted in the database and queued for deletion from the filesystem.
+			7. All files will be marked as deleted in the database and queued for deletion from the filesystem.
 			  * There are %d undeleted files in the database for this user. (-1 means not calculated.)
 
 			> Validation checks passed.
@@ -347,7 +350,8 @@ func (p *Plugin) validateGDPRCleanUser(fields []string, search_posts_files bool)
 			> * :white_check_mark: Destination e-mail %q is available.
 			> * :white_check_mark: Destination username %q is available.
 			> * :white_check_mark: %s cleanup mode is valid.`,
-		*/
+			username, destinationEmail, destinationUsername, destinationID, postCount, fileCount,
+			username, destinationEmail, destinationUsername, fields[3]), nil */
 	default:
 		return "", fmt.Errorf("Invalid cleanup mode %q. Use lite, soft or hard.", fields[3])
 	}
