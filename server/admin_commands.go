@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -11,189 +9,47 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
-// TODO write better module string
+// TODO write better module description with warnings at the top of this file
 // TODO prefix method names to avoid collisions
 
 /*
 	/mm is a set of administrative commands for managing the Mattermost instance.
 */
 
-var adminCommandUsage = map[string]string{
-	"move-town-square":    "Usage: /mm move-town-square [team] ~[old-town-square] [new-name-for-old-town-square] ~[channel-to-make-town-square]",
-	"rename-team":         "Usage: /mm rename-team [team] [new-team-name]",
-	"gdpr-clean-user":     "Usage: /mm gdpr-clean-user @[user] [soft|hard]",
-	"soft-delete-posts":   "Usage: /mm soft-delete-posts [message-id]",
-	"soft-reauthor-posts": "Usage: /mm soft-reauthor-posts [message-id]",
-	"search-posts":        "Usage: /mm search-posts \"[regex]\"",
-	// NEW COMMAND? add usage string here
-}
 var adminCommandNames = []string{
 	"move-town-square",
 	"rename-team",
 	"gdpr-clean-user",
 	"soft-delete-posts",
-	"soft-reauthor-posts",
+	"undelete-posts",
+	"reauthor-posts",
 	"search-posts",
 	// NEW COMMAND? add name here
 }
-
-type adminCommandContext struct {
-	UserID    string
-	TeamID    string
-	ChannelID string
+var adminCommandUsage = map[string]string{
+	"move-town-square":  "Usage: /mm move-town-square [team] ~[old-town-square] [new-name-for-old-town-square] ~[channel-to-make-town-square]",
+	"rename-team":       "Usage: /mm rename-team [team] [new-team-name]",
+	"gdpr-clean-user":   "Usage: /mm gdpr-clean-user @[user] [lite|soft|hard] [default|destination-ID]",
+	"soft-delete-posts": "Usage: /mm soft-delete-posts [specification-message-id]",
+	"undelete-posts":    "Usage: /mm undelete-posts [specification-message-id]",
+	"reauthor-posts":    "Usage: /mm reauthor-posts [specification-message-id]",
+	"search-posts":      "Usage: /mm search-posts \"[regex]\"",
+	// NEW COMMAND? add usage string here
+}
+var adminCommandDescription = map[string]string{
+	"move-town-square":  "Switches which channel is the Town Square channel for a team.",
+	"rename-team":       "Renames a team (URL name).",
+	"gdpr-clean-user":   "Clean's a user's data. Lite anonymizes the user; soft also marks posts and files as deleted; hard also queues posts and files for deletion from the filesystem. (Hard deletion is not implemented.)",
+	"soft-delete-posts": "According to specification, marks an array of post IDs from the specified message ID as deleted, and saves which were deleted to a message.",
+	"undelete-posts":    "According to specification, marks an array of post IDs from the specified message ID as undeleted, and saves which were undeleted to a message.",
+	"reauthor-posts":    "According to specification, changes the author of an array of post IDs from the specified message ID to a new author, and saves which were reauthored to a message (and the original author).",
+	"search-posts":      "Search for posts matching a regular expression.",
+	// NEW COMMAND? add description string here
 }
 
-func (p *Plugin) adminCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
-	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
-
-	if !p.adminCommandAllowed(args.UserId) {
-		if !p.API.HasPermissionTo(args.UserId, model.PermissionManageSystem) {
-			response.Text = "Only system admins can run /mm."
-			return response, nil
-		} else {
-			response.Text = "Only system admins which are explicitly configured to be able to run /mm can do so. This is a potentially dangerous tool. Please contact the system administrators before using this tool."
-			return response, nil
-		}
-
-	}
-
-	fields, err := parseAdminCommand(args.Command)
-	if err != nil {
-		response.Text = err.Error()
-		return response, nil
-	}
-	context := adminCommandContext{UserID: args.UserId, TeamID: args.TeamId, ChannelID: args.ChannelId}
-	if len(fields) >= 3 && isAdminCommandHash(fields[len(fields)-1]) {
-		return p.validateAndRunCommand(fields, context, response)
-	} else {
-		return p.validateCommand(fields, context, response)
-	}
-}
-
-/* DRY RUN: Validates the command. */
-func (p *Plugin) validateCommand(fields []string, context adminCommandContext, response *model.CommandResponse) (*model.CommandResponse, *model.AppError) {
-	summary, err := p.validateAdminCommand(fields, context)
-	if err != nil {
-		response.Text = err.Error()
-		return response, nil
-	}
-	hash := adminCommandHash(fields)
-	response.Text = fmt.Sprintf("Proposed changes: %s\n\nThis command is not executed yet. Append `%s` to the command to confirm it.", summary, hash)
-	return response, nil
-}
-
-/* LIVE: Checks the hash and validates the command before running it command. */
-func (p *Plugin) validateAndRunCommand(fields []string, context adminCommandContext, response *model.CommandResponse) (*model.CommandResponse, *model.AppError) {
-	commandFields := fields[:len(fields)-1]
-	providedHash := strings.ToUpper(fields[len(fields)-1])
-
-	if len(commandFields) != len(strings.Fields(adminCommandUsage[fields[1]])) {
-		response.Text = fmt.Sprintf("%s\n\nWrong number of fields for /mm "+fields[1]+". The last field looks like a hash, please re-run the command without it for a dry run evaluation.", adminCommandUsage[fields[1]])
-	} // We have the right number of fields
-
-	if expectedHash := adminCommandHash(commandFields); expectedHash != providedHash {
-		response.Text = fmt.Sprintf("%s\n\nCommand hash mismatch. Please re-run the command without the hash (%s) for a dry run evaluation.", adminCommandUsage[fields[1]], providedHash)
-		return response, nil
-	} // The hash matches the command
-
-	if _, err := p.validateAdminCommand(commandFields, context); err != nil {
-		response.Text = fmt.Sprintf("ERROR: THE LAST FIELD IS THE CORRECT HASH, BUT THE COMMAND IS NOW INVALID. Something must have changed since the hash was generated.\n\n%s", err.Error())
-		return response, nil
-	} // The command is re-validated
-	if err := p.runCommand(commandFields, context); err != nil {
-		// TODO
-		response.Text = err.Error()
-		return response, nil
-	}
-
-	return response, nil
-}
-
-func adminCommandHash(fields []string) string { // OK
-	sum := sha256.Sum256([]byte(strings.Join(fields, "\x00")))
-	return fmt.Sprintf("#%s", strings.ToUpper(hex.EncodeToString(sum[:])[:6]))
-}
-
-/* Format: #6CHARS */
-func isAdminCommandHash(value string) bool {
-	return regexp.MustCompile(`^#[A-Fa-f0-9]{6}$`).MatchString(value)
-}
-
-/* Only users who are system admin AND are explicitly configured to may run /mm. */
-func (p *Plugin) adminCommandAllowed(userID string) bool { // OK
-	if !p.API.HasPermissionTo(userID, model.PermissionManageSystem) {
-		return false
-	}
-
-	for _, allowedUserID := range p.getConfiguration().AdminCommands_AllowedUsers {
-		if allowedUserID == userID {
-			return true
-		}
-	}
-	return false
-}
-
-func parseAdminCommand(command string) ([]string, error) { // OK
-	fields, err := shellFields(strings.TrimSpace(command))
-	if err != nil {
-		return nil, fmt.Errorf("%s\n\n%s", err, adminUsage())
-	}
-	if len(fields) == 0 || fields[0] != "/mm" {
-		return nil, fmt.Errorf("%s\n\n%s", "Invalid /mm command.", adminUsage())
-	}
-	return fields, nil
-}
-
-/*
-	Call this function without the hash string.
-
-Validates the admin command, returning a (dry-run) summary of the command if it is valid or a descriptive error otherwise.
-*/
-func (p *Plugin) validateAdminCommand(fields []string, context adminCommandContext) (string, error) { // OK
-	// Return general reference if a subcommand is not given
-	if len(fields) < 2 {
-		return "", fmt.Errorf("%s", adminUsage())
-	}
-	if _, ok := adminCommandUsage[fields[1]]; !ok {
-		return "", fmt.Errorf("%s", adminUsage())
-	}
-
-	// Return reference for subcommand
-	if len(fields) == 2 {
-		return "", fmt.Errorf("%s", adminCommandUsage[fields[1]])
-	}
-
-	// Ensure the command has the same number of fields as its usage string.
-	if len(fields) != len(strings.Fields(adminCommandUsage[fields[1]])) {
-		return "", fmt.Errorf("%s\n\nWrong number of fields for /mm %s.", adminCommandUsage[fields[1]], fields[1])
-	}
-
-	var s string
-	var err error
-
-	switch fields[1] {
-	case "move-town-square":
-		s, err = p.validateMoveTownSquare(fields, context)
-	case "rename-team":
-		s, err = p.validateRenameTeam(fields, context)
-	case "gdpr-clean-user":
-		s, err = p.validateGDPRCleanUser(fields)
-	case "soft-delete-posts":
-		s, err = p.validateSoftDeletePosts(fields)
-	case "soft-reauthor-posts":
-		s, err = p.validateSoftReauthorPosts(fields)
-	case "search-posts":
-		s, err = p.validateSearchPosts(fields)
-	default:
-		return "", fmt.Errorf("%s", adminUsage())
-	}
-
-	if err != nil {
-		return "", fmt.Errorf("%s\n\n%s", adminCommandUsage[fields[1]], err)
-	} else {
-		return s, nil
-	}
-}
+/*******************
+* MOVE-TOWN-SQUARE *
+*******************/
 
 /*
 	/mm move-town-square [team] ~[old-town-square] [new-name-for-old-town-square] ~[channel-to-make-town-square]
@@ -278,6 +134,27 @@ func (p *Plugin) validateMoveTownSquare(fields []string, context adminCommandCon
 		newTownSquareChannelName, fields[2]), nil
 }
 
+/* Move the town square from the old channel to the new channel, and rename the old town square channel to the new name. */
+func (p *Plugin) moveTownSquare(fields []string, context adminCommandContext) error {
+	// TODO rename
+	if _, err := p.validateMoveTownSquare(fields, context); err != nil {
+		return err
+	}
+	return fmt.Errorf("Not implemented.")
+}
+
+/**************
+* RENAME-TEAM *
+**************/
+
+/*
+	/mm rename-team [team] [new-team-name]
+
+Checks:
+1. That the command is exactly 4 fields long (including /mm)
+2. That the team exists and is the current team
+3. That the new team name is valid and does not already exist
+*/
 func (p *Plugin) validateRenameTeam(fields []string, context adminCommandContext) (string, error) {
 	if len(fields) < 2 || fields[0] != "/mm" || fields[1] != "rename-team" {
 		return "", fmt.Errorf("Major internal error: validateRenameTeam called with wrong initial fields.")
@@ -317,11 +194,31 @@ func (p *Plugin) validateRenameTeam(fields []string, context adminCommandContext
 		fields[3]), nil
 }
 
-func (p *Plugin) validateGDPRCleanUser(fields []string) (string, error) {
+func (p *Plugin) renameTeam(fields []string, context adminCommandContext) error {
+	if _, err := p.validateRenameTeam(fields, context); err != nil {
+		return err // re-validate for good measure
+	}
+	return fmt.Errorf("Not implemented.")
+}
+
+/******************
+* GDPR-CLEAN-USER *
+******************/
+
+/*
+	/mm gdpr-clean-user @[user] [lite|soft|hard] [default|destination-ID]
+
+Checks:
+1. That the command is exactly 5 fields long (including /mm)
+2. That the user exists
+3. That the destination ID is valid and not already occupied by another user
+4. That the cleanup mode is valid (lite, soft or hard)
+*/
+func (p *Plugin) validateGDPRCleanUser(fields []string, search_posts_files bool) (string, error) {
 	if len(fields) < 2 || fields[0] != "/mm" || fields[1] != "gdpr-clean-user" {
 		return "", fmt.Errorf("Major internal error: validateGDPRCleanUser called with wrong initial fields.")
 	}
-	if len(fields) != 4 {
+	if len(fields) != 5 {
 		return "", fmt.Errorf("Wrong number of fields for /mm gdpr-clean-user.")
 	}
 
@@ -331,158 +228,296 @@ func (p *Plugin) validateGDPRCleanUser(fields []string) (string, error) {
 		return "", fmt.Errorf("Invalid user @%s.", username)
 	}
 
+	destinationID := ""
+	if fields[4] != "default" {
+		if !regexp.MustCompile(`^[A-Za-z0-9]+$`).MatchString(fields[4]) {
+			return "", fmt.Errorf("Invalid destination ID %q. Use only alphanumeric characters or pass - for the default ID.", fields[4])
+		}
+		destinationID = fields[4]
+	}
+	if destinationID == "" {
+		destinationID = user.Id
+		if user.AuthData != nil && *user.AuthData != "" {
+			destinationID = *user.AuthData
+		}
+	}
+	destinationEmail := fmt.Sprintf("deactivated+%s@mattermost.invalid", destinationID)
+	destinationUsername := fmt.Sprintf("deactivated+%s", destinationID)
+
+	destinationUser, lookupErr := p.API.GetUserByEmail(destinationEmail)
+	if lookupErr != nil && lookupErr.StatusCode != http.StatusNotFound {
+		return "", fmt.Errorf("Could not check whether destination e-mail %q is occupied.", destinationEmail)
+	}
+	if destinationUser != nil {
+		return "", fmt.Errorf("Destination e-mail %q is already occupied.", destinationEmail)
+	}
+
+	destinationUser, lookupErr = p.API.GetUserByUsername(destinationUsername)
+	if lookupErr != nil && lookupErr.StatusCode != http.StatusNotFound {
+		return "", fmt.Errorf("Could not check whether destination username %q is occupied.", destinationUsername)
+	}
+	if destinationUser != nil {
+		return "", fmt.Errorf("Destination username %q is already occupied.", destinationUsername)
+	}
+
 	switch fields[3] {
-	case "soft":
-		// Soft deletion: only anonymize the user, but keep posts and files
-		return "", nil // TODO
-	case "hard":
-		// Hard deletion: anonymize the user and mark all posts as deleted in the database
-		return "", nil // TODO
+	case "lite": // Lite deletion: only anonymize the user, but keep posts and files
+		return fmt.Sprintf(
+			`Handle **lite** GDPR deletion of user @%s.
+
+			With lite deletion, the following changes will occur:
+			1. The first name will be changed to "Deactivated"
+			2. The last name will be changed to "User"
+			3. The email will be changed to %q
+			4. The username will be changed to %q
+
+			> Validation checks passed.
+			> * :white_check_mark: User @%s exists.
+			> * :white_check_mark: Destination e-mail %q is available.
+			> * :white_check_mark: Destination username %q is available.
+			> * :white_check_mark: %s cleanup mode is valid.`,
+			username, destinationEmail, destinationUsername,
+			username, destinationEmail, destinationUsername, fields[3]), nil
+
+	case "soft": // Soft deletion: anonymize the user and mark all posts and files as deleted in the database
+		var postCount = int64(-1)
+		var fileCount = int64(-1)
+		if search_posts_files {
+			pC, err := p.postCountForUser(user.Id)
+			if err != nil {
+				return "", fmt.Errorf("Could not count posts for user @%s: %w", username, err)
+			}
+			fC, err := p.fileCountForUser(user.Id)
+			if err != nil {
+				return "", fmt.Errorf("Could not count files for user @%s: %w", username, err)
+			}
+			postCount = pC
+			fileCount = fC
+		}
+
+		return fmt.Sprintf(
+			`Handle **soft** GDPR deletion of user @%s.
+
+			With soft deletion, the following changes will occur:
+			1. The first name will be changed to "Deactivated"
+			2. The last name will be changed to "User"
+			3. The email will be changed to %q
+			4. The username will be changed to %q
+			5. All posts will be marked as deleted in the database (but not removed from the filesystem)
+			  * There are %d undeleted posts in the database for this user. (-1 means not calculated.)
+			6. All files will be marked as deleted in the database (but not removed from the filesystem)
+			  * There are %d undeleted files in the database for this user. (-1 means not calculated.)
+
+			> Validation checks passed.
+			> * :white_check_mark: User @%s exists.
+			> * :white_check_mark: Destination e-mail %q is available.
+			> * :white_check_mark: Destination username %q is available.
+			> * :white_check_mark: %s cleanup mode is valid.`,
+			username, destinationEmail, destinationUsername, postCount, fileCount,
+			username, destinationEmail, destinationUsername, fields[3]), nil
+	case "hard": // Hard deletion: anonymize the user and delete all posts and files in the database, and queue them for deletion from the filesystem.
+		return "", fmt.Errorf("The **hard** deletion mode is NOT implemented. Do so at your own risk if you need it.")
+
+		/* NOT IMPLEMENTED
+		postCount, err := p.postCountForUser(user.Id)
+		if err != nil {
+			return "", fmt.Errorf("Could not count posts for user @%s: %w", username, err)
+		}
+
+		fileCount, err := p.fileCountForUser(user.Id)
+		if err != nil {
+			return "", fmt.Errorf("Could not count files for user @%s: %w", username, err)
+		}
+
+		return `# THIS IS A DANGEROUS METHOD. PROCEED WITH CAUTION.
+
+			Handle **HARD** GDPR deletion of user @%s.
+			With **HARD** deletion, the following changes will occur:
+			1. The first name will be changed to "Deactivated"
+			2. The last name will be changed to "User"
+			3. The email will be changed to %q
+			4. The username will be changed to %q
+			5. All posts will be marked as deleted in the database and queued for deletion from the filesystem.
+			  * There are %d undeleted posts in the database for this user. (-1 means not calculated.)
+			6. All files will be marked as deleted in the database and queued for deletion from the filesystem.
+			  * There are %d undeleted files in the database for this user. (-1 means not calculated.)
+
+			> Validation checks passed.
+			> * :white_check_mark: User @%s exists.
+			> * :white_check_mark: Destination e-mail %q is available.
+			> * :white_check_mark: Destination username %q is available.
+			> * :white_check_mark: %s cleanup mode is valid.`,
+		*/
 	default:
-		return "", fmt.Errorf("Invalid cleanup mode %q. Use soft or hard.", fields[3])
+		return "", fmt.Errorf("Invalid cleanup mode %q. Use lite, soft or hard.", fields[3])
 	}
 }
+
+/* WARNING: Untested, may take a long time. */
+func (p *Plugin) postCountForUser(userID string) (int64, error) {
+	pageSize := 200
+
+	teams, appErr := p.API.GetTeamsForUser(userID)
+	if appErr != nil {
+		return 0, fmt.Errorf("get teams for user %q: %w", userID, appErr)
+	}
+
+	var count int64
+	for _, team := range teams {
+		if team == nil {
+			continue
+		}
+
+		page := 0
+		for {
+			searchParams := model.SearchParameter{
+				Page:    &page,
+				PerPage: &pageSize,
+			}
+			results, searchErr := p.API.SearchPostsInTeamForUser(team.Id, userID, searchParams)
+			if searchErr != nil {
+				return 0, fmt.Errorf("search posts in team %q for user %q: %w", team.Id, userID, searchErr)
+			}
+			if results == nil || results.PostList == nil {
+				break
+			}
+
+			count += int64(len(results.Order))
+			if results.HasNext == nil || !*results.HasNext {
+				break
+			}
+			page++
+		}
+	}
+
+	return count, nil
+}
+
+/* WARNING: Untested, may take a long time. */
+func (p *Plugin) fileCountForUser(userID string) (int64, error) {
+	const pageSize = 200
+	options := &model.GetFileInfosOptions{
+		UserIds:        []string{userID},
+		IncludeDeleted: false,
+	}
+
+	var count int64
+	for page := 0; ; page++ {
+		files, appErr := p.API.GetFileInfos(page, pageSize, options)
+		if appErr != nil {
+			return 0, fmt.Errorf("get files for user %q: %w", userID, appErr)
+		}
+
+		count += int64(len(files))
+		if len(files) < pageSize {
+			return count, nil
+		}
+	}
+}
+
+func (p *Plugin) GDPRCleanUser(fields []string, context adminCommandContext) error {
+	if _, err := p.validateGDPRCleanUser(fields, false); err != nil {
+		return err // re-validate for good measure
+	}
+	return fmt.Errorf("Not implemented.")
+}
+
+/********************
+* SOFT-DELETE-POSTS *
+********************/
 
 func (p *Plugin) validateSoftDeletePosts(fields []string) (string, error) {
-	if len(fields) != 3 || !model.IsValidId(fields[2]) {
+	return "", fmt.Errorf("Not implemented.")
+
+	/* if len(fields) != 3 || !model.IsValidId(fields[2]) {
 		return "", fmt.Errorf("%s", adminCommandUsage["soft-delete-posts"])
 	}
-	return fmt.Sprintf("Soft-delete post %s.", fields[2]), nil
+	return fmt.Sprintf("Soft-delete post %s.", fields[2]), nil */
 }
 
-func (p *Plugin) validateSoftReauthorPosts(fields []string) (string, error) {
-	if len(fields) != 3 || !model.IsValidId(fields[2]) {
-		return "", fmt.Errorf("%s", adminCommandUsage["soft-reauthor-posts"])
+func (p *Plugin) softDeletePosts(fields []string, context adminCommandContext) error {
+	if _, err := p.validateSoftDeletePosts(fields); err != nil {
+		return err // re-validate for good measure
 	}
-	return fmt.Sprintf("Soft-reauthor post %s.", fields[2]), nil
+	return fmt.Errorf("Not implemented.")
 }
+
+/*****************
+* UNDELETE-POSTS *
+******************/
+
+func (p *Plugin) validateUndeletePosts(fields []string) (string, error) {
+	return "", fmt.Errorf("Not implemented.")
+
+	/* if len(fields) != 3 || !model.IsValidId(fields[2]) {
+		return "", fmt.Errorf("%s", adminCommandUsage["undelete-posts"])
+	}
+	return fmt.Sprintf("Undelete post %s.", fields[2]), nil */
+}
+
+func (p *Plugin) undeletePosts(fields []string, context adminCommandContext) error {
+	if _, err := p.validateUndeletePosts(fields); err != nil {
+		return err // re-validate for good measure
+	}
+	return fmt.Errorf("Not implemented.")
+}
+
+/*****************
+* REAUTHOR-POSTS *
+*****************/
+
+func (p *Plugin) validateReauthorPosts(fields []string) (string, error) {
+	return "", fmt.Errorf("Not implemented.")
+
+	/* if len(fields) != 3 || !model.IsValidId(fields[2]) {
+		return "", fmt.Errorf("%s", adminCommandUsage["reauthor-posts"])
+	}
+	return fmt.Sprintf("Reauthor post %s.", fields[2]), nil */
+}
+
+func (p *Plugin) reauthorPosts(fields []string, context adminCommandContext) error {
+	if _, err := p.validateReauthorPosts(fields); err != nil {
+		return err // re-validate for good measure
+	}
+	return fmt.Errorf("Not implemented.")
+}
+
+/***************
+* SEARCH-POSTS *
+****************/
 
 func (p *Plugin) validateSearchPosts(fields []string) (string, error) {
-	if len(fields) != 3 {
+	return "", fmt.Errorf("Not implemented.")
+
+	/* if len(fields) != 3 {
 		return "", fmt.Errorf("%s", adminCommandUsage["search-posts"])
 	}
 	if _, err := regexp.Compile(fields[2]); err != nil {
 		return "", fmt.Errorf("Invalid search regex: %w", err)
 	}
-	return fmt.Sprintf("Search posts using regular expression %q.", fields[2]), nil
-}
-
-func (p *Plugin) runCommand(fields []string, context adminCommandContext) error {
-	if len(fields) < 2 {
-		return fmt.Errorf("%s", adminUsage())
-	}
-	switch fields[1] {
-	case "move-town-square":
-		return p.renameTownSquare(fields, context)
-	case "rename-team":
-		return p.renameTeam(fields, context)
-	case "gdpr-clean-user":
-		return p.GDPRCleanUser(fields, context)
-	case "soft-delete-posts":
-		return p.softDeletePosts(fields, context)
-	case "soft-reauthor-posts":
-		return p.softReauthorPosts(fields, context)
-	case "search-posts":
-		return p.searchPosts(fields, context)
-	default:
-		return fmt.Errorf("unknown administrative command %q", fields[1])
-	}
-}
-
-func (p *Plugin) renameTownSquare(fields []string, context adminCommandContext) error {
-	if _, err := p.validateMoveTownSquare(fields, context); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *Plugin) renameTeam(fields []string, context adminCommandContext) error {
-	if _, err := p.validateRenameTeam(fields, context); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *Plugin) GDPRCleanUser(fields []string, context adminCommandContext) error {
-	if _, err := p.validateGDPRCleanUser(fields); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *Plugin) softDeletePosts(fields []string, context adminCommandContext) error {
-	if _, err := p.validateSoftDeletePosts(fields); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *Plugin) softReauthorPosts(fields []string, context adminCommandContext) error {
-	if _, err := p.validateSoftReauthorPosts(fields); err != nil {
-		return err
-	}
-	return nil
+	return fmt.Sprintf("Search posts using regular expression %q.", fields[2]), nil */
 }
 
 func (p *Plugin) searchPosts(fields []string, context adminCommandContext) error {
 	if _, err := p.validateSearchPosts(fields); err != nil {
-		return err
+		return err // re-validate for good measure
 	}
-	return nil
+	return fmt.Errorf("Not implemented.")
 }
 
-func adminUsage() string {
-	usages := make([]string, 0, len(adminCommandNames))
-	for _, name := range adminCommandNames {
-		usages = append(usages, adminCommandUsage[name])
-	}
-	return strings.Join(usages, " | ")
+// NEW COMMAND? Copy the below (please keep the reference)
+
+/**************
+* NEW-COMMAND *
+**************/
+
+func (p *Plugin) validateNewCommand(fields []string) (string, error) {
+	return "", fmt.Errorf("Not implemented.")
 }
 
-const MAX_NAME_LENGTH = 32 // Mattermost supports longer channel names, usernames, team names etc. in many occasions but we limit it here to avoid problems
-
-/* Validates that a name contains only allowed characters (alphanumeric or ._-), starts with an alphanumeric character, and is not longer than 32. */
-func validAdminName(value string) bool {
-	var allowedNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	return allowedNamePattern.MatchString(value) && len(value) <= MAX_NAME_LENGTH
-}
-
-/* Builds fields from string, with support for regex inside quotation marks */
-func shellFields(command string) ([]string, error) { // OK
-	var fields []string
-	var current strings.Builder
-	var quote rune
-	escaped := false
-
-	for _, character := range command {
-		switch {
-		case escaped:
-			current.WriteRune(character)
-			escaped = false
-		case character == '\\' && quote != '\'':
-			escaped = true
-		case quote != 0:
-			if character == quote {
-				quote = 0
-			} else {
-				current.WriteRune(character)
-			}
-		case character == '\'' || character == '"':
-			quote = character
-		case character == ' ' || character == '\t' || character == '\n' || character == '\r':
-			if current.Len() > 0 {
-				fields = append(fields, current.String())
-				current.Reset()
-			}
-		default:
-			current.WriteRune(character)
-		}
+func (p *Plugin) newCommand(fields []string, context adminCommandContext) error {
+	if _, err := p.validateNewCommand(fields); err != nil {
+		return err // re-validate for good measure
 	}
-	if escaped || quote != 0 {
-		return nil, fmt.Errorf("Unterminated quote or escape in command.")
-	}
-	if current.Len() > 0 {
-		fields = append(fields, current.String())
-	}
-	return fields, nil
+	return fmt.Errorf("Not implemented.")
 }
