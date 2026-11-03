@@ -219,8 +219,7 @@ func (p *Plugin) OnActivate() error {
 	}
 	if err := p.API.RegisterCommand(&model.Command{
 		Trigger:          "mm",
-		AutoComplete:     true,
-		AutoCompleteHint: "rename-town-square|rename-team|gdpr-clean-user|soft-delete-posts|soft-reauthor-posts|search-posts",
+		AutoComplete:     true, // TODO: necessary?
 		AutoCompleteDesc: "Internal.",
 	}); err != nil {
 		return err
