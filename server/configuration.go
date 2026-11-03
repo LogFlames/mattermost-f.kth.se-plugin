@@ -19,9 +19,10 @@ import (
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
 type configuration struct {
-	ConvertToTextEmojies bool
-	DebugLogging         bool
-	LoggingChannelID     string
+	ConvertToTextEmojies       bool
+	DebugLogging               bool
+	LoggingChannelID           string
+	AdminCommands_AllowedUsers []string
 
 	JoinLeaveFree_OnOffBool bool
 	JoinLeaveFree_BotUserId string
@@ -66,6 +67,7 @@ func (c *configuration) Clone() *configuration {
 	clone.ModeratorBot_Channels = make([]string, len(c.ModeratorBot_Channels))
 	copy(clone.ModeratorBot_Channels, c.ModeratorBot_Channels)
 
+	clone.AdminCommands_AllowedUsers = slices.Clone(c.AdminCommands_AllowedUsers)
 	clone.DefaultChannels_Custom = slices.Clone(c.DefaultChannels_Custom)
 	clone.InternationalStudents_Users = slices.Clone(c.InternationalStudents_Users)
 	clone.InternationalStudents_EnglishChannels = slices.Clone(c.InternationalStudents_EnglishChannels)

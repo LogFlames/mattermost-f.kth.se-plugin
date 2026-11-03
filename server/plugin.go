@@ -151,6 +151,8 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		return p.defaultChannelCommand(args)
 	case "keycloak":
 		return p.keycloakCommand(args)
+	case "mm":
+		return p.adminCommand(args)
 	default:
 		return &model.CommandResponse{
 			ResponseType: model.CommandResponseTypeEphemeral,
@@ -212,6 +214,14 @@ func (p *Plugin) OnActivate() error {
 		AutoComplete:     true,
 		AutoCompleteHint: "new_user|migrate_to_google/keycloak",
 		AutoCompleteDesc: "Create or migrate a Keycloak account",
+	}); err != nil {
+		return err
+	}
+	if err := p.API.RegisterCommand(&model.Command{
+		Trigger:          "mm",
+		AutoComplete:     true,
+		AutoCompleteHint: "rename-town-square|rename-team|gdpr-clean-user|soft-delete-posts|soft-reauthor-posts|search-posts",
+		AutoCompleteDesc: "Internal.",
 	}); err != nil {
 		return err
 	}

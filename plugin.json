@@ -42,6 +42,19 @@
                 ]
             },
             {
+                "key": "admin-commands",
+                "title": "Administrative Commands",
+                "subtitle": "Controls which system administrators may use /mm.",
+                "settings": [
+                    {
+                      "key": "AdminCommands_AllowedUsers",
+                      "display_name": "Administrative Commands: Allowed users",
+                      "type": "custom",
+                      "help_text": "Mattermost users allowed to run /mm. Users must also have the system administrator permission."
+                    }
+                ]
+            },
+            {
                 "key": "text-emojis",
                 "title": "Text Emojis Module",
                 "subtitle": "",
