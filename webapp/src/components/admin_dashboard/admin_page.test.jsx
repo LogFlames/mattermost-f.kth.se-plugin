@@ -48,7 +48,13 @@ beforeEach(async () => {
     });
     Client4.mockImplementation(() => ({setUrl: jest.fn(), getUrl: () => '', doFetch: request}));
     await act(async () => {
-        ReactDOM.render(<AdminPage currentUserID='admin'/>, container);
+        ReactDOM.render(
+            <AdminPage
+                currentUserID='admin'
+                systemAdmin={true}
+            />,
+            container,
+        );
     });
 });
 
@@ -57,6 +63,36 @@ afterEach(() => {
         ReactDOM.unmountComponentAtNode(container);
     });
     container.remove();
+});
+
+it('hides the dashboard and discards reviewed changes when system admin access is removed', async () => {
+    await generate();
+    expect(container.querySelector('[aria-label="Change preview"]')).not.toBe(null);
+    request.mockClear();
+    await act(async () => {
+        ReactDOM.render(
+            <AdminPage
+                currentUserID='admin'
+                systemAdmin={false}
+            />,
+            container,
+        );
+    });
+    expect(container.querySelector('[role=alert]').textContent).toBe('Only system admins can access the admin dashboard.');
+    expect(container.querySelector('nav, form, button, input, select')).toBe(null);
+    expect(container.querySelector('[aria-label="Change preview"]')).toBe(null);
+    expect(request).not.toHaveBeenCalled();
+    await act(async () => {
+        ReactDOM.render(
+            <AdminPage
+                currentUserID='admin'
+                systemAdmin={true}
+            />,
+            container,
+        );
+    });
+    expect(container.querySelector('form')).not.toBe(null);
+    expect(container.querySelector('[aria-label="Change preview"]')).toBe(null);
 });
 
 it('requires explicit review, supports paging and search, and clears the preview after a scope edit', async () => {

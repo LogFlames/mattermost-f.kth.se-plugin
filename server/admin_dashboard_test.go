@@ -24,7 +24,7 @@ type adminTestAPI struct {
 func newAdminTestPlugin(t *testing.T) (*Plugin, *adminTestAPI) {
 	t.Helper()
 	p, base := newDefaultChannelTestPlugin(t)
-	api := &adminTestAPI{defaultChannelTestAPI: base, channelPermission: true}
+	api := &adminTestAPI{defaultChannelTestAPI: base, channelPermission: true, systemAdmin: true}
 	p.SetAPI(api)
 	api.users = []*model.User{{Id: "admin", Username: "admin"}, {Id: "existing", Username: "existing"}, {Id: "new", Username: "new"}, {Id: "deleted", Username: "deleted", DeleteAt: 1}}
 	api.members = model.ChannelMembers{{UserId: "existing", ChannelId: "channel"}}
@@ -36,7 +36,7 @@ func (a *adminTestAPI) KVSetWithExpiry(key string, value []byte, _ int64) *model
 	return a.KVSet(key, value)
 }
 func (a *adminTestAPI) HasPermissionTo(userID string, permission *model.Permission) bool {
-	return userID == "admin" && a.systemAdmin && permission == model.PermissionManageSystem
+	return (userID == "admin" || userID == "other-admin") && a.systemAdmin && permission == model.PermissionManageSystem
 }
 func (a *adminTestAPI) HasPermissionToChannel(userID, channelID string, permission *model.Permission) bool {
 	return userID == "admin" && a.channelPermission && channelID == "channel" &&
@@ -111,6 +111,44 @@ func adminPreviewHTTP(t *testing.T, p *Plugin, input adminInput) adminPreview {
 	return preview
 }
 
+func TestAdminDashboardRequiresSystemAdmin(t *testing.T) {
+	p, api := newAdminTestPlugin(t)
+	input := adminInput{Action: "mass_add", TeamID: "team", ChannelID: "channel"}
+	preview := adminPreviewHTTP(t, p, input)
+	api.systemAdmin = false
+	for _, user := range []string{"", "ordinary-user", "admin"} {
+		for _, endpoint := range []string{"options", "preview", "execute"} {
+			t.Run(user+"/"+endpoint, func(t *testing.T) {
+				body := any(input)
+				if endpoint == "execute" {
+					body = map[string]string{"preview_id": preview.ID}
+				}
+				data, _ := json.Marshal(body)
+				method := http.MethodPost
+				if endpoint == "options" {
+					method = http.MethodGet
+				}
+				r := httptest.NewRequest(method, "/admin/"+endpoint, strings.NewReader(string(data)))
+				r.Header.Set("Mattermost-User-Id", user)
+				w := httptest.NewRecorder()
+				p.ServeHTTP(nil, w, r)
+				want := http.StatusForbidden
+				if user == "" {
+					want = http.StatusUnauthorized
+				}
+				if w.Code != want || len(api.added) != 0 || api.saves != 0 || len(api.kv) != 1 {
+					t.Fatalf("dashboard accessible without system admin permission: %d %s", w.Code, w.Body)
+				}
+			})
+		}
+	}
+	api.systemAdmin = true
+	w := adminHTTP(t, p, "admin", "execute", map[string]string{"preview_id": preview.ID})
+	if w.Code != http.StatusOK || !slices.Equal(api.added, []string{"channel:new"}) {
+		t.Fatalf("system admin could not apply reviewed changes: %d %s", w.Code, w.Body)
+	}
+}
+
 func TestAdminPreviewRequiresFreshSingleUseConfirmation(t *testing.T) {
 	p, api := newAdminTestPlugin(t)
 	input := adminInput{Action: "mass_add", TeamID: "team", ChannelID: "channel"}
@@ -119,7 +157,7 @@ func TestAdminPreviewRequiresFreshSingleUseConfirmation(t *testing.T) {
 		t.Fatalf("preview must exclude existing, deleted and requesting users without adding members: %+v, added=%v", preview, api.added)
 	}
 	confirm := map[string]string{"preview_id": preview.ID}
-	if w := adminHTTP(t, p, "other", "execute", confirm); w.Code != http.StatusConflict || len(api.added) != 0 {
+	if w := adminHTTP(t, p, "other-admin", "execute", confirm); w.Code != http.StatusConflict || len(api.added) != 0 {
 		t.Fatalf("another user applied preview: %d %s", w.Code, w.Body)
 	}
 	api.users = append(api.users, &model.User{Id: "late", Username: "late"})
@@ -202,7 +240,7 @@ func TestAdminCategoryPreviewKeepsReviewedScope(t *testing.T) {
 		t.Run(fmt.Sprint(changedDefault), func(t *testing.T) {
 			p, base := newCategoryTestPlugin(t)
 			base.adminTeam = "team"
-			api := &adminTestAPI{defaultChannelTestAPI: &defaultChannelTestAPI{categoryTestAPI: base, p: p, settings: map[string]any{}, left: map[string]bool{}, users: []*model.User{{Id: "user", Username: "elsa"}, {Id: "late", Username: "late"}, base.user}}}
+			api := &adminTestAPI{systemAdmin: true, defaultChannelTestAPI: &defaultChannelTestAPI{categoryTestAPI: base, p: p, settings: map[string]any{}, left: map[string]bool{}, users: []*model.User{{Id: "user", Username: "elsa"}, {Id: "late", Username: "late"}, base.user}}}
 			p.SetAPI(api)
 			base.searchChannels = func(*model.ChannelSearch) (*model.ChannelsWithCount, *model.AppError) {
 				return &model.ChannelsWithCount{Channels: model.ChannelListWithTeamData{&model.ChannelWithTeamData{Channel: base.channel}}, TotalCount: 1}, nil

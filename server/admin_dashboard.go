@@ -67,6 +67,10 @@ func (p *Plugin) serveAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusUnauthorized, "Sign in to use the admin dashboard.")
 		return
 	}
+	if !p.API.HasPermissionTo(userID, model.PermissionManageSystem) {
+		fail(http.StatusForbidden, "Only system admins can access the admin dashboard.")
+		return
+	}
 	if r.URL.Path == "/admin/options" && r.Method == http.MethodGet {
 		options, err := p.adminOptions(r.Context(), userID, r.URL.Query().Get("team_id"))
 		if err != nil {

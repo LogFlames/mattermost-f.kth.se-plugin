@@ -2,6 +2,7 @@ import React, {useEffect, useMemo, useRef, useState} from 'react';
 import PropTypes from 'prop-types';
 import {connect} from 'react-redux';
 import Client4 from 'mattermost-redux/client/client4';
+import {isCurrentUserSystemAdmin} from 'mattermost-redux/selectors/entities/users';
 
 import manifest from '../../manifest';
 
@@ -17,7 +18,7 @@ const actions = [
 ];
 const pageSize = 25;
 
-export function AdminPage({siteURL = '', currentUserID}) {
+export function AdminPage({siteURL = '', currentUserID, systemAdmin = false}) {
     const client = useMemo(() => {
         const instance = new Client4();
         instance.setUrl(siteURL.replace(/\/$/, ''));
@@ -50,11 +51,11 @@ export function AdminPage({siteURL = '', currentUserID}) {
         return () => {
             generation.current += 1;
         };
-    }, [currentUserID]);
+    }, [currentUserID, systemAdmin]);
 
     useEffect(() => {
         let active = true;
-        if (!currentUserID) {
+        if (!currentUserID || !systemAdmin) {
             setLoading(false);
             return () => {
                 active = false;
@@ -86,7 +87,7 @@ export function AdminPage({siteURL = '', currentUserID}) {
         return () => {
             active = false;
         };
-    }, [client, currentUserID, input.team_id, refresh]);
+    }, [client, currentUserID, systemAdmin, input.team_id, refresh]);
 
     useEffect(() => {
         const timer = preview ? setInterval(() => setNow(Date.now()), 1000) : null;
@@ -197,7 +198,8 @@ export function AdminPage({siteURL = '', currentUserID}) {
                     <span className='admin-badge'>{'Preview → confirm → apply'}</span>
                 </header>
                 {!currentUserID && <p role='alert'>{'Sign in to use the admin dashboard.'}</p>}
-                {currentUserID && (
+                {currentUserID && !systemAdmin && <p role='alert'>{'Only system admins can access the admin dashboard.'}</p>}
+                {currentUserID && systemAdmin && (
                     <div className='admin-layout'>
                         <nav aria-label='Administrative actions'>
                             {actions.map((entry) => (
@@ -424,9 +426,10 @@ export function AdminPage({siteURL = '', currentUserID}) {
     );
 }
 
-AdminPage.propTypes = {siteURL: PropTypes.string, currentUserID: PropTypes.string};
+AdminPage.propTypes = {siteURL: PropTypes.string, currentUserID: PropTypes.string, systemAdmin: PropTypes.bool};
 
 export default connect((state) => ({
     siteURL: state.entities.general.config.SiteURL || '',
     currentUserID: state.entities.users.currentUserId,
+    systemAdmin: isCurrentUserSystemAdmin(state),
 }))(AdminPage);
