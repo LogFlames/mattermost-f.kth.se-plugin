@@ -10,10 +10,12 @@ import SelectUsers from './components/admin_settings/single_type_input/select_us
 import StatsPage from './components/stats/stats_page';
 import TranslatorChannels from './components/admin_settings/translator_channels';
 import MistralModelSetting from './components/admin_settings/mistral_model';
+import AdminPage from './components/admin_dashboard/admin_page';
 
 export default class Plugin {
     initialize(registry) {
         registry.registerCustomRoute('/stats', StatsPage);
+        registry.registerCustomRoute('/admin', AdminPage);
         registry.registerAdminConsoleCustomSetting('DefaultChannels_Custom', DefaultChannelsSettings);
         registry.registerAdminConsoleCustomSetting('ModeratorBot_Channels', SelectChannels, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('JoinLeaveFree_BotUserId', JoinLeaveFreeBotUserId, {showTitle: true});

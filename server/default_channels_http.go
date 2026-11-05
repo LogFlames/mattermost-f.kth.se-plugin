@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -21,6 +22,10 @@ func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Req
 	}
 	if r.URL.Path == "/mistral/models" {
 		p.serveMistralModels(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/admin/") {
+		p.serveAdminDashboard(w, r)
 		return
 	}
 	fail := func(status int, message string) {

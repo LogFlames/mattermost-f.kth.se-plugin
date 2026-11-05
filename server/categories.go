@@ -46,6 +46,7 @@ type categoryJob struct {
 	Attempts    int    `json:"attempts"`
 	Page        int    `json:"page"`
 	Scanned     bool   `json:"scanned"`
+	FixedScope  bool   `json:"fixed_scope,omitempty"`
 	// A failed user remains here while subsequent members/pages are processed.
 	// Save source IDs before moving so deletion can be retried after a crash.
 	Pending map[string][]string `json:"pending"`
@@ -257,6 +258,9 @@ func (p *Plugin) runCategoryJob(ctx context.Context, rest *categoryREST, key str
 		job.Confirmed = true
 	}
 	if channel.DefaultCategoryName != job.NewName {
+		if job.FixedScope {
+			return true, nil
+		}
 		// A confirmed job may have partially run before a newer change. Resume
 		// against the latest committed default, retaining pending cleanup IDs.
 		job.NewName = channel.DefaultCategoryName
