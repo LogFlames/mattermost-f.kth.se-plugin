@@ -59,7 +59,72 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 	if err := p.muteExistingDefaultChannels(user.Id); err != nil && firstErr == nil {
 		firstErr = err
 	}
+	for _, channelID := range configuration.InternationalStudents_DefaultChannels {
+		channel, err := p.API.GetChannel(channelID)
+		if err != nil {
+			firstErr = firstError(firstErr, fmt.Errorf("get default channel %q: %w", channelID, err))
+			continue
+		}
+		if channel == nil {
+			firstErr = firstError(firstErr, fmt.Errorf("get default channel %q returned no channel", channelID))
+			continue
+		}
+		if err := p.setChannelCategory(user.Id, channel); err != nil {
+			firstErr = firstError(firstErr, fmt.Errorf("set default category for channel %q: %w", channelID, err))
+		}
+	}
 	return firstErr
+}
+
+func (p *Plugin) setChannelCategory(userID string, channel *model.Channel) error {
+	categories, err := p.API.GetChannelSidebarCategories(userID, channel.TeamId)
+	if err != nil {
+		return err
+	}
+
+	var target *model.SidebarCategoryWithChannels
+	for _, category := range categories.Categories {
+		if (channel.DefaultCategoryName == "" && category.Type == model.SidebarCategoryChannels) ||
+			(channel.DefaultCategoryName != "" && category.Type == model.SidebarCategoryCustom &&
+				strings.EqualFold(category.DisplayName, channel.DefaultCategoryName)) {
+			target = category
+			break
+		}
+	}
+	if target == nil {
+		if channel.DefaultCategoryName == "" {
+			return fmt.Errorf("built-in Channels category is missing")
+		}
+		target, err = p.API.CreateChannelSidebarCategory(userID, channel.TeamId, &model.SidebarCategoryWithChannels{
+			SidebarCategory: model.SidebarCategory{
+				UserId: userID, TeamId: channel.TeamId, Type: model.SidebarCategoryCustom,
+				DisplayName: channel.DefaultCategoryName,
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	var updates []*model.SidebarCategoryWithChannels
+	for _, category := range categories.Categories {
+		if category.Id == target.Id {
+			continue
+		}
+		if slices.Contains(category.Channels, channel.Id) {
+			category.Channels = slices.DeleteFunc(category.Channels, func(id string) bool { return id == channel.Id })
+			updates = append(updates, category)
+		}
+	}
+	if !slices.Contains(target.Channels, channel.Id) {
+		target.Channels = append([]string{channel.Id}, target.Channels...)
+		updates = append(updates, target)
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	_, err = p.API.UpdateChannelSidebarCategories(userID, channel.TeamId, updates)
+	return err
 }
 
 func (p *Plugin) isActuallyInternational(email string) (bool, error) {
