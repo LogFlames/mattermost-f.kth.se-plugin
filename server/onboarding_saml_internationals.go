@@ -82,23 +82,26 @@ func (p *Plugin) setChannelCategory(userID string, channel *model.Channel) error
 		return err
 	}
 
+	categoryName := channel.DefaultCategoryName
+	if categoryName == "" {
+		categoryName = "Channels"
+	}
 	var target *model.SidebarCategoryWithChannels
 	for _, category := range categories.Categories {
-		if (channel.DefaultCategoryName == "" && category.Type == model.SidebarCategoryChannels) ||
-			(channel.DefaultCategoryName != "" && category.Type == model.SidebarCategoryCustom &&
-				strings.EqualFold(category.DisplayName, channel.DefaultCategoryName)) {
+		if (categoryName == "Channels" && category.Type == model.SidebarCategoryChannels) ||
+			(categoryName != "Channels" && strings.EqualFold(category.DisplayName, categoryName)) {
 			target = category
 			break
 		}
 	}
 	if target == nil {
-		if channel.DefaultCategoryName == "" {
+		if categoryName == "Channels" {
 			return fmt.Errorf("built-in Channels category is missing")
 		}
 		target, err = p.API.CreateChannelSidebarCategory(userID, channel.TeamId, &model.SidebarCategoryWithChannels{
 			SidebarCategory: model.SidebarCategory{
 				UserId: userID, TeamId: channel.TeamId, Type: model.SidebarCategoryCustom,
-				DisplayName: channel.DefaultCategoryName,
+				DisplayName: categoryName,
 			},
 		})
 		if err != nil {
@@ -123,8 +126,11 @@ func (p *Plugin) setChannelCategory(userID string, channel *model.Channel) error
 	if len(updates) == 0 {
 		return nil
 	}
-	_, err = p.API.UpdateChannelSidebarCategories(userID, channel.TeamId, updates)
-	return err
+	_, appErr := p.API.UpdateChannelSidebarCategories(userID, channel.TeamId, updates)
+	if appErr != nil {
+		return appErr
+	}
+	return nil
 }
 
 func (p *Plugin) isActuallyInternational(email string) (bool, error) {
@@ -262,6 +268,10 @@ func (p *Plugin) addInternationalStudentToChannels(userID string, channelIDs []s
 				continue
 			}
 			if _, err := p.API.AddChannelMember(channelID, userID); err != nil {
+				member, membershipErr := p.API.GetChannelMember(channelID, userID)
+				if membershipErr == nil && member != nil {
+					continue
+				}
 				firstErr = firstError(firstErr, fmt.Errorf("add user to channel %q: %w", channelID, err))
 			}
 		}
@@ -336,7 +346,10 @@ func (p *Plugin) addInternationalStudentToConfig(userID string) error {
 	current.InternationalStudents_Users = append(current.InternationalStudents_Users, userID)
 	updated := clonePluginSettings(settings)
 	updated[internationalStudentsUsersKey] = stringsToAny(current.InternationalStudents_Users)
-	return p.API.SavePluginConfig(updated)
+	if err := p.API.SavePluginConfig(updated); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *Plugin) muteExistingDefaultChannels(userID string) error {
