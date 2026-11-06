@@ -343,6 +343,47 @@
                 ]
             },
             {
+                "key": "google-workspace",
+                "title": "Google Workspace Integration",
+                "subtitle": "Credentials and defaults used by account migration.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "GoogleServiceAccountKey",
+                        "display_name": "Google Workspace: Service account JSON key",
+                        "type": "longtext",
+                        "help_text": "Service account JSON key with domain-wide delegation for the Admin SDK Directory API.",
+                        "secret": true
+                    },
+                    {
+                        "key": "GoogleAdminEmail",
+                        "display_name": "Google Workspace: Delegated administrator",
+                        "type": "text",
+                        "help_text": "Administrator email address to impersonate with domain-wide delegation."
+                    },
+                    {
+                        "key": "GoogleExternalOrgUnit",
+                        "display_name": "Google Workspace: External users org unit",
+                        "type": "text",
+                        "help_text": "Default org unit path for external users, for example /External."
+                    },
+                    {
+                        "key": "GoogleMigrationSendEphemeral",
+                        "display_name": "Google Workspace: Notify migrated users in Mattermost",
+                        "type": "bool",
+                        "help_text": "Send an ephemeral Mattermost message to users after migrating them to Google."
+                    },
+                    {
+                        "key": "GoogleMigrationSendEmail",
+                        "display_name": "Google Workspace: Notify migrated users by email",
+                        "type": "bool",
+                        "help_text": "Reserved for future email notifications. Email delivery is not implemented.",
+                        "disabled": true
+                    }
+                ]
+            },
+            {
                 "key": "mistral",
                 "title": "Mistral",
                 "subtitle": "Credentials and settings for integrations to Mistral",

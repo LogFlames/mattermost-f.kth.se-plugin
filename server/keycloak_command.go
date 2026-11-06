@@ -30,6 +30,15 @@ type keycloakCredential struct {
 	Temporary bool   `json:"temporary"`
 }
 
+type keycloakUserRepresentation struct {
+	ID         string              `json:"id"`
+	Username   string              `json:"username"`
+	Email      string              `json:"email"`
+	FirstName  string              `json:"firstName"`
+	LastName   string              `json:"lastName"`
+	Attributes map[string][]string `json:"attributes"`
+}
+
 func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
 	if !p.API.HasPermissionTo(args.UserId, model.PermissionManageSystem) {
@@ -45,11 +54,9 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 
 	switch fields[1] {
 	case "migrate_to_google":
-		response.Text = "Keycloak account migration is not implemented yet."
-		return response, nil
+		return p.migrateKeycloakUserToGoogle(args, fields)
 	case "migrate_to_keycloak":
-		response.Text = "Keycloak account migration is not implemented yet."
-		return response, nil
+		return p.migrateGoogleUserToKeycloak(args, fields)
 	case "new_user":
 		if len(fields) != 8 {
 			response.Text = keycloakNewUserUsage
@@ -83,6 +90,167 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 		response.Text = keycloakNewUserUsage
 		return response, nil
 	}
+}
+
+var keycloakMigrateUsage map[string]string = map[string]string{
+	"migrate_to_google":                 "Usage: `/keycloak migrate_to_google <list-org-units|create-kth|create-external|bind>`",
+	"migrate_to_google list-org-units":  "Usage: `/keycloak migrate_to_google list-org-units`",
+	"migrate_to_google create-kth":      "Usage: `/keycloak migrate_to_google create-kth ~<mattermost-user-to-migrate> <kth-id> <org-unit-#>`",
+	"migrate_to_google create-external": "Usage: `/keycloak migrate_to_google create-external ~<mattermost-user-to-migrate> <fysiksektionen.se-address> [org-unit]`",
+	"migrate_to_google bind":            "Usage: `/keycloak migrate_to_google bind ~<mattermost-user-to-migrate> <fysiksektionen.se-address>`",
+	"migrate_to_keycloak":               "Usage: `/keycloak migrate_to_keycloak <create|bind|update>`",
+	"migrate_to_keycloak create":        "Usage: `/keycloak migrate_to_keycloak create ~<mattermost-user-to-migrate> <keycloak-email>`",
+	"migrate_to_keycloak bind":          "Usage: `/keycloak migrate_to_keycloak bind ~<mattermost-user-to-migrate> <keycloak-email>`",
+	"migrate_to_keycloak update":        "Usage: `/keycloak migrate_to_keycloak update ~<mattermost-user-to-migrate> <keycloak-email>`",
+}
+
+func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []string) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	if len(fields) < 3 {
+		response.Text = keycloakMigrateUsage["migrate_to_google"]
+		return response, nil
+	}
+	if fields[2] == "list-org-units" {
+		if len(fields) != 3 {
+			response.Text = keycloakMigrateUsage["migrate_to_google list-org-units"]
+			return response, nil
+		}
+		units, err := p.listGoogleOrgUnits()
+		if err != nil {
+			response.Text = err.Error()
+			return response, nil
+		}
+		response.Text = strings.Join(units, "\n")
+		return response, nil
+	}
+	user, err := p.migrationMattermostUser(fields[2])
+	if err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	keycloakUser, err := p.getKeycloakUser(user.Email)
+	if err != nil {
+		response.Text = fmt.Sprintf("Could not find the Keycloak account for %s: %v", user.Email, err)
+		return response, nil
+	}
+
+	var googleUser *googleDirectoryUser
+	var password string
+	if len(fields) < 4 {
+		response.Text = keycloakMigrateUsage["migrate_to_google "+fields[2]]
+		return response, nil
+	}
+	switch fields[2] {
+	case "create-kth":
+		if len(fields) != 5 {
+			response.Text = keycloakMigrateUsage["migrate_to_google create-kth"]
+			return response, nil
+		}
+		googleUser, err = p.createGoogleUser(fmt.Sprintf("%s@fysiksektionen.se", fields[3]), keycloakUser.FirstName, keycloakUser.LastName, fields[4], "")
+	case "create-external":
+		if len(fields) != 4 && len(fields) != 5 {
+			response.Text = keycloakMigrateUsage["migrate_to_google create-external"]
+			return response, nil
+		}
+		orgUnit := p.getConfiguration().GoogleExternalOrgUnit
+		if len(fields) == 5 {
+			orgUnit = fields[4]
+		}
+		password = randomPassword(16)
+		googleUser, err = p.createGoogleUser(fields[3], keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password)
+	case "bind":
+		if len(fields) != 4 {
+			response.Text = keycloakMigrateUsage["migrate_to_google bind"]
+			return response, nil
+		}
+		googleUser, err = p.getGoogleUser(fields[3])
+		if err != nil {
+			err = fmt.Errorf("Google account %q does not exist; use create-kth or create-external first", fields[3])
+		}
+	default:
+		response.Text = keycloakMigrateUsage["migrate_to_google"]
+		return response, nil
+	}
+	if err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	if err = p.updateMattermostIdentity(user, model.ServiceOpenid, googleUser.ID); err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	if err = p.updateKeycloakMigration(keycloakUser, true, googleUser.PrimaryEmail, googleUser.ID, user.Email, keycloakUser.ID, user.Id, user.Email); err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	response.Text = fmt.Sprintf("Migrated ~%s to Google account %s. Their Mattermost account will be updated on first log-in.", user.Username, googleUser.PrimaryEmail)
+	if password != "" {
+		response.Text += fmt.Sprintf("\n\n Temporary password: `%s`", password)
+	}
+	if err := p.notifyGoogleMigration(user, googleUser.PrimaryEmail, password); err != nil {
+		p.API.LogError("Google migration notification failed", "user_id", user.Id, "error", err.Error())
+	}
+	return response, nil
+}
+
+func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []string) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	if len(fields) < 4 {
+		response.Text = keycloakMigrateUsage["migrate_to_keycloak"]
+		return response, nil
+	}
+	user, err := p.migrationMattermostUser(fields[2])
+	if err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	googleUser, err := p.getGoogleUser(user.Email)
+	if err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	keycloakEmail := fields[3]
+	var keycloakUser *keycloakUserRepresentation
+	switch fields[2] {
+	case "create":
+		if len(fields) != 4 {
+			response.Text = keycloakMigrateUsage["migrate_to_keycloak create"]
+			return response, nil
+		}
+		if err = p.createKeycloakUser(keycloakEmail, randomPassword(16), googleUser.Name.GivenName, googleUser.Name.FamilyName, user.Username); err == nil {
+			keycloakUser, err = p.getKeycloakUser(keycloakEmail)
+		}
+	case "bind", "update":
+		if len(fields) != 4 {
+			response.Text = keycloakMigrateUsage["migrate_to_keycloak "+fields[2]]
+			return response, nil
+		}
+		keycloakUser, err = p.getKeycloakUser(keycloakEmail)
+		if err != nil && fields[2] == "bind" {
+			err = fmt.Errorf("Keycloak account %q does not exist; use /keycloak migrate_to_keycloak create %s %s", keycloakEmail, fields[2], keycloakEmail)
+		}
+	default:
+		response.Text = keycloakMigrateUsage["migrate_to_keycloak"]
+		return response, nil
+	}
+	if err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	if user.AuthData == nil || *user.AuthData == "" {
+		response.Text = "Mattermost user has no Google Auth Data; cannot migrate to Keycloak."
+		return response, nil
+	}
+	if err = p.updateMattermostIdentity(user, model.UserAuthServiceSaml, keycloakUser.ID); err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	if err = p.updateKeycloakMigration(keycloakUser, true, keycloakUser.Username, keycloakUser.ID, googleUser.PrimaryEmail, googleUser.ID, *user.AuthData, googleUser.PrimaryEmail); err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	response.Text = fmt.Sprintf("Migrated %s to Keycloak account %s.", user.Username, keycloakUser.Username)
+	return response, nil
 }
 
 const keycloakNewUserUsage = "Usage: `/keycloak new_user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes|no>`"
@@ -197,6 +365,7 @@ func (p *Plugin) keycloakUserConflict(token, parameter, value string) (bool, err
 	if parameter == "email" {
 		query.Set("exact", "true")
 	}
+
 	request, err := http.NewRequest(http.MethodGet, endpoint+"?"+query.Encode(), nil)
 	if err != nil {
 		return false, fmt.Errorf("create Keycloak conflict request: %w", err)
@@ -217,4 +386,80 @@ func (p *Plugin) keycloakUserConflict(token, parameter, value string) (bool, err
 		return false, fmt.Errorf("decode Keycloak conflict response: %w", err)
 	}
 	return len(users) > 0, nil
+}
+
+func (p *Plugin) getKeycloakUser(email string) (*keycloakUserRepresentation, error) {
+	configuration := p.getConfiguration()
+	if configuration.KeycloakClientID == "" || configuration.KeycloakClientSecret == "" {
+		return nil, fmt.Errorf("Keycloak client credentials are not configured")
+	}
+	token, err := p.getKeycloakAccessToken(configuration.KeycloakClientID, configuration.KeycloakClientSecret)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := fmt.Sprintf("%s/admin/realms/%s/users?email=%s&exact=true", keycloakURL, url.PathEscape(keycloakRealm), url.QueryEscape(email))
+	request, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create Keycloak user request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("get Keycloak user: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Keycloak user search returned HTTP %d", response.StatusCode)
+	}
+	var users []keycloakUserRepresentation
+	if err := json.NewDecoder(response.Body).Decode(&users); err != nil {
+		return nil, fmt.Errorf("decode Keycloak user response: %w", err)
+	}
+	if len(users) == 0 {
+		return nil, fmt.Errorf("Keycloak account %q was not found", email)
+	}
+	return &users[0], nil
+}
+
+func (p *Plugin) updateKeycloakMigration(user *keycloakUserRepresentation, migrated bool, toEmail, toID, fromEmail, fromID, mattermostID, mattermostEmail string) error {
+	configuration := p.getConfiguration()
+	token, err := p.getKeycloakAccessToken(configuration.KeycloakClientID, configuration.KeycloakClientSecret)
+	if err != nil {
+		return err
+	}
+	if user.Attributes == nil {
+		user.Attributes = map[string][]string{}
+	}
+	accountMigrated := "false"
+	if migrated {
+		accountMigrated = "true"
+	}
+	user.Attributes["accountMigrated"] = []string{accountMigrated}
+	user.Attributes["migratedToEmail"] = []string{toEmail}
+	user.Attributes["migratedFromEmail"] = []string{fromEmail}
+	user.Attributes["migratedToID"] = []string{toID}
+	user.Attributes["migratedFromID"] = []string{fromID}
+	user.Attributes["mattermostID"] = []string{mattermostID}
+	user.Attributes["mattermostEmail"] = []string{mattermostEmail}
+	body, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("encode Keycloak migration update: %w", err)
+	}
+	endpoint := fmt.Sprintf("%s/admin/realms/%s/users/%s", keycloakURL, url.PathEscape(keycloakRealm), url.PathEscape(user.ID))
+	request, err := http.NewRequest(http.MethodPut, endpoint, strings.NewReader(string(body)))
+	if err != nil {
+		return fmt.Errorf("create Keycloak migration update: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	if err != nil {
+		return fmt.Errorf("update Keycloak migration attributes: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		details, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		return fmt.Errorf("Keycloak migration update returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(details)))
+	}
+	return nil
 }
