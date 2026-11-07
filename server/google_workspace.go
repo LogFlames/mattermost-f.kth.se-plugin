@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -51,9 +52,28 @@ type googleOrgUnit struct {
 	Path string `json:"orgUnitPath"`
 }
 
-func (p *Plugin) googleAccessToken() (string, error) {
+var googleOrgUnitAliasPattern = regexp.MustCompile(`(?i)(?:^|[ /])i\s+f-(ø|0|o|24)(?:[ .]|$)`)
+
+const (
+	keycloakMigrationGoogleServiceAccountKey = "KeycloakMigrationGoogleServiceAccountKey"
+	googleGroupsSyncServiceAccountKey        = "GoogleGroupsSyncServiceAccountKey"
+)
+
+func (p *Plugin) googleServiceAccountKey(keyName string) (string, error) {
+	configuration := p.getConfiguration()
+	switch keyName {
+	case keycloakMigrationGoogleServiceAccountKey:
+		return configuration.KeycloakMigrationGoogleServiceAccountKey, nil
+	case googleGroupsSyncServiceAccountKey:
+		return configuration.GoogleGroupsSyncServiceAccountKey, nil
+	default:
+		return "", fmt.Errorf("unknown Google service account setting %q", keyName)
+	}
+}
+
+func (p *Plugin) googleAccessToken(serviceAccountKey, adminEmail string) (string, error) {
 	var account googleServiceAccount
-	if err := json.Unmarshal([]byte(p.getConfiguration().GoogleServiceAccountKey), &account); err != nil {
+	if err := json.Unmarshal([]byte(serviceAccountKey), &account); err != nil {
 		return "", fmt.Errorf("decode Google service account key: %w", err)
 	}
 	if account.ClientEmail == "" || account.PrivateKey == "" {
@@ -81,10 +101,10 @@ func (p *Plugin) googleAccessToken() (string, error) {
 	now := time.Now()
 	header, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT"})
 	claims, _ := json.Marshal(map[string]interface{}{
-		"iss": account.ClientEmail, "scope": "https://www.googleapis.com/auth/admin.directory.user https://www.googleapis.com/auth/admin.directory.orgunit",
+		"iss": account.ClientEmail, "scope": "https://www.googleapis.com/auth/admin.directory.user.readonly https://www.googleapis.com/auth/admin.directory.user https://www.googleapis.com/auth/admin.directory.orgunit.readonly",
 		"aud": account.TokenURI, "iat": now.Unix(), "exp": now.Add(time.Hour).Unix(),
 	})
-	if adminEmail := p.getConfiguration().GoogleAdminEmail; adminEmail != "" {
+	if adminEmail != "" {
 		var delegatedClaims map[string]interface{}
 		_ = json.Unmarshal(claims, &delegatedClaims)
 		delegatedClaims["sub"] = adminEmail
@@ -120,8 +140,12 @@ func (p *Plugin) googleAccessToken() (string, error) {
 	return token.AccessToken, nil
 }
 
-func (p *Plugin) googleRequest(method, endpoint string, payload interface{}, result interface{}) error {
-	token, err := p.googleAccessToken()
+func (p *Plugin) googleRequest(serviceAccountKeyName, adminEmail, method, endpoint string, payload interface{}, result interface{}) error {
+	serviceAccountKey, err := p.googleServiceAccountKey(serviceAccountKeyName)
+	if err != nil {
+		return err
+	}
+	token, err := p.googleAccessToken(serviceAccountKey, adminEmail)
 	if err != nil {
 		return err
 	}
@@ -158,20 +182,20 @@ func (p *Plugin) googleRequest(method, endpoint string, payload interface{}, res
 	return nil
 }
 
-func (p *Plugin) getGoogleUser(email string) (*googleDirectoryUser, error) {
+func (p *Plugin) getGoogleUser(serviceAccountKeyName, adminEmail, email string) (*googleDirectoryUser, error) {
 	var user googleDirectoryUser
-	err := p.googleRequest(http.MethodGet, googleDirectoryURL+"/users/"+url.PathEscape(email), nil, &user)
+	err := p.googleRequest(serviceAccountKeyName, adminEmail, http.MethodGet, googleDirectoryURL+"/users/"+url.PathEscape(email), nil, &user)
 	if err != nil {
 		return nil, fmt.Errorf("get Google account %q: %w", email, err)
 	}
 	return &user, nil
 }
 
-func (p *Plugin) createGoogleUser(email, firstName, lastName, orgUnit, password string) (*googleDirectoryUser, error) {
+func (p *Plugin) createGoogleUser(serviceAccountKeyName, adminEmail, email, firstName, lastName, orgUnit, password string) (*googleDirectoryUser, error) {
 	if err := validateKeycloakEmail(email); err != nil {
 		return nil, err
 	}
-	if _, err := p.getGoogleUser(email); err == nil {
+	if _, err := p.getGoogleUser(serviceAccountKeyName, adminEmail, email); err == nil {
 		return nil, fmt.Errorf("Google account conflict: %q already exists", email)
 	} else {
 		var apiErr *googleAPIError
@@ -190,24 +214,76 @@ func (p *Plugin) createGoogleUser(email, firstName, lastName, orgUnit, password 
 		payload["orgUnitPath"] = orgUnit
 	}
 	var user googleDirectoryUser
-	if err := p.googleRequest(http.MethodPost, googleDirectoryURL+"/users", payload, &user); err != nil {
+	if err := p.googleRequest(serviceAccountKeyName, adminEmail, http.MethodPost, googleDirectoryURL+"/users", payload, &user); err != nil {
 		return nil, fmt.Errorf("create Google account: %w", err)
 	}
 	return &user, nil
 }
 
-func (p *Plugin) listGoogleOrgUnits() ([]string, error) {
-	var response struct {
-		OrganizationUnits []googleOrgUnit `json:"organizationUnits"`
-	}
-	if err := p.googleRequest(http.MethodGet, googleDirectoryURL+"/customer/my_customer/orgunits?type=all", nil, &response); err != nil {
-		return nil, fmt.Errorf("list Google org units: %w", err)
-	}
-	units := make([]string, 0, len(response.OrganizationUnits))
-	for _, unit := range response.OrganizationUnits {
-		units = append(units, unit.Path)
+func (p *Plugin) listGoogleOrgUnits(serviceAccountKeyName, adminEmail string) ([]string, error) {
+	var units []string
+	pageToken := ""
+	for {
+		query := url.Values{"type": {"all"}}
+		if pageToken != "" {
+			query.Set("pageToken", pageToken)
+		}
+		var response struct {
+			OrganizationUnits []googleOrgUnit `json:"organizationUnits"`
+			NextPageToken     string          `json:"nextPageToken"`
+		}
+		endpoint := googleDirectoryURL + "/customer/my_customer/orgunits?" + query.Encode()
+		if err := p.googleRequest(serviceAccountKeyName, adminEmail, http.MethodGet, endpoint, nil, &response); err != nil {
+			return nil, fmt.Errorf("list Google org units: %w", err)
+		}
+		for _, unit := range response.OrganizationUnits {
+			units = append(units, unit.Path)
+		}
+		if response.NextPageToken == "" {
+			break
+		}
+		pageToken = response.NextPageToken
 	}
 	return units, nil
+}
+
+func (p *Plugin) resolveGoogleOrgUnit(serviceAccountKeyName, adminEmail, requested string) (string, error) {
+	if requested == "" {
+		return "", nil
+	}
+	units, err := p.listGoogleOrgUnits(serviceAccountKeyName, adminEmail)
+	if err != nil {
+		return "", err
+	}
+	for _, unit := range units {
+		if strings.EqualFold(unit, requested) {
+			return unit, nil
+		}
+	}
+
+	alias := strings.ToUpper(strings.TrimPrefix(requested, "F-"))
+	switch alias {
+	case "0", "O", "Ø":
+		alias = "Ø"
+	case "24":
+	default:
+		return "", fmt.Errorf("Google organization unit %q was not found", requested)
+	}
+
+	var match string
+	for _, unit := range units {
+		matchAlias := googleOrgUnitAliasPattern.FindStringSubmatch(unit)
+		if len(matchAlias) == 2 && strings.EqualFold(matchAlias[1], alias) {
+			if match != "" {
+				return "", fmt.Errorf("Google organization unit alias %q is ambiguous", requested)
+			}
+			match = unit
+		}
+	}
+	if match == "" {
+		return "", fmt.Errorf("Google organization unit alias %q was not found", requested)
+	}
+	return match, nil
 }
 
 func randomPassword(length int) string {

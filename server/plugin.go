@@ -214,7 +214,7 @@ func (p *Plugin) OnActivate() error {
 	if err := p.API.RegisterCommand(&model.Command{
 		Trigger:          "keycloak",
 		AutoComplete:     true,
-		AutoCompleteHint: "new_user|migrate_to_google/keycloak",
+		AutoCompleteHint: "new_user|migrate_to_google|migrate_to_keycloak",
 		AutoCompleteDesc: "Create or migrate a Keycloak account",
 	}); err != nil {
 		return err

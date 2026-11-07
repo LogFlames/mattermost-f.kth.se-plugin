@@ -93,7 +93,7 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 }
 
 var keycloakMigrateUsage map[string]string = map[string]string{
-	"migrate_to_google":                 "Usage: `/keycloak migrate_to_google <list-org-units|create-kth|create-external|bind>`",
+	"migrate_to_google":                 "Usage: `/keycloak migrate_to_google list-org-units|create-kth|create-external|bind`",
 	"migrate_to_google list-org-units":  "Usage: `/keycloak migrate_to_google list-org-units`",
 	"migrate_to_google create-kth":      "Usage: `/keycloak migrate_to_google create-kth ~<mattermost-user-to-migrate> <kth-id> <org-unit-#>`",
 	"migrate_to_google create-external": "Usage: `/keycloak migrate_to_google create-external ~<mattermost-user-to-migrate> <fysiksektionen.se-address> [org-unit]`",
@@ -115,7 +115,8 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = keycloakMigrateUsage["migrate_to_google list-org-units"]
 			return response, nil
 		}
-		units, err := p.listGoogleOrgUnits()
+		configuration := p.getConfiguration()
+		units, err := p.listGoogleOrgUnits(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail)
 		if err != nil {
 			response.Text = err.Error()
 			return response, nil
@@ -150,24 +151,37 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = keycloakMigrateUsage["migrate_to_google create-kth"]
 			return response, nil
 		}
-		googleUser, err = p.createGoogleUser(fmt.Sprintf("%s@fysiksektionen.se", fields[3]), keycloakUser.FirstName, keycloakUser.LastName, fields[4], "")
+		configuration := p.getConfiguration()
+		orgUnit, resolveErr := p.resolveGoogleOrgUnit(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[4])
+		if resolveErr != nil {
+			response.Text = resolveErr.Error()
+			return response, nil
+		}
+		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fmt.Sprintf("%s@fysiksektionen.se", fields[3]), keycloakUser.FirstName, keycloakUser.LastName, orgUnit, "")
 	case "create-external":
 		if len(fields) != 4 && len(fields) != 5 {
 			response.Text = keycloakMigrateUsage["migrate_to_google create-external"]
 			return response, nil
 		}
-		orgUnit := p.getConfiguration().GoogleExternalOrgUnit
+		orgUnit := p.getConfiguration().KeycloakMigrationGoogleExternalOrgUnit
 		if len(fields) == 5 {
 			orgUnit = fields[4]
 		}
 		password = randomPassword(16)
-		googleUser, err = p.createGoogleUser(fields[3], keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password)
+		configuration := p.getConfiguration()
+		orgUnit, err = p.resolveGoogleOrgUnit(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, orgUnit)
+		if err != nil {
+			response.Text = err.Error()
+			return response, nil
+		}
+		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[3], keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password)
 	case "bind":
 		if len(fields) != 4 {
 			response.Text = keycloakMigrateUsage["migrate_to_google bind"]
 			return response, nil
 		}
-		googleUser, err = p.getGoogleUser(fields[3])
+		configuration := p.getConfiguration()
+		googleUser, err = p.getGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[3])
 		if err != nil {
 			err = fmt.Errorf("Google account %q does not exist; use create-kth or create-external first", fields[3])
 		}
@@ -208,7 +222,8 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 		response.Text = err.Error()
 		return response, nil
 	}
-	googleUser, err := p.getGoogleUser(user.Email)
+	configuration := p.getConfiguration()
+	googleUser, err := p.getGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, user.Email)
 	if err != nil {
 		response.Text = err.Error()
 		return response, nil
@@ -255,6 +270,20 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 	}
 	response.Text = fmt.Sprintf("Migrated %s to Keycloak account %s.", user.Username, keycloakUser.Username)
 	return response, nil
+}
+
+func (p *Plugin) notifyGoogleMigration(user *model.User, email, temporaryPassword string) error {
+	configuration := p.getConfiguration()
+	if configuration.KeycloakMigrationGoogleSendEphemeral {
+		message := fmt.Sprintf("Your Mattermost account has been migrated to Google Workspace. Sign in with `%s`.", email)
+		if temporaryPassword != "" {
+			message += fmt.Sprintf(" Your temporary password is `%s`; Google will require you to change it at first login.", temporaryPassword)
+		}
+		if post := p.API.SendEphemeralPost(user.Id, &model.Post{UserId: user.Id, Message: message}); post == nil {
+			return fmt.Errorf("Mattermost did not create the migration notification")
+		}
+	}
+	return nil
 }
 
 const keycloakNewUserUsage = "Usage: `/keycloak new_user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes|no>`"
