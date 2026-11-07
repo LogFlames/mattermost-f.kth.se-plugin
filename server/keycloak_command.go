@@ -128,9 +128,13 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		response.Text = err.Error()
 		return response, nil
 	}
-	keycloakUser, err := p.getKeycloakUser(user.Email)
+	if user.AuthData == nil || *user.AuthData == "" {
+		response.Text = "Mattermost user has no authentication data; cannot find the Keycloak account."
+		return response, nil
+	}
+	keycloakUser, err := p.getKeycloakUserByMattermostID(*user.AuthData)
 	if err != nil {
-		response.Text = fmt.Sprintf("Could not find the Keycloak account for %s: %v", user.Email, err)
+		response.Text = fmt.Sprintf("Could not find the Keycloak account for Mattermost user %s: %v", user.Username, err)
 		return response, nil
 	}
 
@@ -389,6 +393,14 @@ func (p *Plugin) keycloakUserConflict(token, parameter, value string) (bool, err
 }
 
 func (p *Plugin) getKeycloakUser(email string) (*keycloakUserRepresentation, error) {
+	return p.getKeycloakUserByQuery("email", email, true)
+}
+
+func (p *Plugin) getKeycloakUserByMattermostID(mattermostID string) (*keycloakUserRepresentation, error) {
+	return p.getKeycloakUserByQuery("q", "mattermostID:"+mattermostID, false)
+}
+
+func (p *Plugin) getKeycloakUserByQuery(parameter, value string, exact bool) (*keycloakUserRepresentation, error) {
 	configuration := p.getConfiguration()
 	if configuration.KeycloakClientID == "" || configuration.KeycloakClientSecret == "" {
 		return nil, fmt.Errorf("Keycloak client credentials are not configured")
@@ -397,7 +409,11 @@ func (p *Plugin) getKeycloakUser(email string) (*keycloakUserRepresentation, err
 	if err != nil {
 		return nil, err
 	}
-	endpoint := fmt.Sprintf("%s/admin/realms/%s/users?email=%s&exact=true", keycloakURL, url.PathEscape(keycloakRealm), url.QueryEscape(email))
+	query := url.Values{parameter: {value}}
+	if exact {
+		query.Set("exact", "true")
+	}
+	endpoint := fmt.Sprintf("%s/admin/realms/%s/users?%s", keycloakURL, url.PathEscape(keycloakRealm), query.Encode())
 	request, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create Keycloak user request: %w", err)
@@ -416,7 +432,7 @@ func (p *Plugin) getKeycloakUser(email string) (*keycloakUserRepresentation, err
 		return nil, fmt.Errorf("decode Keycloak user response: %w", err)
 	}
 	if len(users) == 0 {
-		return nil, fmt.Errorf("Keycloak account %q was not found", email)
+		return nil, fmt.Errorf("Keycloak account matching %s %q was not found", parameter, value)
 	}
 	return &users[0], nil
 }
