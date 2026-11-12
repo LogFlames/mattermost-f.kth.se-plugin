@@ -151,6 +151,10 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		return p.defaultChannelCommand(args)
 	case "keycloak":
 		return p.keycloakCommand(args)
+	case "team":
+		return p.teamCommand(args)
+	case "member":
+		return p.memberCommand(args)
 	default:
 		return &model.CommandResponse{
 			ResponseType: model.CommandResponseTypeEphemeral,
@@ -212,6 +216,22 @@ func (p *Plugin) OnActivate() error {
 		AutoComplete:     true,
 		AutoCompleteHint: "new_user|migrate_to_google/keycloak",
 		AutoCompleteDesc: "Create or migrate a Keycloak account",
+	}); err != nil {
+		return err
+	}
+	if err := p.API.RegisterCommand(&model.Command{
+		Trigger:          "team",
+		AutoComplete:     true,
+		AutoCompleteHint: "join|leave|list",
+		AutoCompleteDesc: "Join, leave, or list teams",
+	}); err != nil {
+		return err
+	}
+	if err := p.API.RegisterCommand(&model.Command{
+		Trigger:          "member",
+		AutoComplete:     true,
+		AutoCompleteHint: "add|remove",
+		AutoCompleteDesc: "Add or remove a member from the current team",
 	}); err != nil {
 		return err
 	}
