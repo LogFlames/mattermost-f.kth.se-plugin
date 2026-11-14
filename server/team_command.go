@@ -49,7 +49,7 @@ func (p *Plugin) joinTeamCommand(args *model.CommandArgs, teamName string) (*mod
 	if team == nil || team.DeleteAt != 0 {
 		return &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral, Text: fmt.Sprintf("Team %q was not found.", teamName)}, nil
 	}
-	if team.Type != model.TeamOpen {
+	if team.AllowOpenInvite == false {
 		return &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral, Text: "You can only join public teams with this command."}, nil
 	}
 	memberTeams, err := p.API.GetTeamsForUser(args.UserId)
@@ -114,35 +114,62 @@ func (p *Plugin) listTeamsCommand(args *model.CommandArgs) (*model.CommandRespon
 		}
 	}
 	for _, team := range allTeams {
-		if team != nil && team.DeleteAt == 0 && (memberIDs[team.Id] || team.Type == model.TeamOpen) {
+		if team == nil || team.DeleteAt != 0 {
+			continue
+		}
+		if memberIDs[team.Id] || team.AllowOpenInvite == true { // team.AllowOpenInvite <=> public teams
 			teams[team.Id] = team
 		}
 	}
 
-	sortedTeams := make([]*model.Team, 0, len(teams))
+	joinableTeams := make([]*model.Team, 0, len(teams))
+	memberTeamsToList := make([]*model.Team, 0, len(teams))
 	for _, team := range teams {
-		sortedTeams = append(sortedTeams, team)
-	}
-	sort.Slice(sortedTeams, func(i, j int) bool {
-		if sortedTeams[i].DisplayName == sortedTeams[j].DisplayName {
-			return sortedTeams[i].Name < sortedTeams[j].Name
+		if memberIDs[team.Id] {
+			memberTeamsToList = append(memberTeamsToList, team)
+		} else {
+			joinableTeams = append(joinableTeams, team)
 		}
-		return sortedTeams[i].DisplayName < sortedTeams[j].DisplayName
-	})
+	}
+	sortTeams := func(teams []*model.Team) {
+		sort.Slice(teams, func(i, j int) bool {
+			if teams[i].DisplayName == teams[j].DisplayName {
+				return teams[i].Name < teams[j].Name
+			}
+			return teams[i].DisplayName < teams[j].DisplayName
+		})
+	}
+	sortTeams(joinableTeams)
+	sortTeams(memberTeamsToList)
 
-	if len(sortedTeams) == 0 {
-		return &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral, Text: "You are not a member of any teams, and there are no public teams available."}, nil
-	}
-	lines := make([]string, 0, len(sortedTeams)*4)
-	for _, team := range sortedTeams {
-		lines = append(lines,
-			fmt.Sprintf("**%s** (`%s`)", team.DisplayName, team.Name),
-			fmt.Sprintf("Description: %s", team.Description),
-		)
-		if !memberIDs[team.Id] {
-			lines = append(lines, fmt.Sprintf("Join with `/team join %s`", team.Name))
+	renderTeams := func(teams []*model.Team, joinable bool) []string {
+		lines := make([]string, 0, len(teams)*4)
+		for _, team := range teams {
+			lines = append(lines, fmt.Sprintf("**%s**, `%s`", team.DisplayName, team.Name))
+			if team.Description != "" {
+				lines = append(lines, fmt.Sprintf("> %s", team.Description))
+			}
+			if joinable {
+				lines = append(lines, "> ", fmt.Sprintf("> Join with `/team join %s`", team.Name))
+			}
+			lines = append(lines, "")
 		}
-		lines = append(lines, "")
+		return lines
+	}
+
+	lines := []string{}
+	if len(joinableTeams) == 0 && len(memberTeamsToList) == 0 {
+		return &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral, Text: "No teams found."}, nil
+	}
+	lines = append(lines, "#### Teams you can join", "")
+	if len(joinableTeams) > 0 {
+		lines = append(lines, renderTeams(joinableTeams, true)...)
+	} else {
+		lines = append(lines, "There are no public teams that you are not already a part of.", "")
+	}
+	if len(memberTeamsToList) > 0 {
+		lines = append(lines, "---", "", "#### Your teams", "")
+		lines = append(lines, renderTeams(memberTeamsToList, false)...)
 	}
 	return &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral, Text: strings.TrimSpace(strings.Join(lines, "\n"))}, nil
 }

@@ -44,9 +44,9 @@ func (a *teamCommandTestAPI) DeleteTeamMember(teamID, _, _ string) *model.AppErr
 }
 
 func TestTeamCommandJoinLeaveAndList(t *testing.T) {
-	member := &model.Team{Id: "member-id", Name: "member", DisplayName: "Member", Description: "Member team", Type: model.TeamOpen}
-	public := &model.Team{Id: "public-id", Name: "public", DisplayName: "Public", Description: "Public team", Type: model.TeamOpen}
-	private := &model.Team{Id: "private-id", Name: "private", DisplayName: "Private", Description: "Private team", Type: model.TeamInvite}
+	member := &model.Team{Id: "member-id", Name: "member", DisplayName: "Member", Description: "Member team", AllowOpenInvite: false}
+	public := &model.Team{Id: "public-id", Name: "public", DisplayName: "Public", Description: "Public team", AllowOpenInvite: true}
+	private := &model.Team{Id: "private-id", Name: "private", DisplayName: "Private", Description: "Private team", AllowOpenInvite: false}
 	api := &teamCommandTestAPI{teams: []*model.Team{private, public, member}, memberTeams: []*model.Team{member, private}}
 	p := &Plugin{}
 	p.SetAPI(api)
@@ -62,9 +62,8 @@ func TestTeamCommandJoinLeaveAndList(t *testing.T) {
 	}
 
 	response, err = p.ExecuteCommand(nil, &model.CommandArgs{UserId: "user", Command: "/team list"})
-	if err != nil || !strings.Contains(response.Text, "**Member** (`member`)\nDescription: Member team") ||
-		!strings.Contains(response.Text, "**Private** (`private`)\nDescription: Private team") ||
-		!strings.Contains(response.Text, "**Public** (`public`)\nDescription: Public team\nJoin with `/team join public`") {
+	wantSections := "#### Teams you can join\n\n**Public**, `public`\n> Public team\n> \n> Join with `/team join public`\n\n---\n\n#### Your teams\n\n**Member**, `member`\n> Member team\n\n**Private**, `private`\n> Private team"
+	if err != nil || response.Text != wantSections {
 		t.Fatalf("list response=%+v err=%v", response, err)
 	}
 	if strings.Contains(response.Text, "Join with `/team join member`") || strings.Contains(response.Text, "Join with `/team join private`") {
@@ -73,7 +72,7 @@ func TestTeamCommandJoinLeaveAndList(t *testing.T) {
 }
 
 func TestTeamCommandRejectsPrivateTeamJoin(t *testing.T) {
-	private := &model.Team{Id: "private-id", Name: "private", DisplayName: "Private", Type: model.TeamInvite}
+	private := &model.Team{Id: "private-id", Name: "private", DisplayName: "Private", AllowOpenInvite: false}
 	api := &teamCommandTestAPI{teams: []*model.Team{private}}
 	p := &Plugin{}
 	p.SetAPI(api)
@@ -93,6 +92,7 @@ type memberCommandTestAPI struct {
 	removed     string
 	addedTeam   string
 	removedTeam string
+	member      bool
 }
 
 func (a *memberCommandTestAPI) HasPermissionToTeam(_ string, _ string, permission *model.Permission) bool {
@@ -107,15 +107,32 @@ func (a *memberCommandTestAPI) GetTeamByName(string) (*model.Team, *model.AppErr
 	return a.team, nil
 }
 
+func (a *memberCommandTestAPI) GetChannel(string) (*model.Channel, *model.AppError) {
+	return &model.Channel{TeamId: "team", Type: model.ChannelTypeOpen}, nil
+}
+
+func (a *memberCommandTestAPI) GetTeam(string) (*model.Team, *model.AppError) {
+	return a.team, nil
+}
+
+func (a *memberCommandTestAPI) GetTeamMember(_, _ string) (*model.TeamMember, *model.AppError) {
+	if a.member {
+		return &model.TeamMember{}, nil
+	}
+	return nil, &model.AppError{StatusCode: 404, Id: "app.team_member.get.app_error"}
+}
+
 func (a *memberCommandTestAPI) CreateTeamMember(teamID, userID string) (*model.TeamMember, *model.AppError) {
 	a.addedTeam = teamID
 	a.added = userID
+	a.member = true
 	return &model.TeamMember{}, nil
 }
 
 func (a *memberCommandTestAPI) DeleteTeamMember(teamID, userID, _ string) *model.AppError {
 	a.removedTeam = teamID
 	a.removed = userID
+	a.member = false
 	return nil
 }
 
