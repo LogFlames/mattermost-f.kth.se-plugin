@@ -15,21 +15,40 @@ func (p *Plugin) memberCommand(args *model.CommandArgs) (*model.CommandResponse,
 		return response, nil
 	}
 	teamID := args.TeamId
-	teamDescription := "the team"
+
+	if len(fields) == 3 {
+		channel, err := p.API.GetChannel(args.ChannelId)
+		if err != nil {
+			return nil, err
+		}
+		if channel.Type != model.ChannelTypeOpen && channel.Type != model.ChannelTypePrivate {
+			response.Text = "Specify the team or run /member from a team channel."
+			return response, nil
+		}
+		if channel.TeamId != args.TeamId {
+			response.Text = "TeamID mismatch between team and channel."
+			return response, nil
+		}
+	}
 	if len(fields) == 4 {
 		team, err := p.API.GetTeamByName(fields[3])
 		if err != nil {
 			return nil, err
 		}
-		if team == nil || team.DeleteAt != 0 {
-			response.Text = fmt.Sprintf("Team %q was not found.", fields[3])
-			return response, nil
-		}
 		teamID = team.Id
-		teamDescription = fmt.Sprintf("team %s (`%s`)", team.DisplayName, team.Name)
 	}
+	team, err := p.API.GetTeam(teamID)
+	if err != nil {
+		return nil, err
+	}
+	if team == nil || team.DeleteAt != 0 {
+		response.Text = fmt.Sprintf("Team %q was not found.", team.Name)
+		return response, nil
+	}
+	teamID = team.Id
+	teamDescription := fmt.Sprintf("team %s / `%s`", team.DisplayName, team.Name)
 	if teamID == "" {
-		response.Text = "Run /member from a team."
+		response.Text = "Specify the team or run /member from a team channel."
 		return response, nil
 	}
 
@@ -50,24 +69,41 @@ func (p *Plugin) memberCommand(args *model.CommandArgs) (*model.CommandResponse,
 		return response, nil
 	}
 	user, err := p.API.GetUserByUsername(username)
-	if err != nil {
+	if err != nil && !(err.StatusCode == 404 && err.Id == "app.user.get_by_username.app_error") {
 		return nil, err
 	}
-	if user == nil || user.DeleteAt != 0 {
+	if (err != nil && err.StatusCode == 404) || user == nil || user.DeleteAt != 0 {
 		response.Text = fmt.Sprintf("User %q was not found.", username)
 		return response, nil
 	}
 
 	if fields[1] == "add" {
+		teamMember, err := p.API.GetTeamMember(teamID, user.Id)
+		if err != nil && !(err.StatusCode == 404 && err.Id == "app.team_member.get.app_error") {
+			return nil, err
+		} // ignore 404 errors
+		if teamMember != nil && teamMember.DeleteAt == 0 {
+			response.Text = fmt.Sprintf("@%s is already a member of %s.", user.Username, teamDescription)
+			return response, nil
+		}
 		if _, err := p.API.CreateTeamMember(teamID, user.Id); err != nil {
 			return nil, err
 		}
 		response.Text = fmt.Sprintf("Added @%s to %s.", user.Username, teamDescription)
 		return response, nil
+	} else {
+		teamMember, err := p.API.GetTeamMember(teamID, user.Id)
+		if err != nil && !(err.StatusCode == 404 && err.Id == "app.team_member.get.app_error") {
+			return nil, err
+		}
+		if (err != nil && err.StatusCode == 404) || teamMember == nil || teamMember.DeleteAt != 0 {
+			response.Text = fmt.Sprintf("@%s is not a member of %s.", user.Username, teamDescription)
+			return response, nil
+		}
+		if err := p.API.DeleteTeamMember(teamID, user.Id, args.UserId); err != nil {
+			return nil, err
+		}
+		response.Text = fmt.Sprintf("Removed @%s from %s.", user.Username, teamDescription)
+		return response, nil
 	}
-	if err := p.API.DeleteTeamMember(teamID, user.Id, args.UserId); err != nil {
-		return nil, err
-	}
-	response.Text = fmt.Sprintf("Removed @%s from %s.", user.Username, teamDescription)
-	return response, nil
 }
