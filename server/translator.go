@@ -168,6 +168,7 @@ func (p *Plugin) translate(message string, configuration *configuration, modelOv
 		model = configuration.TranslatorBot_MistralModel.ID
 	}
 	client := NewMistralClient(configuration.TranslatorBot_APIKey, model)
+	client.logError = func(message string, fields ...any) { p.API.LogError(message, fields...) }
 	if model == configuration.TranslatorBot_MistralModel.ID && configuration.TranslatorBot_MistralModel.ReasoningEffort != "" {
 		client.reasoningEffort = configuration.TranslatorBot_MistralModel.ReasoningEffort
 	}

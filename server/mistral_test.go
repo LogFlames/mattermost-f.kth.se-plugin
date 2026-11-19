@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -110,7 +111,7 @@ func TestMistralClientCompleteErrors(t *testing.T) {
 			apiKey:     "test-key",
 			statusCode: http.StatusBadRequest,
 			response:   `{"error":{"message":"invalid request"}}`,
-			wantError:  "Mistral returned HTTP 400: invalid request",
+			wantError:  "Mistral rejected the request",
 		},
 		{
 			name:       "empty completion",
@@ -148,10 +149,92 @@ func TestMistralClientCompleteErrors(t *testing.T) {
 			}
 
 			_, err := client.Complete("", "")
-			if err == nil || err.Error() != test.wantError {
+			if err == nil || !strings.HasPrefix(err.Error(), test.wantError) {
 				t.Fatalf("error = %v, want %q", err, test.wantError)
 			}
 		})
+	}
+}
+
+func TestMistralFailureDiagnostics(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+		want   string
+	}{
+		{"gateway", 502, "error private text test-key", "Mistral rejected the request"},
+		{"malformed success", 200, "error private text test-key", "Could not decode Mistral response"},
+		{"json error", 400, `{"error":{"message":"private text test-key"}}`, "Mistral rejected the request"},
+		{"large error", 503, strings.Repeat("x", 16380) + "test-key" + strings.Repeat("y", 1024), "Mistral rejected the request"},
+		{"success", 200, `{"choices":[{"message":{"content":"Translated"}}]}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/plain")
+				w.Header().Set("X-Request-Id", "request-123")
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+			client := NewMistralClient("test-key", mistralTestModel)
+			client.apiURL = server.URL
+			logs := []map[string]any{}
+			client.logError = func(_ string, fields ...any) {
+				entry := map[string]any{}
+				for i := 0; i < len(fields); i += 2 {
+					entry[fields[i].(string)] = fields[i+1]
+				}
+				logs = append(logs, entry)
+			}
+			text, err := client.Complete("private prompt", "private message")
+			if tc.want == "" {
+				if err != nil || text != "Translated" || len(logs) != 0 {
+					t.Fatalf("success logged or failed: %q %v %v", text, err, logs)
+				}
+				return
+			}
+			if err == nil || !strings.HasPrefix(err.Error(), tc.want) || !strings.Contains(err.Error(), "request-123") || strings.Contains(err.Error(), "private text") || strings.Contains(err.Error(), "test-key") {
+				t.Fatalf("unsafe or incomplete public error: %v", err)
+			}
+			if len(logs) != 1 {
+				t.Fatalf("got %d diagnostic logs", len(logs))
+			}
+			entry := logs[0]
+			body := entry["response_body"].(string)
+			if entry["status"] != tc.status || entry["content_type"] != "text/plain" || entry["request_id"] != "request-123" || len(body) > 16384 || strings.Contains(body, "test-key") {
+				t.Fatalf("incorrect diagnostic: %v", entry)
+			}
+			wantBody := strings.ReplaceAll(tc.body, "test-key", "[REDACTED]")
+			wantTruncated := len(wantBody) > 16384
+			if body != wantBody[:min(len(wantBody), 16384)] || entry["truncated"] != wantTruncated {
+				t.Fatal("incorrect body or truncation marker")
+			}
+		})
+	}
+}
+
+func TestMistralPlainTextRateLimit(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil || !strings.Contains(string(body), "retry this message") {
+			t.Error("request body was not preserved")
+		}
+		requests++
+		if requests == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte("error: rate limited"))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"Translated"}}]}`))
+	}))
+	defer server.Close()
+	client := NewMistralClient("test-key", mistralTestModel)
+	client.apiURL = server.URL
+	text, err := client.Complete("", "retry this message")
+	if err != nil || text != "Translated" {
+		t.Fatalf("plain-text rate limit did not recover: %q %v", text, err)
 	}
 }
 

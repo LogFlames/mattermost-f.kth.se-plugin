@@ -13,8 +13,9 @@ import (
 const (
 	mistralAPIURL = "https://api.mistral.ai/v1/chat/completions"
 
-	mistralMaxRetries    = 5
-	mistralRetryInterval = 5 * time.Second
+	mistralMaxRetries      = 5
+	mistralRetryInterval   = 5 * time.Second
+	mistralDiagnosticLimit = 16 * 1024
 )
 
 type MistralClient struct {
@@ -23,6 +24,18 @@ type MistralClient struct {
 	reasoningEffort string
 	httpClient      *http.Client
 	apiURL          string
+	logError        func(string, ...any)
+}
+
+type mistralDiagnosticBody struct {
+	bytes.Buffer
+	limit int
+}
+
+func (b *mistralDiagnosticBody) Write(data []byte) (int, error) {
+	n := len(data)
+	_, _ = b.Buffer.Write(data[:min(n, b.limit-b.Len())])
+	return n, nil
 }
 
 type mistralRequest struct {
@@ -100,32 +113,45 @@ func (c *MistralClient) Complete(systemPrompt, userPrompt string) (string, error
 			return "", fmt.Errorf("call Mistral: %w", err)
 		}
 
+		captured := &mistralDiagnosticBody{limit: mistralDiagnosticLimit + len(c.apiKey) + 1}
+		reader := io.TeeReader(response.Body, captured)
 		var result mistralResponse
-		if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
-			response.Body.Close()
-			return "", fmt.Errorf("decode Mistral response: %w", err)
+		decodeErr := json.NewDecoder(reader).Decode(&result)
+		if decodeErr != nil || response.StatusCode < 200 || response.StatusCode >= 300 {
+			_, _ = io.Copy(io.Discard, io.LimitReader(reader, int64(captured.limit-captured.Len())))
 		}
 		response.Body.Close()
+		failure := func(reason string) error {
+			redact := func(value string) string { return strings.ReplaceAll(value, c.apiKey, "[REDACTED]") }
+			contentType := redact(response.Header.Get("Content-Type"))
+			requestID := redact(response.Header.Get("X-Request-Id"))
+			contentType = contentType[:min(len(contentType), 256)]
+			requestID = requestID[:min(len(requestID), 256)]
+			if c.logError != nil {
+				body := redact(captured.String())
+				truncated := captured.Len() == captured.limit || len(body) > mistralDiagnosticLimit
+				body = body[:min(len(body), mistralDiagnosticLimit)]
+				c.logError("Mistral response failed", "status", response.StatusCode, "content_type", contentType,
+					"request_id", requestID, "reason", reason, "response_body", body, "truncated", truncated)
+			}
+			return fmt.Errorf("%s (HTTP %d, content-type %q, request-id %q)", reason, response.StatusCode, contentType, requestID)
+		}
 
 		if response.StatusCode == http.StatusTooManyRequests {
-			if result.Error != nil {
-				lastErr = fmt.Errorf("Mistral returned HTTP 429: %s", result.Error.Message)
-			} else {
-				lastErr = fmt.Errorf("Mistral returned HTTP 429")
-			}
+			lastErr = failure("Mistral rate limited the request")
 			// Re-create the request body reader for the next attempt.
 			request.Body = io.NopCloser(bytes.NewReader(requestBody))
 			continue
 		}
 
 		if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-			if result.Error != nil {
-				return "", fmt.Errorf("Mistral returned HTTP %d: %s", response.StatusCode, result.Error.Message)
-			}
-			return "", fmt.Errorf("Mistral returned HTTP %d", response.StatusCode)
+			return "", failure("Mistral rejected the request")
+		}
+		if decodeErr != nil {
+			return "", failure("Could not decode Mistral response")
 		}
 		if len(result.Choices) == 0 || len(result.Choices[0].Message.Content) == 0 {
-			return "", fmt.Errorf("Mistral returned no completion")
+			return "", failure("Mistral returned no completion")
 		}
 		var content string
 		if err := json.Unmarshal(result.Choices[0].Message.Content, &content); err != nil {
@@ -134,7 +160,7 @@ func (c *MistralClient) Complete(systemPrompt, userPrompt string) (string, error
 				Text string `json:"text"`
 			}
 			if err := json.Unmarshal(result.Choices[0].Message.Content, &chunks); err != nil {
-				return "", fmt.Errorf("decode Mistral content: %w", err)
+				return "", failure("Could not decode Mistral content")
 			}
 			var text strings.Builder
 			for _, chunk := range chunks {
@@ -145,7 +171,7 @@ func (c *MistralClient) Complete(systemPrompt, userPrompt string) (string, error
 			content = text.String()
 		}
 		if strings.TrimSpace(content) == "" {
-			return "", fmt.Errorf("Mistral returned no completion")
+			return "", failure("Mistral returned no completion")
 		}
 		return content, nil
 	}
