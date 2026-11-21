@@ -354,12 +354,6 @@
                         "display_name": "Keycloak Account Migration: Google delegated administrator",
                         "type": "text",
                         "help_text": "Administrator email address to impersonate during account migration."
-                    },
-                    {
-                        "key": "KeycloakMigrationGoogleSendEphemeral",
-                        "display_name": "Keycloak Account Migration: Notify users in Mattermost",
-                        "type": "bool",
-                        "help_text": "Send an ephemeral Mattermost message to users after migrating them to Google."
                     }
                 ]
             },

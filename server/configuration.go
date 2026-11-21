@@ -44,8 +44,6 @@ type configuration struct {
 	KeycloakClientSecret                      string
 	KeycloakMigrationGoogleServiceAccountKey  string
 	KeycloakMigrationGoogleAdminEmail         string
-	KeycloakMigrationGoogleExternalOrgUnit    string
-	KeycloakMigrationGoogleSendEphemeral      bool
 	GoogleGroupsSyncServiceAccountKey         string
 	GoogleGroupsSyncAdminEmail                string
 

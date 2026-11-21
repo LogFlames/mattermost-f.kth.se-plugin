@@ -314,9 +314,6 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 	if password != "" {
 		response.Text += fmt.Sprintf("\n\n Temporary password: `%s`", password)
 	}
-	if err := p.notifyGoogleMigration(user, googleUser.PrimaryEmail, password); err != nil {
-		p.API.LogError("Google migration notification failed", "user_id", user.Id, "error", err.Error())
-	}
 	return response, nil
 }
 
@@ -612,20 +609,6 @@ func (p *Plugin) createKeycloakMigrationUser(email, password, firstName, lastNam
 	return nil
 }
 
-func (p *Plugin) notifyGoogleMigration(user *model.User, email, temporaryPassword string) error {
-	configuration := p.getConfiguration()
-	if configuration.KeycloakMigrationGoogleSendEphemeral {
-		message := fmt.Sprintf("Your Mattermost account has been migrated to Google Workspace. Sign in with `%s`.", email)
-		if temporaryPassword != "" {
-			message += fmt.Sprintf(" Your temporary password is `%s`; Google will require you to change it at first login.", temporaryPassword)
-		}
-		if post := p.API.SendEphemeralPost(user.Id, &model.Post{UserId: user.Id, Message: message}); post == nil {
-			return fmt.Errorf("Mattermost did not create the migration notification")
-		}
-	}
-	return nil
-}
-
 const keycloakNewUserUsage = "Usage: `/keycloak new_user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes|no>`"
 
 func validateKeycloakEmail(email string) error {
@@ -637,8 +620,9 @@ func validateKeycloakEmail(email string) error {
 }
 
 func validateFysiksektionenEmail(email string) error {
-	if err := validateKeycloakEmail(email); err != nil {
-		return err
+	parsedEmail, err := mail.ParseAddress(email)
+	if err != nil || parsedEmail.Address != email {
+		return fmt.Errorf("Invalid e-mail address %q. Use a fysiksektionen.se-address such as name@fysiksektionen.se.", email)
 	}
 	if !strings.HasSuffix(strings.ToLower(email), "@fysiksektionen.se") {
 		return fmt.Errorf("Invalid @fysiksektionen.se address %q. Include the @fysiksektionen.se suffix, for example name@fysiksektionen.se.", email)

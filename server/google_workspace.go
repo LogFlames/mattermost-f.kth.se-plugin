@@ -305,7 +305,7 @@ func resolveGoogleOrgUnitKey(units []string, category, requested string) (string
 		}
 		leaf, ok := externalKeys[strings.ToLower(requested)]
 		if !ok {
-			return "", fmt.Errorf("Google organization unit key %q was not found", requested)
+			return "", fmt.Errorf("Google organization unit key %q was not found. Note that create-external only accepts keys external, alumner and utility.", requested)
 		}
 		var match string
 		for _, unit := range units {
@@ -334,7 +334,7 @@ func resolveGoogleOrgUnitKey(units []string, category, requested string) (string
 		}
 	}
 	if keyAlias == "" {
-		return "", fmt.Errorf("Google organization unit key %q was not found", requested)
+		return "", fmt.Errorf("Google organization unit key %q was not found. Note that create-kth only accepts keys f-XX, f-0 or f-Ø.", requested)
 	}
 
 	var match string
