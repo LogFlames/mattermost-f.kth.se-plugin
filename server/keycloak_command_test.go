@@ -29,10 +29,11 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 		"/keycloak migrate_to_google create-kth":      "Create a KTH user's Google Workspace account",
 		"/keycloak migrate_to_google create-external": "Create an external Google Workspace account",
 		"/keycloak migrate_to_google bind":            "Bind an existing Google Workspace account",
+		"/keycloak migrate_to_google unmigrate":       "Reverse a Google migration",
 		"/keycloak migrate_to_keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID",
-		"/keycloak migrate_to_keycloak create":        "Create a Keycloak account",
+		"/keycloak migrate_to_keycloak create":        "Create a temporary-password Keycloak account",
 		"/keycloak migrate_to_keycloak bind":          "Bind an existing Keycloak account",
-		"/keycloak migrate_to_keycloak update":        "Synchronize the bound Keycloak account by the Mattermost user's Google ID",
+		"/keycloak migrate_to_keycloak update":        "Synchronize a previously created or bound Keycloak account",
 	}
 
 	for command, description := range tests {
@@ -131,6 +132,75 @@ func TestKeycloakEnableDisableMattermostLogin(t *testing.T) {
 		if got := keycloakMigrationAttribute(&keycloakUserRepresentation{Attributes: gotAttributes}, "allowMattermostLogin"); got != test.want {
 			t.Fatalf("%s set allowMattermostLogin to %q, want %q", test.command, got, test.want)
 		}
+	}
+}
+
+func TestKeycloakMigrateToGoogleUnmigrate(t *testing.T) {
+	p, api := newAdminTestPlugin(t)
+	p.setConfiguration(&configuration{KeycloakClientID: "test", KeycloakClientSecret: "test"})
+
+	existing := api.users[1]
+	existing.AuthService = model.ServiceOpenid
+	existing.AuthData = model.NewPointer("google123")
+
+	var gotAttributes map[string][]string
+	var gotUsername string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/realms/mattermost/protocol/openid-connect/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"test-token"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/mattermost/users":
+			if r.URL.Query().Get("q") != "mattermostID:google123" {
+				t.Fatalf("unexpected Keycloak search query: %q", r.URL.RawQuery)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"keycloak123","username":"existing","attributes":{"accountMigrated":["True"],"mattermostID":["google123"],"mattermostEmail":["existing@fysiksektionen.se"],"migratedFromID":["keycloak123"],"migratedFromUsername":["existing@example.org"]}}]`))
+		case r.Method == http.MethodPut && r.URL.Path == "/admin/realms/mattermost/users/keycloak123":
+			var user keycloakUserRepresentation
+			if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+				t.Fatalf("decode Keycloak update: %v", err)
+			}
+			gotAttributes = user.Attributes
+			gotUsername = user.Username
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	oldURL := keycloakURL
+	keycloakURL = server.URL
+	t.Cleanup(func() { keycloakURL = oldURL })
+
+	response, appErr := p.keycloakCommand(&model.CommandArgs{
+		UserId:  "admin",
+		Command: "/keycloak migrate_to_google unmigrate @existing",
+	})
+	if appErr != nil {
+		t.Fatalf("command returned AppError: %v", appErr)
+	}
+	if !strings.Contains(response.Text, "Unmigrated") {
+		t.Fatalf("unexpected response: %s", response.Text)
+	}
+	if keycloakMigrationAttribute(&keycloakUserRepresentation{Attributes: gotAttributes}, "accountMigrated") != "False" {
+		t.Fatalf("accountMigrated was not reset to False")
+	}
+	if _, ok := gotAttributes["mattermostEmail"]; ok {
+		t.Fatalf("mattermostEmail was not removed")
+	}
+	if _, ok := gotAttributes["migratedFromUsername"]; ok {
+		t.Fatalf("migratedFromUsername was not removed")
+	}
+	if gotUsername != "existing@example.org" {
+		t.Fatalf("Keycloak username = %q, want old username", gotUsername)
+	}
+	if got := keycloakMigrationAttribute(&keycloakUserRepresentation{Attributes: gotAttributes}, "mattermostID"); got != "keycloak123" {
+		t.Fatalf("mattermostID = %q, want old ID", got)
+	}
+	if existing.AuthService != model.UserAuthServiceSaml || existing.AuthData == nil || *existing.AuthData != "keycloak123" {
+		t.Fatalf("Mattermost identity was not restored: service=%q authdata=%v", existing.AuthService, existing.AuthData)
 	}
 }
 

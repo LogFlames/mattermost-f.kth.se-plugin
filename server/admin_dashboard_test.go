@@ -65,6 +65,15 @@ func (a *adminTestAPI) GetUserByUsername(username string) (*model.User, *model.A
 	}
 	return nil, testAppError(http.StatusNotFound)
 }
+func (a *adminTestAPI) UpdateUser(user *model.User) (*model.User, *model.AppError) {
+	for i, existing := range a.users {
+		if existing != nil && existing.Id == user.Id {
+			a.users[i] = user
+			return user, nil
+		}
+	}
+	return nil, testAppError(http.StatusNotFound)
+}
 func (a *adminTestAPI) AddChannelMember(channelID, userID string) (*model.ChannelMember, *model.AppError) {
 	return a.AddUserToChannel(channelID, userID, "bot")
 }
