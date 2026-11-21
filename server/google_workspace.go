@@ -52,7 +52,11 @@ type googleOrgUnit struct {
 	Path string `json:"orgUnitPath"`
 }
 
-var googleOrgUnitAliasPattern = regexp.MustCompile(`(?i)(?:^|[ /])i\s+f-(ø|0|o|24)(?:[ .]|$)`)
+var (
+	googleOrgUnitFPattern          = regexp.MustCompile(`(?i)^/?Teknologer[^/]*/Teknologer i F-(?:[øo0])(?:[^/]*)$`)
+	googleOrgUnitXXPattern         = regexp.MustCompile(`(?i)^/?Teknologer[^/]*/Teknologer i F-([0-9]+)(?:[^/]*)$`)
+	googleOrgUnitNumericKeyPattern = regexp.MustCompile(`(?i)^f([0-9]+)$`)
+)
 
 const (
 	keycloakMigrationGoogleServiceAccountKey = "KeycloakMigrationGoogleServiceAccountKey"
@@ -248,42 +252,137 @@ func (p *Plugin) listGoogleOrgUnits(serviceAccountKeyName, adminEmail string) ([
 }
 
 func (p *Plugin) resolveGoogleOrgUnit(serviceAccountKeyName, adminEmail, requested string) (string, error) {
-	if requested == "" {
-		return "", nil
-	}
 	units, err := p.listGoogleOrgUnits(serviceAccountKeyName, adminEmail)
 	if err != nil {
 		return "", err
 	}
-	for _, unit := range units {
-		if strings.EqualFold(unit, requested) {
-			return unit, nil
-		}
+	return resolveGoogleOrgUnitKey(units, "kth", requested)
+}
+
+func resolveGoogleOrgUnitKey(units []string, category, requested string) (string, error) {
+	if requested == "" {
+		return "", nil
 	}
 
-	alias := strings.ToUpper(strings.TrimPrefix(requested, "F-"))
-	switch alias {
-	case "0", "O", "Ø":
-		alias = "Ø"
-	case "24":
-	default:
-		return "", fmt.Errorf("Google organization unit %q was not found", requested)
+	if strings.EqualFold(category, "external") {
+		externalKeys := map[string]string{
+			"alumner":  "Alumner",
+			"external": "Icke-teknologer",
+			"utility":  "Utility-konton",
+		}
+		leaf, ok := externalKeys[strings.ToLower(requested)]
+		if !ok {
+			return "", fmt.Errorf("Google organization unit key %q was not found", requested)
+		}
+		var match string
+		for _, unit := range units {
+			if strings.EqualFold(unitLeaf(unit), leaf) {
+				if match != "" {
+					return "", fmt.Errorf("Google organization unit key %q is ambiguous", requested)
+				}
+				match = unit
+			}
+		}
+		if match == "" {
+			return "", fmt.Errorf("Google organization unit key %q was not found", requested)
+		}
+		return match, nil
+	}
+
+	key := strings.ToLower(strings.ReplaceAll(requested, "-", ""))
+	var keyAlias string
+	switch key {
+	case "fo", "f0", "fø":
+		keyAlias = "f"
+	}
+	if match := googleOrgUnitNumericKeyPattern.FindStringSubmatch(key); len(match) == 2 {
+		if match[1] != "0" {
+			keyAlias = "f" + match[1]
+		}
+	}
+	if keyAlias == "" {
+		return "", fmt.Errorf("Google organization unit key %q was not found", requested)
 	}
 
 	var match string
 	for _, unit := range units {
-		matchAlias := googleOrgUnitAliasPattern.FindStringSubmatch(unit)
-		if len(matchAlias) == 2 && strings.EqualFold(matchAlias[1], alias) {
+		path := strings.Trim(unit, "/")
+		if keyAlias == "f" {
+			if googleOrgUnitFPattern.MatchString(path) {
+				if match != "" {
+					return "", fmt.Errorf("Google organization unit key %q is ambiguous", requested)
+				}
+				match = unit
+			}
+			continue
+		}
+		matchAlias := googleOrgUnitXXPattern.FindStringSubmatch(path)
+		if len(matchAlias) == 2 && strings.EqualFold("f"+matchAlias[1], keyAlias) {
 			if match != "" {
-				return "", fmt.Errorf("Google organization unit alias %q is ambiguous", requested)
+				return "", fmt.Errorf("Google organization unit key %q is ambiguous", requested)
 			}
 			match = unit
 		}
 	}
 	if match == "" {
-		return "", fmt.Errorf("Google organization unit alias %q was not found", requested)
+		return "", fmt.Errorf("Google organization unit key %q was not found", requested)
 	}
 	return match, nil
+}
+
+func unitLeaf(unit string) string {
+	unit = strings.Trim(unit, "/")
+	if index := strings.LastIndex(unit, "/"); index >= 0 {
+		return unit[index+1:]
+	}
+	return unit
+}
+
+func googleOrgUnitKeys(units []string) []string {
+	keys := make([]string, 0)
+	external := []struct {
+		key  string
+		leaf string
+	}{
+		{"alumner", "Alumner"},
+		{"external", "Icke-teknologer"},
+		{"utility", "Utility-konton"},
+	}
+	for _, candidate := range external {
+		for _, unit := range units {
+			if strings.EqualFold(unitLeaf(unit), candidate.leaf) {
+				keys = append(keys, candidate.key)
+				break
+			}
+		}
+	}
+	if _, err := resolveGoogleOrgUnitKey(units, "kth", "f-ø"); err == nil {
+		keys = append(keys, "f-ø")
+	}
+	seen := make(map[string]bool)
+	for _, unit := range units {
+		match := googleOrgUnitXXPattern.FindStringSubmatch(strings.Trim(unit, "/"))
+		if len(match) == 2 {
+			key := "f-" + match[1]
+			if !seen[key] {
+				keys = append(keys, key)
+				seen[key] = true
+			}
+		}
+	}
+	return keys
+}
+
+func resolveGoogleOrgUnitKeyFromConfiguredDefault(units []string, configured string) (string, error) {
+	if configured == "" {
+		return "", nil
+	}
+	for _, unit := range units {
+		if strings.EqualFold(unit, configured) || strings.EqualFold(unitLeaf(unit), unitLeaf(configured)) {
+			return unit, nil
+		}
+	}
+	return "", fmt.Errorf("Google organization unit %q was not found", configured)
 }
 
 func randomPassword(length int) string {

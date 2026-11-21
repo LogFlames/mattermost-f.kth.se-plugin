@@ -100,8 +100,8 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 var keycloakMigrateUsage map[string]string = map[string]string{
 	"migrate_to_google":                 "Usage: `/keycloak migrate_to_google list-org-units|create-kth|create-external|bind`",
 	"migrate_to_google list-org-units":  "Usage: `/keycloak migrate_to_google list-org-units`",
-	"migrate_to_google create-kth":      "Usage: `/keycloak migrate_to_google create-kth ~<mattermost-user-to-migrate> <kth-id> <org-unit-#>`",
-	"migrate_to_google create-external": "Usage: `/keycloak migrate_to_google create-external ~<mattermost-user-to-migrate> <fysiksektionen.se-address> [org-unit]`",
+	"migrate_to_google create-kth":      "Usage: `/keycloak migrate_to_google create-kth ~<mattermost-user-to-migrate> <kth-id> <org-unit-key>`",
+	"migrate_to_google create-external": "Usage: `/keycloak migrate_to_google create-external ~<mattermost-user-to-migrate> <fysiksektionen.se-address> [org-unit-key]`",
 	"migrate_to_google bind":            "Usage: `/keycloak migrate_to_google bind ~<mattermost-user-to-migrate> <fysiksektionen.se-address>`",
 	"migrate_to_keycloak":               "Usage: `/keycloak migrate_to_keycloak <create|bind|update>`",
 	"migrate_to_keycloak create":        "Usage: `/keycloak migrate_to_keycloak create ~<mattermost-user-to-migrate> <keycloak-email>`",
@@ -112,9 +112,9 @@ var keycloakMigrateUsage map[string]string = map[string]string{
 var keycloakSubcommandDescriptions map[string]string = map[string]string{
 	"new_user":                          "Create a domestic Keycloak account for a Mattermost username, with a temporary password.",
 	"migrate_to_google":                 "Migrate a Mattermost account from Keycloak/SAML to Google Workspace/OpenID.",
-	"migrate_to_google list-org-units":  "List Google Workspace organization units and their aliases.",
-	"migrate_to_google create-kth":      "Create a Google Workspace account for a KTH user and migrate it to that account.",
-	"migrate_to_google create-external": "Create a Google Workspace account for an external fysiksektionen.se address and migrate it to that account.",
+	"migrate_to_google list-org-units":  "List the available org-unit keys and their Google Workspace organization units.",
+	"migrate_to_google create-kth":      "Create a KTH user's Google Workspace account using an f-Ø or f-XX org-unit key.",
+	"migrate_to_google create-external": "Create an external Google Workspace account using an alumner, external, or utility org-unit key.",
 	"migrate_to_google bind":            "Bind an existing Google Workspace account to a Mattermost account currently using Keycloak.",
 	"migrate_to_keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID to Keycloak/SAML.",
 	"migrate_to_keycloak create":        "Create a Keycloak account from the Mattermost user's Google profile and migrate it to that account.",
@@ -149,7 +149,22 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = err.Error()
 			return response, nil
 		}
-		response.Text = strings.Join(units, "\n")
+		keys := googleOrgUnitKeys(units)
+		for i, key := range keys {
+			for _, unit := range units {
+				resolved, resolveErr := resolveGoogleOrgUnitKey(units, "external", key)
+				if resolveErr == nil && resolved == unit {
+					keys[i] = key + " = " + unit
+					break
+				}
+				resolved, resolveErr = resolveGoogleOrgUnitKey(units, "kth", key)
+				if resolveErr == nil && resolved == unit {
+					keys[i] = key + " = " + unit
+					break
+				}
+			}
+		}
+		response.Text = strings.Join(keys, "\n")
 		return response, nil
 	}
 	if len(fields) == 3 {
@@ -212,7 +227,12 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			return response, nil
 		}
 		configuration := p.getConfiguration()
-		orgUnit, resolveErr := p.resolveGoogleOrgUnit(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[5])
+		units, resolveErr := p.listGoogleOrgUnits(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail)
+		if resolveErr != nil {
+			response.Text = resolveErr.Error()
+			return response, nil
+		}
+		orgUnit, resolveErr := resolveGoogleOrgUnitKey(units, "kth", fields[5])
 		if resolveErr != nil {
 			response.Text = resolveErr.Error()
 			return response, nil
@@ -227,13 +247,22 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = err.Error()
 			return response, nil
 		}
-		orgUnit := p.getConfiguration().KeycloakMigrationGoogleExternalOrgUnit
-		if len(fields) == 6 {
-			orgUnit = fields[5]
-		}
 		password = randomPassword(16)
 		configuration := p.getConfiguration()
-		orgUnit, err = p.resolveGoogleOrgUnit(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, orgUnit)
+		units, err := p.listGoogleOrgUnits(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail)
+		if err != nil {
+			response.Text = err.Error()
+			return response, nil
+		}
+		orgUnit := ""
+		if len(fields) == 6 {
+			orgUnit, err = resolveGoogleOrgUnitKey(units, "external", fields[5])
+		} else {
+			orgUnit, err = resolveGoogleOrgUnitKeyFromConfiguredDefault(units, configuration.KeycloakMigrationGoogleExternalOrgUnit)
+			if err != nil || orgUnit == "" {
+				orgUnit, err = resolveGoogleOrgUnitKey(units, "external", "external")
+			}
+		}
 		if err != nil {
 			response.Text = err.Error()
 			return response, nil

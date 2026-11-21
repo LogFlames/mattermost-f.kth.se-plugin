@@ -13,8 +13,8 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 	tests := map[string]string{
 		"/keycloak new_user":                          "Create a domestic Keycloak account",
 		"/keycloak migrate_to_google":                 "Migrate a Mattermost account from Keycloak/SAML",
-		"/keycloak migrate_to_google create-kth":      "Create a Google Workspace account for a KTH user",
-		"/keycloak migrate_to_google create-external": "Create a Google Workspace account for an external",
+		"/keycloak migrate_to_google create-kth":      "Create a KTH user's Google Workspace account",
+		"/keycloak migrate_to_google create-external": "Create an external Google Workspace account",
 		"/keycloak migrate_to_google bind":            "Bind an existing Google Workspace account",
 		"/keycloak migrate_to_keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID",
 		"/keycloak migrate_to_keycloak create":        "Create a Keycloak account",
@@ -49,4 +49,59 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 			t.Fatalf("removed subcommand is still advertised:\n%s", response.Text)
 		}
 	})
+}
+
+func TestResolveGoogleOrgUnitKey(t *testing.T) {
+	units := []string{
+		"/Alumner",
+		"/Icke-teknologer",
+		"/Utility-konton",
+		"/Teknologer/Teknologer i F-Ø",
+		"/Teknologer/Teknologer i F-24",
+	}
+
+	if !googleOrgUnitFPattern.MatchString(strings.Trim("/Teknologer/Teknologer i F-Ø", "/")) {
+		t.Fatal("F-Ø org-unit pattern does not match the test fixture")
+	}
+
+	externalTests := map[string]string{
+		"alumner":  "/Alumner",
+		"external": "/Icke-teknologer",
+		"utility":  "/Utility-konton",
+	}
+	for key, expected := range externalTests {
+		resolved, err := resolveGoogleOrgUnitKey(units, "external", key)
+		if err != nil {
+			t.Fatalf("resolve external key %q: %v", key, err)
+		}
+		if resolved != expected {
+			t.Fatalf("external key %q resolved to %q, expected %q", key, resolved, expected)
+		}
+	}
+
+	for _, key := range []string{"f-o", "fo", "F-O", "F0", "f-0", "f-ø", "fø"} {
+		resolved, err := resolveGoogleOrgUnitKey(units, "kth", key)
+		if err != nil {
+			t.Fatalf("resolve F-Ø key %q: %v", key, err)
+		}
+		if resolved != "/Teknologer/Teknologer i F-Ø" {
+			t.Fatalf("key %q resolved to %q", key, resolved)
+		}
+	}
+	for _, key := range []string{"f-24", "f24", "F-24", "F24"} {
+		resolved, err := resolveGoogleOrgUnitKey(units, "kth", key)
+		if err != nil {
+			t.Fatalf("resolve F-XX key %q: %v", key, err)
+		}
+		if resolved != "/Teknologer/Teknologer i F-24" {
+			t.Fatalf("key %q resolved to %q", key, resolved)
+		}
+	}
+
+	if _, err := resolveGoogleOrgUnitKey(units, "external", "/Icke-teknologer"); err == nil {
+		t.Fatal("full external org unit path was accepted")
+	}
+	if _, err := resolveGoogleOrgUnitKey(units, "kth", "/Teknologer/Teknologer i F-24"); err == nil {
+		t.Fatal("full KTH org unit path was accepted")
+	}
 }
