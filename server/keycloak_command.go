@@ -106,7 +106,7 @@ var keycloakMigrateUsage map[string]string = map[string]string{
 	"migrate_to_keycloak":               "Usage: `/keycloak migrate_to_keycloak <create|bind|update>`",
 	"migrate_to_keycloak create":        "Usage: `/keycloak migrate_to_keycloak create ~<mattermost-user-to-migrate> <keycloak-email>`",
 	"migrate_to_keycloak bind":          "Usage: `/keycloak migrate_to_keycloak bind ~<mattermost-user-to-migrate> <keycloak-email>`",
-	"migrate_to_keycloak update":        "Usage: `/keycloak migrate_to_keycloak update ~<mattermost-user-to-migrate> <keycloak-email>`",
+	"migrate_to_keycloak update":        "Usage: `/keycloak migrate_to_keycloak update ~<mattermost-user-to-migrate> [keycloak-email]`",
 }
 
 var keycloakSubcommandDescriptions map[string]string = map[string]string{
@@ -119,7 +119,7 @@ var keycloakSubcommandDescriptions map[string]string = map[string]string{
 	"migrate_to_keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID to Keycloak/SAML.",
 	"migrate_to_keycloak create":        "Create a Keycloak account from the Mattermost user's Google profile and migrate it to that account.",
 	"migrate_to_keycloak bind":          "Bind an existing Keycloak account to a Mattermost account currently using Google.",
-	"migrate_to_keycloak update":        "Synchronize the bound Keycloak account from the Mattermost user's Google profile.",
+	"migrate_to_keycloak update":        "Synchronize the bound Keycloak account by the Mattermost user's Google ID.",
 }
 
 func keycloakUsageWithDescriptions(usage, subcommand string) string {
@@ -286,7 +286,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		response.Text = err.Error()
 		return response, nil
 	}
-	if err = p.checkGoogleMigrationConflicts(user, googleUser.ID, googleUser.PrimaryEmail); err != nil {
+	if err = p.checkGoogleMigrationConflicts(user, googleUser.ID); err != nil {
 		response.Text = err.Error()
 		return response, nil
 	}
@@ -327,14 +327,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak"], "migrate_to_keycloak")
 		return response, nil
 	}
-	if len(fields) < 5 {
-		if len(fields) >= 3 {
-			usageKey := "migrate_to_keycloak " + fields[2]
-			if usage := keycloakMigrateUsage[usageKey]; usage != "" {
-				response.Text = keycloakUsageWithDescriptions(usage, usageKey)
-				return response, nil
-			}
-		}
+	if len(fields) < 4 {
 		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak"], "migrate_to_keycloak")
 		return response, nil
 	}
@@ -352,7 +345,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 		return response, nil
 	}
 	configuration := p.getConfiguration()
-	googleUser, err := p.getGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, user.Email)
+	googleUser, err := p.getGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, *user.AuthData)
 	if err != nil {
 		response.Text = err.Error()
 		return response, nil
@@ -362,12 +355,20 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 		return response, nil
 	}
 	if fields[2] == "create" || fields[2] == "bind" {
-		if err = p.checkGoogleMigrationConflicts(user, googleUser.ID, googleUser.PrimaryEmail); err != nil {
+		if err = p.checkGoogleMigrationConflicts(user, googleUser.ID); err != nil {
 			response.Text = err.Error()
 			return response, nil
 		}
 	}
-	keycloakEmail := fields[4]
+	keycloakEmail := ""
+	if fields[2] != "update" {
+		if len(fields) != 5 {
+			usageKey := "migrate_to_keycloak " + fields[2]
+			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage[usageKey], usageKey)
+			return response, nil
+		}
+		keycloakEmail = fields[4]
+	}
 	var keycloakUser *keycloakUserRepresentation
 	switch fields[2] {
 	case "create":
@@ -384,7 +385,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 		if err == nil {
 			keycloakUser, err = p.getKeycloakUser(keycloakEmail)
 		}
-	case "bind", "update":
+	case "bind":
 		if len(fields) != 5 {
 			response.Text = keycloakUsageWithDescriptions(
 				keycloakMigrateUsage["migrate_to_keycloak "+fields[2]],
@@ -396,7 +397,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 		if err != nil {
 			err = fmt.Errorf("Keycloak account %q does not exist", keycloakEmail)
 		}
-		if err == nil && fields[2] == "bind" {
+		if err == nil {
 			if keycloakMigrationAttribute(keycloakUser, "accountMigrated") == "true" {
 				err = fmt.Errorf("Keycloak account is already marked as migrated; use update instead")
 			} else if keycloakMigrationAttribute(keycloakUser, "mattermostEmail") != "" {
@@ -408,7 +409,21 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 				}
 			}
 		}
-		if err == nil && fields[2] == "update" {
+	case "update":
+		if len(fields) != 4 && len(fields) != 5 {
+			response.Text = keycloakUsageWithDescriptions(
+				keycloakMigrateUsage["migrate_to_keycloak update"],
+				"migrate_to_keycloak update",
+			)
+			return response, nil
+		}
+		keycloakUser, err = p.findKeycloakUserByQuery("q", "mattermostID:"+googleUser.ID, false)
+		if err != nil {
+			err = fmt.Errorf("Could not find the Keycloak migration account for Google ID %q: %w", googleUser.ID, err)
+		} else if keycloakUser == nil {
+			err = fmt.Errorf("Could not find the Keycloak migration account for Google ID %q", googleUser.ID)
+		}
+		if err == nil {
 			if keycloakMigrationAttribute(keycloakUser, "accountMigrated") != "true" {
 				err = fmt.Errorf("Keycloak account has not been marked as migrated; use create or bind before update")
 			} else if keycloakMigrationAttribute(keycloakUser, "mattermostID") != googleUser.ID {
@@ -459,15 +474,7 @@ func keycloakMigrationAttribute(user *keycloakUserRepresentation, name string) s
 	return values[0]
 }
 
-func (p *Plugin) checkGoogleMigrationConflicts(user *model.User, googleID, googleEmail string) error {
-	existing, appErr := p.API.GetUserByEmail(googleEmail)
-	if appErr != nil && appErr.StatusCode != http.StatusNotFound {
-		return fmt.Errorf("check Mattermost e-mail conflict: %w", appErr)
-	}
-	if existing != nil && existing.Id != user.Id {
-		return fmt.Errorf("Mattermost account conflict: Google e-mail %q belongs to another Mattermost account", googleEmail)
-	}
-
+func (p *Plugin) checkGoogleMigrationConflicts(user *model.User, googleID string) error {
 	page := 0
 	for {
 		users, appErr := p.API.GetUsers(&model.UserGetOptions{Page: page, PerPage: 200})

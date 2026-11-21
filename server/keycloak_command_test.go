@@ -19,7 +19,7 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 		"/keycloak migrate_to_keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID",
 		"/keycloak migrate_to_keycloak create":        "Create a Keycloak account",
 		"/keycloak migrate_to_keycloak bind":          "Bind an existing Keycloak account",
-		"/keycloak migrate_to_keycloak update":        "Synchronize the bound Keycloak account",
+		"/keycloak migrate_to_keycloak update":        "Synchronize the bound Keycloak account by the Mattermost user's Google ID",
 	}
 
 	for command, description := range tests {
