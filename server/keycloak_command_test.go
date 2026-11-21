@@ -79,6 +79,26 @@ func TestRandomPasswordMeetsGoogleCharacterClasses(t *testing.T) {
 	}
 }
 
+func TestKeycloakBooleanAttributes(t *testing.T) {
+	if keycloakBooleanString(true) != "True" {
+		t.Fatal("Keycloak true attribute is not capitalized")
+	}
+	if keycloakBooleanString(false) != "False" {
+		t.Fatal("Keycloak false attribute is not capitalized")
+	}
+
+	user := &keycloakUserRepresentation{
+		Attributes: map[string][]string{"accountMigrated": {"True"}},
+	}
+	if !keycloakMigrationAttributeIsTrue(user, "accountMigrated") {
+		t.Fatal("capitalized True attribute was not recognized")
+	}
+	user.Attributes["accountMigrated"] = []string{"true"}
+	if !keycloakMigrationAttributeIsTrue(user, "accountMigrated") {
+		t.Fatal("lowercase true attribute was not recognized")
+	}
+}
+
 func TestResolveGoogleOrgUnitKey(t *testing.T) {
 	units := []string{
 		"/Alumner",

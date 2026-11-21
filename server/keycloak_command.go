@@ -212,7 +212,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		)
 		return response, nil
 	}
-	if keycloakMigrationAttribute(keycloakUser, "accountMigrated") == "true" {
+	if keycloakMigrationAttributeIsTrue(keycloakUser, "accountMigrated") {
 		response.Text = "Keycloak account is already marked as migrated."
 		return response, nil
 	}
@@ -391,7 +391,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 			err = fmt.Errorf("Keycloak account %q does not exist", keycloakEmail)
 		}
 		if err == nil {
-			if keycloakMigrationAttribute(keycloakUser, "accountMigrated") == "true" {
+			if keycloakMigrationAttributeIsTrue(keycloakUser, "accountMigrated") {
 				err = fmt.Errorf("Keycloak account is already marked as migrated; use update instead")
 			} else if keycloakMigrationAttribute(keycloakUser, "mattermostEmail") != "" {
 				err = fmt.Errorf("Keycloak account already has a Mattermost email migration attribute")
@@ -417,7 +417,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 			err = fmt.Errorf("Could not find the Keycloak migration account for Google ID %q", googleUser.ID)
 		}
 		if err == nil {
-			if keycloakMigrationAttribute(keycloakUser, "accountMigrated") != "true" {
+			if !keycloakMigrationAttributeIsTrue(keycloakUser, "accountMigrated") {
 				err = fmt.Errorf("Keycloak account has not been marked as migrated; use create or bind before update")
 			} else if keycloakMigrationAttribute(keycloakUser, "mattermostID") != googleUser.ID {
 				err = fmt.Errorf("Google account ID does not match the Keycloak migration mattermostID attribute")
@@ -465,6 +465,17 @@ func keycloakMigrationAttribute(user *keycloakUserRepresentation, name string) s
 		return ""
 	}
 	return values[0]
+}
+
+func keycloakMigrationAttributeIsTrue(user *keycloakUserRepresentation, name string) bool {
+	return strings.EqualFold(keycloakMigrationAttribute(user, name), "true")
+}
+
+func keycloakBooleanString(value bool) string {
+	if value {
+		return "True"
+	}
+	return "False"
 }
 
 func (p *Plugin) checkGoogleMigrationConflicts(user *model.User, googleID string) error {
@@ -547,7 +558,7 @@ func (p *Plugin) createKeycloakMigrationUser(email, password, firstName, lastNam
 			"mattermostUsername": {mattermostUsername},
 			"creationMethod":     {"MattermostPluginMigration"},
 			"accountType":        {"Unknown (created by Mattermost migration)"},
-			"accountMigrated":    {"false"},
+			"accountMigrated":    {"False"},
 		},
 		Credentials: []keycloakCredential{{Type: "password", Value: password, Temporary: true}},
 	}
@@ -826,10 +837,7 @@ func (p *Plugin) updateKeycloakMigrationProfile(user *keycloakUserRepresentation
 	if user.Attributes == nil {
 		user.Attributes = map[string][]string{}
 	}
-	accountMigrated := "false"
-	if migrated {
-		accountMigrated = "true"
-	}
+	accountMigrated := keycloakBooleanString(migrated)
 	user.Attributes["accountMigrated"] = []string{accountMigrated}
 	if fromID == "" {
 		delete(user.Attributes, "migratedFromID")
@@ -838,8 +846,8 @@ func (p *Plugin) updateKeycloakMigrationProfile(user *keycloakUserRepresentation
 	}
 	user.Attributes["mattermostID"] = []string{mattermostID}
 	user.Attributes["mattermostEmail"] = []string{mattermostEmail}
-	user.Attributes["allowProfileUpdates"] = []string{fmt.Sprintf("%t", allowProfileUpdates)}
-	user.Attributes["allowMattermostLogin"] = []string{fmt.Sprintf("%t", allowMattermostLogin)}
+	user.Attributes["allowProfileUpdates"] = []string{keycloakBooleanString(allowProfileUpdates)}
+	user.Attributes["allowMattermostLogin"] = []string{keycloakBooleanString(allowMattermostLogin)}
 	if firstName != "" {
 		user.FirstName = firstName
 	}
