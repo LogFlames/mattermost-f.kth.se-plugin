@@ -310,6 +310,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		response.Text = err.Error()
 		return response, nil
 	}
+	p.notifyMigrationInitiator(args.UserId, user.Username, googleUser.PrimaryEmail, password, fields[2])
 	response.Text = fmt.Sprintf("Migrated @%s to Google account %s. Their Mattermost account will be updated on first log-in.", user.Username, googleUser.PrimaryEmail)
 	if password != "" {
 		response.Text += fmt.Sprintf("\n\n Temporary password: `%s`", password)
@@ -375,6 +376,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 		keycloakEmail = fields[4]
 	}
 	var keycloakUser *keycloakUserRepresentation
+	migrationPassword := ""
 	switch fields[2] {
 	case "create":
 		if len(fields) != 5 {
@@ -385,7 +387,8 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 			err = p.checkGoogleMigrationKeycloakConflicts(googleUser.ID, googleUser.PrimaryEmail)
 		}
 		if err == nil {
-			err = p.createKeycloakMigrationUser(keycloakEmail, randomPassword(16), googleUser.Name.GivenName, googleUser.Name.FamilyName, user.Username)
+			migrationPassword = randomPassword(16)
+			err = p.createKeycloakMigrationUser(keycloakEmail, migrationPassword, googleUser.Name.GivenName, googleUser.Name.FamilyName, user.Username)
 		}
 		if err == nil {
 			keycloakUser, err = p.getKeycloakUser(keycloakEmail)
@@ -464,8 +467,69 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 		response.Text = err.Error()
 		return response, nil
 	}
-	response.Text = fmt.Sprintf("Migrated %s to Keycloak account %s.", user.Username, keycloakUser.Username)
+	if fields[1] == "migrate_to_google" && (fields[2] == "create-kth" || fields[2] == "create-external" || fields[2] == "bind") {
+		p.notifyMigrationInitiator(args.UserId, user.Username, keycloakUser.Username, migrationPassword, fields[2])
+		response.Text = fmt.Sprintf("Migrated %s to Keycloak account %s.", user.Username, keycloakUser.Username)
+	}
 	return response, nil
+}
+
+const (
+	defaultKeycloakMigrationDMText    = "Example DM text:\n\n```text\nHi @{{username}},\n\nYour account has successfully been migrated. You can now use {{account}}.```"
+	defaultKeycloakMigrationEmailText = "Example e-mail text:\n\n```text\nHello {{username}},\n\nYour account migration was successful. Your account is: {{account}}.```"
+)
+
+func renderKeycloakMigrationText(text, username, account, password string) string {
+	replacer := strings.NewReplacer(
+		"{{username}}", username,
+		"{{account}}", account,
+		"{{password}}", password,
+	)
+	return replacer.Replace(text)
+}
+
+func keycloakMigrationNotificationTexts(configuration *configuration, googleCreationMethod string) (string, string) {
+	var dmText, emailText string
+
+	switch googleCreationMethod {
+	case "create-kth":
+		dmText = configuration.KeycloakMigrationKTHDMText
+		emailText = configuration.KeycloakMigrationKTHEmailText
+	case "create-external":
+		dmText = configuration.KeycloakMigrationExternalDMText
+		emailText = configuration.KeycloakMigrationExternalEmailText
+	}
+
+	if strings.TrimSpace(dmText) == "" {
+		dmText = defaultKeycloakMigrationDMText
+	}
+	if strings.TrimSpace(emailText) == "" {
+		emailText = defaultKeycloakMigrationEmailText
+	}
+	return dmText, emailText
+}
+
+func (p *Plugin) notifyMigrationInitiator(userID, username, account, password, googleCreationMethod string) {
+	dmText, emailText := keycloakMigrationNotificationTexts(p.getConfiguration(), googleCreationMethod)
+
+	dm, err := p.API.GetDirectChannel(userID, p.pluginBot.UserId)
+	if err != nil {
+		p.API.LogError("Could not create migration notification direct-message channel", "user_id", userID, "error", err.Error())
+		return
+	}
+
+	for _, text := range []string{
+		renderKeycloakMigrationText(dmText, username, account, password),
+		renderKeycloakMigrationText(emailText, username, account, password),
+	} {
+		if _, appErr := p.API.CreatePost(&model.Post{
+			UserId:    p.pluginBot.UserId,
+			ChannelId: dm.Id,
+			Message:   text,
+		}); appErr != nil {
+			p.API.LogError("Could not send migration notification direct message", "user_id", userID, "error", appErr.Error())
+		}
+	}
 }
 
 func keycloakMigrationAttribute(user *keycloakUserRepresentation, name string) string {

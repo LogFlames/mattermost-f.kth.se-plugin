@@ -99,6 +99,44 @@ func TestKeycloakBooleanAttributes(t *testing.T) {
 	}
 }
 
+func TestRenderKeycloakMigrationText(t *testing.T) {
+	got := renderKeycloakMigrationText(
+		"Hi @{{username}}, account {{account}}, password {{password}}",
+		"alice",
+		"alice@fysiksektionen.se",
+		"temporary-password",
+	)
+	if got != "Hi @alice, account alice@fysiksektionen.se, password temporary-password" {
+		t.Fatalf("rendered migration text = %q", got)
+	}
+}
+
+func TestKeycloakMigrationNotificationTextBranches(t *testing.T) {
+	configuration := &configuration{
+		KeycloakMigrationDMText:            "generic DM",
+		KeycloakMigrationEmailText:         "generic email",
+		KeycloakMigrationKTHDMText:         "KTH DM",
+		KeycloakMigrationKTHEmailText:      "KTH email",
+		KeycloakMigrationExternalDMText:    "external DM",
+		KeycloakMigrationExternalEmailText: "external email",
+	}
+
+	dm, email := keycloakMigrationNotificationTexts(configuration, "create-kth")
+	if dm != "KTH DM" || email != "KTH email" {
+		t.Fatalf("KTH branch = (%q, %q)", dm, email)
+	}
+
+	dm, email = keycloakMigrationNotificationTexts(configuration, "create-external")
+	if dm != "external DM" || email != "external email" {
+		t.Fatalf("external branch = (%q, %q)", dm, email)
+	}
+
+	dm, email = keycloakMigrationNotificationTexts(configuration, "bind")
+	if dm != "generic DM" || email != "generic email" {
+		t.Fatalf("generic branch = (%q, %q)", dm, email)
+	}
+}
+
 func TestAlternativeGoogleEmail(t *testing.T) {
 	if got := alternativeGoogleEmail("alice@fysiksektionen.se", "alice@example.com"); got != "alice@example.com" {
 		t.Fatalf("alternative email = %q, expected Keycloak email", got)
