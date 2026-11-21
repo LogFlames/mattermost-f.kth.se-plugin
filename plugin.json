@@ -343,6 +343,73 @@
                 ]
             },
             {
+                "key": "keycloak-account-migration",
+                "title": "Keycloak Account Migration",
+                "subtitle": "Credentials and defaults used to migrate accounts between Keycloak and Google Workspace.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "KeycloakMigrationGoogleAdminEmail",
+                        "display_name": "Keycloak Account Migration: Google delegated administrator",
+                        "type": "text",
+                        "help_text": "Administrator email address to impersonate during account migration."
+                    },
+                    {
+                        "key": "KeycloakMigrationKTHDMText",
+                        "display_name": "KTH Google Account: Example DM text",
+                        "type": "longtext",
+                        "help_text": "Example DM for accounts created with migrate_to_google create-kth. Available placeholders: {{username}} and {{account}}.",
+                        "default": "Please consider sending this DM to the person whose account you migrated to Google:\n\nHi @{{username}},\n\nYour Mattermost account has successfully been migrated to a Google account: {{account}}. Please log in to Mattermost anew via the KTH button to update your account in Mattermost.\n\nWith the new account, you are able to reach more chapter resources. For example, check out https://drive.fysiksektionen.se/ and https://mail.fysiksektionen.se/.\n\nFeel free to reach out to us if you have any questions. You can DM me or get help at mattermaster@f.kth.se.\n\nSincerely,\nThe Physics Chapter Mattermost Team"
+                    },
+                    {
+                        "key": "KeycloakMigrationKTHEmailText",
+                        "display_name": "KTH Google Account: Example e-mail text",
+                        "type": "longtext",
+                        "help_text": "Example e-mail for accounts created with migrate_to_google create-kth. Available placeholders: {{username}} and {{account}}.",
+                        "default": "Please consider sending this e-mail to the person whose account you migrated to Google:\n\nHi @{{username}},\n\nYour Mattermost account has successfully been migrated to a Google account: {{account}}. Please log in to Mattermost anew via the KTH button to update your account in Mattermost.\n\nWith the new account, you are able to reach more chapter resources. For example, check out https://drive.fysiksektionen.se/ and https://mail.fysiksektionen.se/.\n\nFeel free to reach out to us if you have any questions. You can reply to this e-mail or get help from mattermaster@f.kth.se.\n\nSincerely,\nThe Physics Chapter Mattermost Team"
+                    },
+                    {
+                        "key": "KeycloakMigrationExternalDMText",
+                        "display_name": "External Google Account: Example DM text",
+                        "type": "longtext",
+                        "help_text": "Example DM for accounts created with migrate_to_google create-external. Available placeholders: {{username}}, {{account}}, and {{password}}.",
+                        "default": "Please consider sending this DM to the person whose account you migrated to Google:\n\nHi @{{username}},\n\nYour Mattermost account has successfully been migrated to a Google account: {{account}}.\n\nTo log in, first head to https://accounts.google.com and enter your account {{account}} with password {{password}}, then log in to Mattermost via the KTH button.\n\nWith the new account, you are able to reach more chapter resources. For example, check out https://drive.fysiksektionen.se/ and https://mail.fysiksektionen.se/.\n\nFeel free to reach out to us if you have any questions. You can DM me or get help at mattermaster@f.kth.se.\n\nSincerely,\nThe Physics Chapter Mattermost Team"
+                    },
+                    {
+                        "key": "KeycloakMigrationExternalEmailText",
+                        "display_name": "External Google Account: Example e-mail text",
+                        "type": "longtext",
+                        "help_text": "Example e-mail for accounts created with migrate_to_google create-external. Available placeholders: {{username}}, {{account}}, and {{password}}.",
+                        "default": "Please consider sending this e-mail to the person whose account you migrated to Google:\n\nHi @{{username}},\n\nYour Mattermost account has successfully been migrated to a Google account: {{account}}. To log in, first head to https://accounts.google.com and enter your account {{account}} with password {{password}}, then log in to Mattermost via the KTH button.\n\nWith the new account, you are able to reach more chapter resources. For example, check out https://drive.fysiksektionen.se/ and https://mail.fysiksektionen.se/.\n\nFeel free to reach out to us if you have any questions. You can reply to this e-mail or get help from mattermaster@f.kth.se.\n\nSincerely,\nThe Physics Chapter Mattermost Team"
+                    
+                    }
+                ]
+            },
+            {
+                "key": "google-workspace",
+                "title": "Google Workspace Integration",
+                "subtitle": "Credentials used by Google Workspace integrations.",
+                "header": null,
+                "footer": null,
+                "settings": [
+                    {
+                        "key": "KeycloakMigrationGoogleServiceAccountKey",
+                        "display_name": "Keycloak Account Migration: Google service account JSON key",
+                        "type": "longtext",
+                        "help_text": "Service account JSON key with domain-wide delegation for Google account migration.",
+                        "secret": true
+                    },
+                    {
+                        "key": "GoogleGroupsSyncServiceAccountKey",
+                        "display_name": "Google Groups Sync: Service account JSON key",
+                        "type": "longtext",
+                        "help_text": "Service account JSON key with domain-wide delegation for synchronizing Google Groups.",
+                        "secret": true
+                    }
+                ]
+            },
+            {
                 "key": "mistral",
                 "title": "Mistral",
                 "subtitle": "Credentials and settings for integrations to Mistral",

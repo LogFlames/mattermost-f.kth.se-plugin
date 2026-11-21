@@ -42,6 +42,16 @@ type configuration struct {
 	InternationalStudents_OnOffBool           bool
 	KeycloakClientID                          string
 	KeycloakClientSecret                      string
+	KeycloakMigrationGoogleServiceAccountKey  string
+	KeycloakMigrationGoogleAdminEmail         string
+	KeycloakMigrationDMText                   string
+	KeycloakMigrationEmailText                string
+	KeycloakMigrationKTHDMText                string
+	KeycloakMigrationKTHEmailText             string
+	KeycloakMigrationExternalDMText           string
+	KeycloakMigrationExternalEmailText        string
+	GoogleGroupsSyncServiceAccountKey         string
+	GoogleGroupsSyncAdminEmail                string
 
 	OIDCOnboarding_OnOffBool    bool
 	OIDCOnboarding_DefaultTeams []string

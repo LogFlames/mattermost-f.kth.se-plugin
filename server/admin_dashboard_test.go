@@ -54,11 +54,37 @@ func (a *adminTestAPI) GetTeamsForUser(string) ([]*model.Team, *model.AppError) 
 func (a *adminTestAPI) GetChannelsForTeamForUser(string, string, bool) ([]*model.Channel, *model.AppError) {
 	return []*model.Channel{&a.channel}, nil
 }
-func (a *adminTestAPI) GetUserByEmail(string) (*model.User, *model.AppError) {
+func (a *adminTestAPI) GetUserByEmail(email string) (*model.User, *model.AppError) {
+	for _, user := range a.users {
+		if user != nil && user.Email == email {
+			return user, nil
+		}
+	}
 	return nil, testAppError(http.StatusNotFound)
 }
-func (a *adminTestAPI) GetUserByUsername(string) (*model.User, *model.AppError) {
+func (a *adminTestAPI) GetUserByUsername(username string) (*model.User, *model.AppError) {
+	for _, user := range a.users {
+		if user != nil && user.Username == username {
+			return user, nil
+		}
+	}
 	return nil, testAppError(http.StatusNotFound)
+}
+func (a *adminTestAPI) UpdateUser(user *model.User) (*model.User, *model.AppError) {
+	for i, existing := range a.users {
+		if existing != nil && existing.Id == user.Id {
+			a.users[i] = user
+			return user, nil
+		}
+	}
+	return nil, testAppError(http.StatusNotFound)
+}
+func (a *adminTestAPI) CreateUser(user *model.User) (*model.User, *model.AppError) {
+	if user.Id == "" {
+		user.Id = "created-" + user.Username
+	}
+	a.users = append(a.users, user)
+	return user, nil
 }
 func (a *adminTestAPI) AddChannelMember(channelID, userID string) (*model.ChannelMember, *model.AppError) {
 	return a.AddUserToChannel(channelID, userID, "bot")

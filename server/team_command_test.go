@@ -119,7 +119,7 @@ func (a *memberCommandTestAPI) GetTeamMember(_, _ string) (*model.TeamMember, *m
 	if a.member {
 		return &model.TeamMember{}, nil
 	}
-	return nil, &model.AppError{StatusCode: 404, Id: "app.team_member.get.app_error"}
+	return nil, &model.AppError{StatusCode: 404, Id: "app.team_member.get_by_teamid_userid.app_error"}
 }
 
 func (a *memberCommandTestAPI) CreateTeamMember(teamID, userID string) (*model.TeamMember, *model.AppError) {

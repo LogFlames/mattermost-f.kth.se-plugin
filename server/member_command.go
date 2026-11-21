@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -69,19 +70,19 @@ func (p *Plugin) memberCommand(args *model.CommandArgs) (*model.CommandResponse,
 		return response, nil
 	}
 	user, err := p.API.GetUserByUsername(username)
-	if err != nil && !(err.StatusCode == 404 && err.Id == "app.user.get_by_username.app_error") {
+	if err != nil && err.StatusCode != http.StatusNotFound {
 		return nil, err
 	}
-	if (err != nil && err.StatusCode == 404) || user == nil || user.DeleteAt != 0 {
+	if (err != nil && err.StatusCode == http.StatusNotFound) || user == nil || user.DeleteAt != 0 {
 		response.Text = fmt.Sprintf("User %q was not found.", username)
 		return response, nil
 	}
 
 	if fields[1] == "add" {
 		teamMember, err := p.API.GetTeamMember(teamID, user.Id)
-		if err != nil && !(err.StatusCode == 404 && err.Id == "app.team_member.get.app_error") {
+		if err != nil && err.StatusCode != http.StatusNotFound {
 			return nil, err
-		} // ignore 404 errors
+		}
 		if teamMember != nil && teamMember.DeleteAt == 0 {
 			response.Text = fmt.Sprintf("@%s is already a member of %s.", user.Username, teamDescription)
 			return response, nil
@@ -93,10 +94,10 @@ func (p *Plugin) memberCommand(args *model.CommandArgs) (*model.CommandResponse,
 		return response, nil
 	} else {
 		teamMember, err := p.API.GetTeamMember(teamID, user.Id)
-		if err != nil && !(err.StatusCode == 404 && err.Id == "app.team_member.get.app_error") {
+		if err != nil && err.StatusCode != http.StatusNotFound {
 			return nil, err
 		}
-		if (err != nil && err.StatusCode == 404) || teamMember == nil || teamMember.DeleteAt != 0 {
+		if (err != nil && err.StatusCode == http.StatusNotFound) || teamMember == nil || teamMember.DeleteAt != 0 {
 			response.Text = fmt.Sprintf("@%s is not a member of %s.", user.Username, teamDescription)
 			return response, nil
 		}
