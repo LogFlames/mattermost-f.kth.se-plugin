@@ -373,18 +373,6 @@ func googleOrgUnitKeys(units []string) []string {
 	return keys
 }
 
-func resolveGoogleOrgUnitKeyFromConfiguredDefault(units []string, configured string) (string, error) {
-	if configured == "" {
-		return "", nil
-	}
-	for _, unit := range units {
-		if strings.EqualFold(unit, configured) || strings.EqualFold(unitLeaf(unit), unitLeaf(configured)) {
-			return unit, nil
-		}
-	}
-	return "", fmt.Errorf("Google organization unit %q was not found", configured)
-}
-
 func randomPassword(length int) string {
 	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
 	password := make([]byte, length)
@@ -397,7 +385,13 @@ func randomPassword(length int) string {
 }
 
 func (p *Plugin) migrationMattermostUser(reference string) (*model.User, error) {
-	username := strings.TrimPrefix(reference, "~")
+	if !strings.HasPrefix(reference, "@") {
+		return nil, fmt.Errorf("Mattermost user reference %q must start with @", reference)
+	}
+	username := strings.TrimPrefix(reference, "@")
+	if username == "" {
+		return nil, fmt.Errorf("Mattermost user reference %q has no username", reference)
+	}
 	user, appErr := p.API.GetUserByUsername(username)
 	if appErr != nil {
 		return nil, fmt.Errorf("get Mattermost user %q: %s", username, appErr.Error())

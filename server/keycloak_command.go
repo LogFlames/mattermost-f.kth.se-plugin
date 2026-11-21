@@ -100,13 +100,13 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 var keycloakMigrateUsage map[string]string = map[string]string{
 	"migrate_to_google":                 "Usage: `/keycloak migrate_to_google list-org-units|create-kth|create-external|bind`",
 	"migrate_to_google list-org-units":  "Usage: `/keycloak migrate_to_google list-org-units`",
-	"migrate_to_google create-kth":      "Usage: `/keycloak migrate_to_google create-kth ~<mattermost-user-to-migrate> <kth-id> <org-unit-key>`",
-	"migrate_to_google create-external": "Usage: `/keycloak migrate_to_google create-external ~<mattermost-user-to-migrate> <fysiksektionen.se-address> [org-unit-key]`",
-	"migrate_to_google bind":            "Usage: `/keycloak migrate_to_google bind ~<mattermost-user-to-migrate> <fysiksektionen.se-address>`",
+	"migrate_to_google create-kth":      "Usage: `/keycloak migrate_to_google create-kth @<mattermost-user-to-migrate> <kth-id> <org-unit-key>`",
+	"migrate_to_google create-external": "Usage: `/keycloak migrate_to_google create-external @<mattermost-user-to-migrate> <fysiksektionen.se-address> <org-unit-key>`",
+	"migrate_to_google bind":            "Usage: `/keycloak migrate_to_google bind @<mattermost-user-to-migrate> <fysiksektionen.se-address>`",
 	"migrate_to_keycloak":               "Usage: `/keycloak migrate_to_keycloak <create|bind|update>`",
-	"migrate_to_keycloak create":        "Usage: `/keycloak migrate_to_keycloak create ~<mattermost-user-to-migrate> <keycloak-email>`",
-	"migrate_to_keycloak bind":          "Usage: `/keycloak migrate_to_keycloak bind ~<mattermost-user-to-migrate> <keycloak-email>`",
-	"migrate_to_keycloak update":        "Usage: `/keycloak migrate_to_keycloak update ~<mattermost-user-to-migrate> [keycloak-email]`",
+	"migrate_to_keycloak create":        "Usage: `/keycloak migrate_to_keycloak create @<mattermost-user-to-migrate> <keycloak-email>`",
+	"migrate_to_keycloak bind":          "Usage: `/keycloak migrate_to_keycloak bind @<mattermost-user-to-migrate> <keycloak-email>`",
+	"migrate_to_keycloak update":        "Usage: `/keycloak migrate_to_keycloak update @<mattermost-user-to-migrate> [keycloak-email]`",
 }
 
 var keycloakSubcommandDescriptions map[string]string = map[string]string{
@@ -239,7 +239,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		}
 		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fmt.Sprintf("%s@fysiksektionen.se", fields[4]), keycloakUser.FirstName, keycloakUser.LastName, orgUnit, "")
 	case "create-external":
-		if len(fields) != 5 && len(fields) != 6 {
+		if len(fields) != 6 {
 			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google create-external"], "migrate_to_google create-external")
 			return response, nil
 		}
@@ -254,15 +254,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = err.Error()
 			return response, nil
 		}
-		orgUnit := ""
-		if len(fields) == 6 {
-			orgUnit, err = resolveGoogleOrgUnitKey(units, "external", fields[5])
-		} else {
-			orgUnit, err = resolveGoogleOrgUnitKeyFromConfiguredDefault(units, configuration.KeycloakMigrationGoogleExternalOrgUnit)
-			if err != nil || orgUnit == "" {
-				orgUnit, err = resolveGoogleOrgUnitKey(units, "external", "external")
-			}
-		}
+		orgUnit, err := resolveGoogleOrgUnitKey(units, "external", fields[5])
 		if err != nil {
 			response.Text = err.Error()
 			return response, nil
@@ -302,7 +294,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		response.Text = err.Error()
 		return response, nil
 	}
-	response.Text = fmt.Sprintf("Migrated ~%s to Google account %s. Their Mattermost account will be updated on first log-in.", user.Username, googleUser.PrimaryEmail)
+	response.Text = fmt.Sprintf("Migrated @%s to Google account %s. Their Mattermost account will be updated on first log-in.", user.Username, googleUser.PrimaryEmail)
 	if password != "" {
 		response.Text += fmt.Sprintf("\n\n Temporary password: `%s`", password)
 	}
@@ -822,10 +814,6 @@ func (p *Plugin) getKeycloakUserByQuery(parameter, value string, exact bool) (*k
 		return nil, fmt.Errorf("Keycloak account matching %s %q was not found", parameter, value)
 	}
 	return &users[0], nil
-}
-
-func (p *Plugin) updateKeycloakMigration(user *keycloakUserRepresentation, migrated bool, fromID, mattermostID, mattermostEmail string) error {
-	return p.updateKeycloakMigrationProfile(user, migrated, fromID, mattermostID, mattermostEmail, false, false, "", "", "")
 }
 
 func (p *Plugin) updateKeycloakMigrationProfile(user *keycloakUserRepresentation, migrated bool, fromID, mattermostID, mattermostEmail string, allowProfileUpdates, allowMattermostLogin bool, firstName, lastName, email string) error {

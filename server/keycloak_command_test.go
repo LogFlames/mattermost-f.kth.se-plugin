@@ -10,6 +10,10 @@ import (
 func TestKeycloakSubcommandHelp(t *testing.T) {
 	p, _ := newAdminTestPlugin(t)
 
+	if strings.Contains(keycloakMigrateUsage["migrate_to_google create-external"], "[org-unit-key]") {
+		t.Fatal("create-external org-unit key is still shown as optional")
+	}
+
 	tests := map[string]string{
 		"/keycloak new_user":                          "Create a domestic Keycloak account",
 		"/keycloak migrate_to_google":                 "Migrate a Mattermost account from Keycloak/SAML",
@@ -49,6 +53,17 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 			t.Fatalf("removed subcommand is still advertised:\n%s", response.Text)
 		}
 	})
+}
+
+func TestMigrationMattermostUserRequiresAtUsername(t *testing.T) {
+	p, _ := newAdminTestPlugin(t)
+
+	if _, err := p.migrationMattermostUser("~alice"); err == nil {
+		t.Fatal("~username reference was accepted")
+	}
+	if _, err := p.migrationMattermostUser("@"); err == nil {
+		t.Fatal("empty @username reference was accepted")
+	}
 }
 
 func TestResolveGoogleOrgUnitKey(t *testing.T) {
