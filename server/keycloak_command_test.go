@@ -16,7 +16,6 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 		"/keycloak migrate_to_google create-kth":      "Create a Google Workspace account for a KTH user",
 		"/keycloak migrate_to_google create-external": "Create a Google Workspace account for an external",
 		"/keycloak migrate_to_google bind":            "Bind an existing Google Workspace account",
-		"/keycloak migrate_to_google update":          "Update the bound Google Workspace account",
 		"/keycloak migrate_to_keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID",
 		"/keycloak migrate_to_keycloak create":        "Create a Keycloak account",
 		"/keycloak migrate_to_keycloak bind":          "Bind an existing Keycloak account",
@@ -37,4 +36,17 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("migrate_to_google update is removed", func(t *testing.T) {
+		response, appErr := p.keycloakCommand(&model.CommandArgs{
+			UserId:  "admin",
+			Command: "/keycloak migrate_to_google update",
+		})
+		if appErr != nil {
+			t.Fatalf("command returned AppError: %v", appErr)
+		}
+		if strings.Contains(response.Text, "migrate_to_google update") {
+			t.Fatalf("removed subcommand is still advertised:\n%s", response.Text)
+		}
+	})
 }

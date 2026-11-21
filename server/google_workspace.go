@@ -220,20 +220,6 @@ func (p *Plugin) createGoogleUser(serviceAccountKeyName, adminEmail, email, firs
 	return &user, nil
 }
 
-func (p *Plugin) updateGoogleUser(serviceAccountKeyName, adminEmail, currentEmail, primaryEmail, firstName, lastName string) error {
-	payload := map[string]interface{}{
-		"primaryEmail": primaryEmail,
-		"name": map[string]string{
-			"givenName":  firstName,
-			"familyName": lastName,
-		},
-	}
-	if err := p.googleRequest(serviceAccountKeyName, adminEmail, http.MethodPatch, googleDirectoryURL+"/users/"+url.PathEscape(currentEmail), payload, nil); err != nil {
-		return fmt.Errorf("update Google account: %w", err)
-	}
-	return nil
-}
-
 func (p *Plugin) listGoogleOrgUnits(serviceAccountKeyName, adminEmail string) ([]string, error) {
 	var units []string
 	pageToken := ""

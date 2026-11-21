@@ -98,12 +98,11 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 }
 
 var keycloakMigrateUsage map[string]string = map[string]string{
-	"migrate_to_google":                 "Usage: `/keycloak migrate_to_google list-org-units|create-kth|create-external|bind|update`",
+	"migrate_to_google":                 "Usage: `/keycloak migrate_to_google list-org-units|create-kth|create-external|bind`",
 	"migrate_to_google list-org-units":  "Usage: `/keycloak migrate_to_google list-org-units`",
 	"migrate_to_google create-kth":      "Usage: `/keycloak migrate_to_google create-kth ~<mattermost-user-to-migrate> <kth-id> <org-unit-#>`",
 	"migrate_to_google create-external": "Usage: `/keycloak migrate_to_google create-external ~<mattermost-user-to-migrate> <fysiksektionen.se-address> [org-unit]`",
 	"migrate_to_google bind":            "Usage: `/keycloak migrate_to_google bind ~<mattermost-user-to-migrate> <fysiksektionen.se-address>`",
-	"migrate_to_google update":          "Usage: `/keycloak migrate_to_google update ~<mattermost-user-to-migrate>`",
 	"migrate_to_keycloak":               "Usage: `/keycloak migrate_to_keycloak <create|bind|update>`",
 	"migrate_to_keycloak create":        "Usage: `/keycloak migrate_to_keycloak create ~<mattermost-user-to-migrate> <keycloak-email>`",
 	"migrate_to_keycloak bind":          "Usage: `/keycloak migrate_to_keycloak bind ~<mattermost-user-to-migrate> <keycloak-email>`",
@@ -117,7 +116,6 @@ var keycloakSubcommandDescriptions map[string]string = map[string]string{
 	"migrate_to_google create-kth":      "Create a Google Workspace account for a KTH user and migrate it to that account.",
 	"migrate_to_google create-external": "Create a Google Workspace account for an external fysiksektionen.se address and migrate it to that account.",
 	"migrate_to_google bind":            "Bind an existing Google Workspace account to a Mattermost account currently using Keycloak.",
-	"migrate_to_google update":          "Update the bound Google Workspace account from the migrated Keycloak account.",
 	"migrate_to_keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID to Keycloak/SAML.",
 	"migrate_to_keycloak create":        "Create a Keycloak account from the Mattermost user's Google profile and migrate it to that account.",
 	"migrate_to_keycloak bind":          "Bind an existing Keycloak account to a Mattermost account currently using Google.",
@@ -163,65 +161,13 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google"], "migrate_to_google")
 		return response, nil
 	}
+	if fields[2] != "create-kth" && fields[2] != "create-external" && fields[2] != "bind" {
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google"], "migrate_to_google")
+		return response, nil
+	}
 	user, err := p.migrationMattermostUser(fields[3])
 	if err != nil {
 		response.Text = err.Error()
-		return response, nil
-	}
-	if fields[2] == "update" {
-		if len(fields) != 4 {
-			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google update"], "migrate_to_google update")
-			return response, nil
-		}
-		if user.AuthService != model.ServiceOpenid {
-			response.Text = "Mattermost user is not currently authenticated with Google/OpenID."
-			return response, nil
-		}
-		if user.AuthData == nil || *user.AuthData == "" {
-			response.Text = "Mattermost user has no Google authentication data."
-			return response, nil
-		}
-		keycloakUser, err := p.findKeycloakUserByQuery("q", "mattermostID:"+*user.AuthData, false)
-		if err != nil {
-			response.Text = err.Error()
-			return response, nil
-		}
-		if keycloakUser == nil {
-			response.Text = fmt.Sprintf("Could not find the Keycloak migration account for Google ID %q.", *user.AuthData)
-			return response, nil
-		}
-		if keycloakMigrationAttribute(keycloakUser, "accountMigrated") != "true" {
-			response.Text = "Keycloak account has not been marked as migrated; use create or bind before update."
-			return response, nil
-		}
-		googleEmail := keycloakMigrationAttribute(keycloakUser, "mattermostEmail")
-		googleID := keycloakMigrationAttribute(keycloakUser, "mattermostID")
-		if googleEmail == "" || googleID == "" {
-			response.Text = "Keycloak account is missing migration email or Google ID attributes."
-			return response, nil
-		}
-		if googleID != *user.AuthData {
-			response.Text = "Google account ID does not match the Mattermost and Keycloak migration IDs."
-			return response, nil
-		}
-		googleUser, err := p.getGoogleUser(keycloakMigrationGoogleServiceAccountKey, p.getConfiguration().KeycloakMigrationGoogleAdminEmail, googleEmail)
-		if err != nil {
-			response.Text = err.Error()
-			return response, nil
-		}
-		if googleUser.ID != googleID {
-			response.Text = "Google account ID does not match the Keycloak migration mattermostID attribute."
-			return response, nil
-		}
-		if err = p.updateGoogleUser(keycloakMigrationGoogleServiceAccountKey, p.getConfiguration().KeycloakMigrationGoogleAdminEmail, googleUser.PrimaryEmail, keycloakUser.Email, keycloakUser.FirstName, keycloakUser.LastName); err != nil {
-			response.Text = err.Error()
-			return response, nil
-		}
-		if err = p.updateKeycloakMigrationProfile(keycloakUser, true, keycloakMigrationAttribute(keycloakUser, "migratedFromID"), googleID, googleEmail, false, false, keycloakUser.FirstName, keycloakUser.LastName, keycloakUser.Email); err != nil {
-			response.Text = err.Error()
-			return response, nil
-		}
-		response.Text = fmt.Sprintf("Updated Google account %s from Keycloak account %s.", googleUser.PrimaryEmail, keycloakUser.Username)
 		return response, nil
 	}
 	if user.AuthData == nil || *user.AuthData == "" {
@@ -252,7 +198,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		return response, nil
 	}
 	if keycloakMigrationAttribute(keycloakUser, "accountMigrated") == "true" {
-		response.Text = "Keycloak account is already marked as migrated; use update instead."
+		response.Text = "Keycloak account is already marked as migrated."
 		return response, nil
 	}
 	if keycloakMigrationAttribute(keycloakUser, "mattermostEmail") != "" {
