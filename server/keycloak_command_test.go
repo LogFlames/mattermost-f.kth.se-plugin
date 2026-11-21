@@ -13,7 +13,7 @@ import (
 func TestKeycloakSubcommandHelp(t *testing.T) {
 	p, _ := newAdminTestPlugin(t)
 
-	if got := keycloakMigrateUsage["migrate_to_keycloak"]; got != "Usage: `/keycloak migrate_to_keycloak create|bind|update`" {
+	if got := keycloakMigrateUsage["migrate_to_keycloak"]; got != "Usage: `/keycloak migrate_to_keycloak prep|create|bind|update`" {
 		t.Fatalf("unexpected migrate_to_keycloak usage: %q", got)
 	}
 
@@ -25,6 +25,7 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 		"/keycloak enable":                            "Allow a Mattermost user",
 		"/keycloak disable":                           "Prevent a Mattermost user",
 		"/keycloak new_user":                          "Create a domestic Keycloak account",
+		"/keycloak reset_password":                    "Generate a new temporary password",
 		"/keycloak migrate_to_google":                 "Migrate a Mattermost account from Keycloak/SAML",
 		"/keycloak migrate_to_google create-kth":      "Create a KTH user's Google Workspace account",
 		"/keycloak migrate_to_google create-external": "Create an external Google Workspace account",
@@ -34,6 +35,7 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 		"/keycloak migrate_to_keycloak create":        "Create a temporary-password Keycloak account",
 		"/keycloak migrate_to_keycloak bind":          "Bind an existing Keycloak account",
 		"/keycloak migrate_to_keycloak update":        "Synchronize a previously created or bound Keycloak account",
+		"/keycloak migrate_to_keycloak prep":          "Create a Mattermost user from an existing Google account",
 	}
 
 	for command, description := range tests {
@@ -73,6 +75,52 @@ func TestMigrationMattermostUserRequiresAtUsername(t *testing.T) {
 	}
 	if _, err := p.migrationMattermostUser("@"); err == nil {
 		t.Fatal("empty @username reference was accepted")
+	}
+}
+
+func TestKeycloakResetPassword(t *testing.T) {
+	p, api := newAdminTestPlugin(t)
+	p.setConfiguration(&configuration{KeycloakClientID: "test", KeycloakClientSecret: "test"})
+
+	existing := api.users[1]
+	existing.AuthData = model.NewPointer("keycloak123")
+
+	var gotCredential keycloakCredential
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/realms/mattermost/protocol/openid-connect/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"test-token"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/mattermost/users":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"keycloak123","username":"existing@example.org","attributes":{"mattermostUsername":["existing"]}}]`))
+		case r.Method == http.MethodPut && r.URL.Path == "/admin/realms/mattermost/users/keycloak123/reset-password":
+			if err := json.NewDecoder(r.Body).Decode(&gotCredential); err != nil {
+				t.Fatalf("decode temporary password: %v", err)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	oldURL := keycloakURL
+	keycloakURL = server.URL
+	t.Cleanup(func() { keycloakURL = oldURL })
+
+	response, appErr := p.keycloakCommand(&model.CommandArgs{
+		UserId:  "admin",
+		Command: "/keycloak reset_password @existing",
+	})
+	if appErr != nil {
+		t.Fatalf("command returned AppError: %v", appErr)
+	}
+	if !strings.Contains(response.Text, "Temporary password:") || !strings.Contains(response.Text, "required to change") {
+		t.Fatalf("unexpected reset response: %s", response.Text)
+	}
+	if gotCredential.Type != "password" || !gotCredential.Temporary || gotCredential.Value == "" {
+		t.Fatalf("invalid temporary password credential: %+v", gotCredential)
 	}
 }
 
