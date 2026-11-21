@@ -226,6 +226,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google create-kth"], "migrate_to_google create-kth")
 			return response, nil
 		}
+		password = randomPassword(16)
 		configuration := p.getConfiguration()
 		units, resolveErr := p.listGoogleOrgUnits(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail)
 		if resolveErr != nil {
@@ -237,7 +238,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = resolveErr.Error()
 			return response, nil
 		}
-		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fmt.Sprintf("%s@fysiksektionen.se", fields[4]), keycloakUser.FirstName, keycloakUser.LastName, orgUnit, "")
+		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fmt.Sprintf("%s@fysiksektionen.se", fields[4]), keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password)
 	case "create-external":
 		if len(fields) != 6 {
 			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google create-external"], "migrate_to_google create-external")

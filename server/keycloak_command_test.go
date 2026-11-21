@@ -66,6 +66,19 @@ func TestMigrationMattermostUserRequiresAtUsername(t *testing.T) {
 	}
 }
 
+func TestRandomPasswordMeetsGoogleCharacterClasses(t *testing.T) {
+	password := randomPassword(16)
+	if len(password) != 16 {
+		t.Fatalf("password length is %d, expected 16", len(password))
+	}
+	if !strings.ContainsAny(password, "ABCDEFGHJKLMNPQRSTUVWXYZ") ||
+		!strings.ContainsAny(password, "abcdefghijkmnopqrstuvwxyz") ||
+		!strings.ContainsAny(password, "23456789") ||
+		!strings.ContainsAny(password, "!@#$%^&*") {
+		t.Fatalf("password does not contain all required character classes")
+	}
+}
+
 func TestResolveGoogleOrgUnitKey(t *testing.T) {
 	units := []string{
 		"/Alumner",

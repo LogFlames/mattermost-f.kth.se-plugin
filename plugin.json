@@ -356,12 +356,6 @@
                         "help_text": "Administrator email address to impersonate during account migration."
                     },
                     {
-                        "key": "KeycloakMigrationGoogleExternalOrgUnit",
-                        "display_name": "Keycloak Account Migration: Google external users org unit",
-                        "type": "text",
-                        "help_text": "Default Google org unit path for external users, for example /External."
-                    },
-                    {
                         "key": "KeycloakMigrationGoogleSendEphemeral",
                         "display_name": "Keycloak Account Migration: Notify users in Mattermost",
                         "type": "bool",

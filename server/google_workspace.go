@@ -374,12 +374,28 @@ func googleOrgUnitKeys(units []string) []string {
 }
 
 func randomPassword(length int) string {
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*"
+	if length < 4 {
+		length = 4
+	}
+
+	const (
+		upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+		lower   = "abcdefghijkmnopqrstuvwxyz"
+		digits  = "23456789"
+		symbols = "!@#$%^&*"
+	)
+
+	groups := []string{upper, lower, digits, symbols}
+	alphabet := upper + lower + digits + symbols
 	password := make([]byte, length)
 	random := make([]byte, length)
 	_, _ = rand.Read(random)
+
 	for i := range password {
 		password[i] = alphabet[int(random[i])%len(alphabet)]
+	}
+	for i, group := range groups {
+		password[i] = group[int(random[i])%len(group)]
 	}
 	return string(password)
 }
