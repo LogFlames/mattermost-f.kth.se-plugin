@@ -238,13 +238,14 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = resolveErr.Error()
 			return response, nil
 		}
-		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fmt.Sprintf("%s@fysiksektionen.se", fields[4]), keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password)
+		googleEmail := fmt.Sprintf("%s@fysiksektionen.se", fields[4])
+		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, googleEmail, keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password, keycloakUser.Email)
 	case "create-external":
 		if len(fields) != 6 {
 			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google create-external"], "migrate_to_google create-external")
 			return response, nil
 		}
-		if err = validateKeycloakEmail(fields[4]); err != nil {
+		if err = validateFysiksektionenEmail(fields[4]); err != nil {
 			response.Text = err.Error()
 			return response, nil
 		}
@@ -260,10 +261,14 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = err.Error()
 			return response, nil
 		}
-		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[4], keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password)
+		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[4], keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password, keycloakUser.Email)
 	case "bind":
 		if len(fields) != 5 {
 			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google bind"], "migrate_to_google bind")
+			return response, nil
+		}
+		if err = validateFysiksektionenEmail(fields[4]); err != nil {
+			response.Text = err.Error()
 			return response, nil
 		}
 		configuration := p.getConfiguration()
@@ -278,6 +283,16 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 	if err != nil {
 		response.Text = err.Error()
 		return response, nil
+	}
+	if fields[2] == "bind" {
+		configuration := p.getConfiguration()
+		alternativeEmail := alternativeGoogleEmail(fields[4], keycloakUser.Email)
+		if alternativeEmail != "" {
+			if err = p.updateGoogleUserAlternativeEmail(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, googleUser.ID, alternativeEmail); err != nil {
+				response.Text = err.Error()
+				return response, nil
+			}
+		}
 	}
 	if err = p.checkGoogleMigrationConflicts(user, googleUser.ID); err != nil {
 		response.Text = err.Error()
@@ -617,6 +632,16 @@ func validateKeycloakEmail(email string) error {
 	parsedEmail, err := mail.ParseAddress(email)
 	if err != nil || parsedEmail.Address != email {
 		return fmt.Errorf("Invalid e-mail address %q. Use an address such as name@example.com.", email)
+	}
+	return nil
+}
+
+func validateFysiksektionenEmail(email string) error {
+	if err := validateKeycloakEmail(email); err != nil {
+		return err
+	}
+	if !strings.HasSuffix(strings.ToLower(email), "@fysiksektionen.se") {
+		return fmt.Errorf("Invalid @fysiksektionen.se address %q. Include the @fysiksektionen.se suffix, for example name@fysiksektionen.se.", email)
 	}
 	return nil
 }

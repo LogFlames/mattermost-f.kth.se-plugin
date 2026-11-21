@@ -99,6 +99,30 @@ func TestKeycloakBooleanAttributes(t *testing.T) {
 	}
 }
 
+func TestAlternativeGoogleEmail(t *testing.T) {
+	if got := alternativeGoogleEmail("alice@fysiksektionen.se", "alice@example.com"); got != "alice@example.com" {
+		t.Fatalf("alternative email = %q, expected Keycloak email", got)
+	}
+	if got := alternativeGoogleEmail("alice@fysiksektionen.se", "ALICE@FYSIKSEKTIONEN.SE"); got != "" {
+		t.Fatalf("matching primary email was returned as alternative: %q", got)
+	}
+	if got := alternativeGoogleEmail("alice@fysiksektionen.se", ""); got != "" {
+		t.Fatalf("empty alternative email was returned: %q", got)
+	}
+}
+
+func TestValidateFysiksektionenEmail(t *testing.T) {
+	if err := validateFysiksektionenEmail("alice@fysiksektionen.se"); err != nil {
+		t.Fatalf("valid @fysiksektionen.se address rejected: %v", err)
+	}
+	if err := validateFysiksektionenEmail("alice"); err == nil {
+		t.Fatal("address without @fysiksektionen.se suffix was accepted")
+	}
+	if err := validateFysiksektionenEmail("alice@example.com"); err == nil {
+		t.Fatal("address with wrong domain was accepted")
+	}
+}
+
 func TestResolveGoogleOrgUnitKey(t *testing.T) {
 	units := []string{
 		"/Alumner",

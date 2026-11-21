@@ -195,8 +195,8 @@ func (p *Plugin) getGoogleUser(serviceAccountKeyName, adminEmail, email string) 
 	return &user, nil
 }
 
-func (p *Plugin) createGoogleUser(serviceAccountKeyName, adminEmail, email, firstName, lastName, orgUnit, password string) (*googleDirectoryUser, error) {
-	if err := validateKeycloakEmail(email); err != nil {
+func (p *Plugin) createGoogleUser(serviceAccountKeyName, adminEmail, email, firstName, lastName, orgUnit, password string, alternativeEmails ...string) (*googleDirectoryUser, error) {
+	if err := validateFysiksektionenEmail(email); err != nil {
 		return nil, err
 	}
 	if _, err := p.getGoogleUser(serviceAccountKeyName, adminEmail, email); err == nil {
@@ -217,11 +217,44 @@ func (p *Plugin) createGoogleUser(serviceAccountKeyName, adminEmail, email, firs
 	if orgUnit != "" {
 		payload["orgUnitPath"] = orgUnit
 	}
+	if alternativeEmail := alternativeGoogleEmail(email, alternativeEmails...); alternativeEmail != "" {
+		payload["emails"] = []map[string]interface{}{{
+			"address": alternativeEmail,
+			"type":    "other",
+		}}
+	}
 	var user googleDirectoryUser
 	if err := p.googleRequest(serviceAccountKeyName, adminEmail, http.MethodPost, googleDirectoryURL+"/users", payload, &user); err != nil {
 		return nil, fmt.Errorf("create Google account: %w", err)
 	}
 	return &user, nil
+}
+
+func alternativeGoogleEmail(primaryEmail string, alternativeEmails ...string) string {
+	for _, email := range alternativeEmails {
+		email = strings.TrimSpace(email)
+		if email != "" && !strings.EqualFold(email, primaryEmail) {
+			return email
+		}
+	}
+	return ""
+}
+
+func (p *Plugin) updateGoogleUserAlternativeEmail(serviceAccountKeyName, adminEmail, userID, alternativeEmail string) error {
+	alternativeEmail = strings.TrimSpace(alternativeEmail)
+	if alternativeEmail == "" {
+		return nil
+	}
+	payload := map[string]interface{}{
+		"emails": []map[string]interface{}{{
+			"address": alternativeEmail,
+			"type":    "other",
+		}},
+	}
+	if err := p.googleRequest(serviceAccountKeyName, adminEmail, http.MethodPatch, googleDirectoryURL+"/users/"+url.PathEscape(userID), payload, nil); err != nil {
+		return fmt.Errorf("update Google account alternative email: %w", err)
+	}
+	return nil
 }
 
 func (p *Plugin) listGoogleOrgUnits(serviceAccountKeyName, adminEmail string) ([]string, error) {
