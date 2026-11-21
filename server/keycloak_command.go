@@ -344,7 +344,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		response.Text = err.Error()
 		return response, nil
 	}
-	if err = p.checkKeycloakMigrationConflicts(googleUser.ID, googleUser.PrimaryEmail); err != nil {
+	if err = p.checkKeycloakMigrationConflicts(googleUser.ID, googleUser.PrimaryEmail, keycloakUser.ID); err != nil {
 		response.Text = err.Error()
 		return response, nil
 	}
@@ -456,7 +456,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 				err = fmt.Errorf("Keycloak account is already marked as migrated; use update instead")
 			} else if keycloakMigrationAttribute(keycloakUser, "mattermostEmail") != "" {
 				err = fmt.Errorf("Keycloak account already has a Mattermost email migration attribute")
-			} else if err = p.checkGoogleMigrationKeycloakConflicts(googleUser.ID, googleUser.PrimaryEmail); err == nil {
+			} else if err = p.checkGoogleMigrationKeycloakConflicts(googleUser.ID, googleUser.PrimaryEmail, keycloakUser.ID); err == nil {
 				oldMattermostID := keycloakMigrationAttribute(keycloakUser, "mattermostID")
 				if !regexp.MustCompile(`^keycloak[0-9]+$`).MatchString(oldMattermostID) {
 					err = fmt.Errorf("Keycloak account is missing or has invalid mattermostID migration data")
@@ -632,39 +632,45 @@ func (p *Plugin) checkGoogleMigrationConflicts(user *model.User, googleID string
 	return nil
 }
 
-func (p *Plugin) checkKeycloakMigrationConflicts(googleID, googleEmail string) error {
+func (p *Plugin) checkKeycloakMigrationConflicts(googleID, googleEmail string, allowedKeycloakUserID ...string) error {
+	isAllowed := func(user *keycloakUserRepresentation) bool {
+		return user != nil && len(allowedKeycloakUserID) > 0 && user.ID == allowedKeycloakUserID[0]
+	}
 	if user, err := p.findKeycloakUserByQuery("q", "mattermostID:"+googleID, false); err != nil {
 		return err
-	} else if user != nil {
+	} else if user != nil && !isAllowed(user) {
 		return fmt.Errorf("Keycloak account conflict: Google ID %q is already a mattermostID", googleID)
 	}
 	if user, err := p.findKeycloakUserByQuery("email", googleEmail, true); err != nil {
 		return err
-	} else if user != nil {
+	} else if user != nil && !isAllowed(user) {
 		return fmt.Errorf("Keycloak account conflict: Google e-mail %q is already a Keycloak account e-mail", googleEmail)
 	}
 	if user, err := p.findKeycloakUserByQuery("q", "mattermostEmail:"+googleEmail, false); err != nil {
 		return err
-	} else if user != nil {
+	} else if user != nil && !isAllowed(user) {
 		return fmt.Errorf("Keycloak account conflict: Google e-mail %q is already a Keycloak mattermostEmail", googleEmail)
 	}
 	return nil
 }
 
-func (p *Plugin) checkGoogleMigrationKeycloakConflicts(googleID, googleEmail string) error {
+func (p *Plugin) checkGoogleMigrationKeycloakConflicts(googleID, googleEmail string, allowedKeycloakUserID ...string) error {
+	isAllowed := func(user *keycloakUserRepresentation) bool {
+		return user != nil && len(allowedKeycloakUserID) > 0 && user.ID == allowedKeycloakUserID[0]
+	}
 	if user, err := p.findKeycloakUserByQuery("q", "mattermostID:"+googleID, false); err != nil {
 		return err
-	} else if user != nil {
+	} else if user != nil && !isAllowed(user) {
 		return fmt.Errorf("Keycloak account conflict: Google ID %q is already a mattermostID", googleID)
 	}
 	if user, err := p.findKeycloakUserByQuery("email", googleEmail, true); err != nil {
 		return err
-	} else if user != nil {
+	} else if user != nil && !isAllowed(user) {
 		return fmt.Errorf("Keycloak account conflict: Google e-mail %q is already a Keycloak account e-mail", googleEmail)
 	}
 	if user, err := p.findKeycloakUserByQuery("q", "mattermostEmail:"+googleEmail, false); err != nil {
 		return err
-	} else if user != nil {
+	} else if user != nil && !isAllowed(user) {
 		return fmt.Errorf("Keycloak account conflict: Google e-mail %q is already a Keycloak mattermostEmail", googleEmail)
 	}
 	return nil

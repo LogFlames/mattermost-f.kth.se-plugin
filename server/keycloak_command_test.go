@@ -167,6 +167,36 @@ func TestKeycloakBooleanAttributes(t *testing.T) {
 	}
 }
 
+func TestGoogleMigrationKeycloakConflictsAllowBindTarget(t *testing.T) {
+	p, _ := newAdminTestPlugin(t)
+	p.setConfiguration(&configuration{KeycloakClientID: "test", KeycloakClientSecret: "test"})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/realms/mattermost/protocol/openid-connect/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"test-token"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/mattermost/users":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"bind-target","username":"alice@example.org","attributes":{"mattermostID":["google123"],"mattermostEmail":["alice@example.org"]}}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	oldURL := keycloakURL
+	keycloakURL = server.URL
+	t.Cleanup(func() { keycloakURL = oldURL })
+
+	if err := p.checkGoogleMigrationKeycloakConflicts("google123", "alice@example.org", "bind-target"); err != nil {
+		t.Fatalf("bind target was reported as a conflict: %v", err)
+	}
+	if err := p.checkGoogleMigrationKeycloakConflicts("google123", "alice@example.org"); err == nil {
+		t.Fatal("another Keycloak account with the Google ID was not reported as a conflict")
+	}
+}
+
 func TestRenderKeycloakMigrationText(t *testing.T) {
 	got := renderKeycloakMigrationText(
 		"Hi @{{username}}, account {{account}}, password {{password}}",
