@@ -59,6 +59,10 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 	case "migrate_to_keycloak":
 		return p.migrateGoogleUserToKeycloak(args, fields)
 	case "new_user":
+		if len(fields) == 2 {
+			response.Text = keycloakUsageWithDescriptions(keycloakNewUserUsage, "new_user")
+			return response, nil
+		}
 		if len(fields) != 8 {
 			response.Text = keycloakNewUserUsage
 			return response, nil
@@ -106,15 +110,39 @@ var keycloakMigrateUsage map[string]string = map[string]string{
 	"migrate_to_keycloak update":        "Usage: `/keycloak migrate_to_keycloak update ~<mattermost-user-to-migrate> <keycloak-email>`",
 }
 
+var keycloakSubcommandDescriptions map[string]string = map[string]string{
+	"new_user":                          "Create a domestic Keycloak account for a Mattermost username, with a temporary password.",
+	"migrate_to_google":                 "Migrate a Mattermost account from Keycloak/SAML to Google Workspace/OpenID.",
+	"migrate_to_google list-org-units":  "List Google Workspace organization units and their aliases.",
+	"migrate_to_google create-kth":      "Create a Google Workspace account for a KTH user and migrate it to that account.",
+	"migrate_to_google create-external": "Create a Google Workspace account for an external fysiksektionen.se address and migrate it to that account.",
+	"migrate_to_google bind":            "Bind an existing Google Workspace account to a Mattermost account currently using Keycloak.",
+	"migrate_to_google update":          "Update the bound Google Workspace account from the migrated Keycloak account.",
+	"migrate_to_keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID to Keycloak/SAML.",
+	"migrate_to_keycloak create":        "Create a Keycloak account from the Mattermost user's Google profile and migrate it to that account.",
+	"migrate_to_keycloak bind":          "Bind an existing Keycloak account to a Mattermost account currently using Google.",
+	"migrate_to_keycloak update":        "Synchronize the bound Keycloak account from the Mattermost user's Google profile.",
+}
+
+func keycloakUsageWithDescriptions(usage, subcommand string) string {
+	if description := keycloakSubcommandDescriptions[subcommand]; description != "" {
+		return usage + "\n" + description
+	}
+	return usage
+}
+
 func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []string) (*model.CommandResponse, *model.AppError) {
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
 	if len(fields) < 3 {
-		response.Text = keycloakMigrateUsage["migrate_to_google"]
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google"], "migrate_to_google")
 		return response, nil
 	}
 	if fields[2] == "list-org-units" {
 		if len(fields) != 3 {
-			response.Text = keycloakMigrateUsage["migrate_to_google list-org-units"]
+			response.Text = keycloakUsageWithDescriptions(
+				keycloakMigrateUsage["migrate_to_google list-org-units"],
+				"migrate_to_google list-org-units",
+			)
 			return response, nil
 		}
 		configuration := p.getConfiguration()
@@ -126,14 +154,23 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		response.Text = strings.Join(units, "\n")
 		return response, nil
 	}
-	user, err := p.migrationMattermostUser(fields[2])
+	if len(fields) == 3 {
+		usageKey := "migrate_to_google " + fields[2]
+		if usage := keycloakMigrateUsage[usageKey]; usage != "" {
+			response.Text = keycloakUsageWithDescriptions(usage, usageKey)
+			return response, nil
+		}
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google"], "migrate_to_google")
+		return response, nil
+	}
+	user, err := p.migrationMattermostUser(fields[3])
 	if err != nil {
 		response.Text = err.Error()
 		return response, nil
 	}
 	if fields[2] == "update" {
-		if len(fields) != 3 {
-			response.Text = keycloakMigrateUsage["migrate_to_google update"]
+		if len(fields) != 4 {
+			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google update"], "migrate_to_google update")
 			return response, nil
 		}
 		if user.AuthService != model.ServiceOpenid {
@@ -208,7 +245,10 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 	var googleUser *googleDirectoryUser
 	var password string
 	if len(fields) < 4 {
-		response.Text = keycloakMigrateUsage["migrate_to_google "+fields[2]]
+		response.Text = keycloakUsageWithDescriptions(
+			keycloakMigrateUsage["migrate_to_google "+fields[2]],
+			"migrate_to_google "+fields[2],
+		)
 		return response, nil
 	}
 	if keycloakMigrationAttribute(keycloakUser, "accountMigrated") == "true" {
@@ -221,29 +261,29 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 	}
 	switch fields[2] {
 	case "create-kth":
-		if len(fields) != 5 {
-			response.Text = keycloakMigrateUsage["migrate_to_google create-kth"]
+		if len(fields) != 6 {
+			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google create-kth"], "migrate_to_google create-kth")
 			return response, nil
 		}
 		configuration := p.getConfiguration()
-		orgUnit, resolveErr := p.resolveGoogleOrgUnit(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[4])
+		orgUnit, resolveErr := p.resolveGoogleOrgUnit(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[5])
 		if resolveErr != nil {
 			response.Text = resolveErr.Error()
 			return response, nil
 		}
-		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fmt.Sprintf("%s@fysiksektionen.se", fields[3]), keycloakUser.FirstName, keycloakUser.LastName, orgUnit, "")
+		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fmt.Sprintf("%s@fysiksektionen.se", fields[4]), keycloakUser.FirstName, keycloakUser.LastName, orgUnit, "")
 	case "create-external":
-		if len(fields) != 4 && len(fields) != 5 {
-			response.Text = keycloakMigrateUsage["migrate_to_google create-external"]
+		if len(fields) != 5 && len(fields) != 6 {
+			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google create-external"], "migrate_to_google create-external")
 			return response, nil
 		}
-		if err = validateKeycloakEmail(fields[3]); err != nil {
+		if err = validateKeycloakEmail(fields[4]); err != nil {
 			response.Text = err.Error()
 			return response, nil
 		}
 		orgUnit := p.getConfiguration().KeycloakMigrationGoogleExternalOrgUnit
-		if len(fields) == 5 {
-			orgUnit = fields[4]
+		if len(fields) == 6 {
+			orgUnit = fields[5]
 		}
 		password = randomPassword(16)
 		configuration := p.getConfiguration()
@@ -252,16 +292,16 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			response.Text = err.Error()
 			return response, nil
 		}
-		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[3], keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password)
+		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[4], keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password)
 	case "bind":
-		if len(fields) != 4 {
-			response.Text = keycloakMigrateUsage["migrate_to_google bind"]
+		if len(fields) != 5 {
+			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google bind"], "migrate_to_google bind")
 			return response, nil
 		}
 		configuration := p.getConfiguration()
-		googleUser, err = p.getGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[3])
+		googleUser, err = p.getGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[4])
 		if err != nil {
-			err = fmt.Errorf("Google account %q does not exist; use create-kth or create-external first", fields[3])
+			err = fmt.Errorf("Google account %q does not exist; use create-kth or create-external first", fields[4])
 		}
 	default:
 		response.Text = keycloakMigrateUsage["migrate_to_google"]
@@ -299,11 +339,31 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 
 func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []string) (*model.CommandResponse, *model.AppError) {
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
-	if len(fields) < 4 {
-		response.Text = keycloakMigrateUsage["migrate_to_keycloak"]
+	if len(fields) < 3 {
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak"], "migrate_to_keycloak")
 		return response, nil
 	}
-	user, err := p.migrationMattermostUser(fields[2])
+	if len(fields) == 3 {
+		usageKey := "migrate_to_keycloak " + fields[2]
+		if usage := keycloakMigrateUsage[usageKey]; usage != "" {
+			response.Text = keycloakUsageWithDescriptions(usage, usageKey)
+			return response, nil
+		}
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak"], "migrate_to_keycloak")
+		return response, nil
+	}
+	if len(fields) < 5 {
+		if len(fields) >= 3 {
+			usageKey := "migrate_to_keycloak " + fields[2]
+			if usage := keycloakMigrateUsage[usageKey]; usage != "" {
+				response.Text = keycloakUsageWithDescriptions(usage, usageKey)
+				return response, nil
+			}
+		}
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak"], "migrate_to_keycloak")
+		return response, nil
+	}
+	user, err := p.migrationMattermostUser(fields[3])
 	if err != nil {
 		response.Text = err.Error()
 		return response, nil
@@ -332,12 +392,12 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 			return response, nil
 		}
 	}
-	keycloakEmail := fields[3]
+	keycloakEmail := fields[4]
 	var keycloakUser *keycloakUserRepresentation
 	switch fields[2] {
 	case "create":
-		if len(fields) != 4 {
-			response.Text = keycloakMigrateUsage["migrate_to_keycloak create"]
+		if len(fields) != 5 {
+			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak create"], "migrate_to_keycloak create")
 			return response, nil
 		}
 		if err = validateKeycloakEmail(keycloakEmail); err == nil {
@@ -350,8 +410,11 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 			keycloakUser, err = p.getKeycloakUser(keycloakEmail)
 		}
 	case "bind", "update":
-		if len(fields) != 4 {
-			response.Text = keycloakMigrateUsage["migrate_to_keycloak "+fields[2]]
+		if len(fields) != 5 {
+			response.Text = keycloakUsageWithDescriptions(
+				keycloakMigrateUsage["migrate_to_keycloak "+fields[2]],
+				"migrate_to_keycloak "+fields[2],
+			)
 			return response, nil
 		}
 		keycloakUser, err = p.getKeycloakUser(keycloakEmail)
