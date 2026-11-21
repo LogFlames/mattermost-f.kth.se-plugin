@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -19,6 +22,8 @@ func TestKeycloakSubcommandHelp(t *testing.T) {
 	}
 
 	tests := map[string]string{
+		"/keycloak enable":                            "Allow a Mattermost user",
+		"/keycloak disable":                           "Prevent a Mattermost user",
 		"/keycloak new_user":                          "Create a domestic Keycloak account",
 		"/keycloak migrate_to_google":                 "Migrate a Mattermost account from Keycloak/SAML",
 		"/keycloak migrate_to_google create-kth":      "Create a KTH user's Google Workspace account",
@@ -67,6 +72,65 @@ func TestMigrationMattermostUserRequiresAtUsername(t *testing.T) {
 	}
 	if _, err := p.migrationMattermostUser("@"); err == nil {
 		t.Fatal("empty @username reference was accepted")
+	}
+}
+
+func TestKeycloakEnableDisableMattermostLogin(t *testing.T) {
+	p, api := newAdminTestPlugin(t)
+	p.setConfiguration(&configuration{KeycloakClientID: "test", KeycloakClientSecret: "test"})
+
+	existing := api.users[1]
+	existing.AuthData = model.NewPointer("keycloak123")
+
+	var gotAttributes map[string][]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/realms/mattermost/protocol/openid-connect/token":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"test-token"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/admin/realms/mattermost/users":
+			if r.URL.Query().Get("q") != "mattermostID:keycloak123" {
+				t.Fatalf("unexpected Keycloak search query: %q", r.URL.RawQuery)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"keycloak123","username":"existing@example.org","attributes":{"mattermostUsername":["existing"]}}]`))
+		case r.Method == http.MethodPut && r.URL.Path == "/admin/realms/mattermost/users/keycloak123":
+			var user keycloakUserRepresentation
+			if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+				t.Fatalf("decode Keycloak update: %v", err)
+			}
+			gotAttributes = user.Attributes
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	oldURL := keycloakURL
+	keycloakURL = server.URL
+	t.Cleanup(func() { keycloakURL = oldURL })
+
+	for _, test := range []struct {
+		command string
+		want    string
+	}{
+		{command: "/keycloak enable @existing", want: "True"},
+		{command: "/keycloak disable @existing", want: "False"},
+	} {
+		response, appErr := p.keycloakCommand(&model.CommandArgs{
+			UserId:  "admin",
+			Command: test.command,
+		})
+		if appErr != nil {
+			t.Fatalf("%s returned AppError: %v", test.command, appErr)
+		}
+		if !strings.Contains(response.Text, "Mattermost login") {
+			t.Fatalf("unexpected response for %s: %s", test.command, response.Text)
+		}
+		if got := keycloakMigrationAttribute(&keycloakUserRepresentation{Attributes: gotAttributes}, "allowMattermostLogin"); got != test.want {
+			t.Fatalf("%s set allowMattermostLogin to %q, want %q", test.command, got, test.want)
+		}
 	}
 }
 

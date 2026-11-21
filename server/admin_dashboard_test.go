@@ -57,7 +57,12 @@ func (a *adminTestAPI) GetChannelsForTeamForUser(string, string, bool) ([]*model
 func (a *adminTestAPI) GetUserByEmail(string) (*model.User, *model.AppError) {
 	return nil, testAppError(http.StatusNotFound)
 }
-func (a *adminTestAPI) GetUserByUsername(string) (*model.User, *model.AppError) {
+func (a *adminTestAPI) GetUserByUsername(username string) (*model.User, *model.AppError) {
+	for _, user := range a.users {
+		if user != nil && user.Username == username {
+			return user, nil
+		}
+	}
 	return nil, testAppError(http.StatusNotFound)
 }
 func (a *adminTestAPI) AddChannelMember(channelID, userID string) (*model.ChannelMember, *model.AppError) {
