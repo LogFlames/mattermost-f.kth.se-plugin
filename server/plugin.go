@@ -212,9 +212,9 @@ func (p *Plugin) OnActivate() error {
 		return err
 	}
 	if err := p.API.RegisterCommand(&model.Command{
-		Trigger:          "keycloak",
-		AutoComplete:     true,
-		AutoCompleteHint: "enable|disable|reset_password|new_user|migrate_to_google|migrate_to_keycloak",
+		Trigger:      "keycloak",
+		AutoComplete: true,
+		// AutoCompleteHint: "enable|disable|reset_password|new_user|migrate_to_google|migrate_to_keycloak",
 		AutoCompleteDesc: "Manage or migrate a Keycloak account",
 	}); err != nil {
 		return err
