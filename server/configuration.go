@@ -44,6 +44,8 @@ type configuration struct {
 	KeycloakClientSecret                      string
 	KeycloakMigrationGoogleServiceAccountKey  string
 	KeycloakMigrationGoogleAdminEmail         string
+	KeycloakMigrationDMText                   string
+	KeycloakMigrationEmailText                string
 	KeycloakMigrationKTHDMText                string
 	KeycloakMigrationKTHEmailText             string
 	KeycloakMigrationExternalDMText           string

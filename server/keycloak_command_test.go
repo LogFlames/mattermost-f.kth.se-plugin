@@ -10,6 +10,10 @@ import (
 func TestKeycloakSubcommandHelp(t *testing.T) {
 	p, _ := newAdminTestPlugin(t)
 
+	if got := keycloakMigrateUsage["migrate_to_keycloak"]; got != "Usage: `/keycloak migrate_to_keycloak create|bind|update`" {
+		t.Fatalf("unexpected migrate_to_keycloak usage: %q", got)
+	}
+
 	if strings.Contains(keycloakMigrateUsage["migrate_to_google create-external"], "[org-unit-key]") {
 		t.Fatal("create-external org-unit key is still shown as optional")
 	}

@@ -103,7 +103,7 @@ var keycloakMigrateUsage map[string]string = map[string]string{
 	"migrate_to_google create-kth":      "Usage: `/keycloak migrate_to_google create-kth @<mattermost-user-to-migrate> <kth-id> <org-unit-key>`",
 	"migrate_to_google create-external": "Usage: `/keycloak migrate_to_google create-external @<mattermost-user-to-migrate> <fysiksektionen.se-address> <org-unit-key>`",
 	"migrate_to_google bind":            "Usage: `/keycloak migrate_to_google bind @<mattermost-user-to-migrate> <fysiksektionen.se-address>`",
-	"migrate_to_keycloak":               "Usage: `/keycloak migrate_to_keycloak <create|bind|update>`",
+	"migrate_to_keycloak":               "Usage: `/keycloak migrate_to_keycloak create|bind|update`",
 	"migrate_to_keycloak create":        "Usage: `/keycloak migrate_to_keycloak create @<mattermost-user-to-migrate> <keycloak-email>`",
 	"migrate_to_keycloak bind":          "Usage: `/keycloak migrate_to_keycloak bind @<mattermost-user-to-migrate> <keycloak-email>`",
 	"migrate_to_keycloak update":        "Usage: `/keycloak migrate_to_keycloak update @<mattermost-user-to-migrate> [keycloak-email]`",
@@ -475,8 +475,8 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 }
 
 const (
-	defaultKeycloakMigrationDMText    = "Example DM text:\n\n```text\nHi @{{username}},\n\nYour account has successfully been migrated. You can now use {{account}}.```"
-	defaultKeycloakMigrationEmailText = "Example e-mail text:\n\n```text\nHello {{username}},\n\nYour account migration was successful. Your account is: {{account}}.```"
+	defaultKeycloakMigrationDMText    = "Example DM text:\n\nHi @{{username}},\n\nYour account has successfully been migrated. You can now use {{account}}."
+	defaultKeycloakMigrationEmailText = "Example e-mail text:\n\nHello {{username}},\n\nYour account migration was successful. Your account is: {{account}}."
 )
 
 func renderKeycloakMigrationText(text, username, account, password string) string {
@@ -489,15 +489,24 @@ func renderKeycloakMigrationText(text, username, account, password string) strin
 }
 
 func keycloakMigrationNotificationTexts(configuration *configuration, googleCreationMethod string) (string, string) {
-	var dmText, emailText string
+	dmText := configuration.KeycloakMigrationDMText
+	emailText := configuration.KeycloakMigrationEmailText
 
 	switch googleCreationMethod {
 	case "create-kth":
-		dmText = configuration.KeycloakMigrationKTHDMText
-		emailText = configuration.KeycloakMigrationKTHEmailText
+		if strings.TrimSpace(configuration.KeycloakMigrationKTHDMText) != "" {
+			dmText = configuration.KeycloakMigrationKTHDMText
+		}
+		if strings.TrimSpace(configuration.KeycloakMigrationKTHEmailText) != "" {
+			emailText = configuration.KeycloakMigrationKTHEmailText
+		}
 	case "create-external":
-		dmText = configuration.KeycloakMigrationExternalDMText
-		emailText = configuration.KeycloakMigrationExternalEmailText
+		if strings.TrimSpace(configuration.KeycloakMigrationExternalDMText) != "" {
+			dmText = configuration.KeycloakMigrationExternalDMText
+		}
+		if strings.TrimSpace(configuration.KeycloakMigrationExternalEmailText) != "" {
+			emailText = configuration.KeycloakMigrationExternalEmailText
+		}
 	}
 
 	if strings.TrimSpace(dmText) == "" {
