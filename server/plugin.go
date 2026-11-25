@@ -127,6 +127,10 @@ func (p *Plugin) UserHasBeenCreated(_ *plugin.Context, user *model.User) {
 }
 
 func (p *Plugin) UserHasLeftChannel(_ *plugin.Context, channelMember *model.ChannelMember, actor *model.User) {
+	if channelMember == nil {
+		return
+	}
+	p.queueLeftChannelCategory(channelMember)
 	configuration := p.getConfiguration()
 
 	if configuration.JoinLeaveFree_OnOffBool {

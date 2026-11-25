@@ -84,7 +84,7 @@ func TestTeamCategorySyncPaginationAndMembers(t *testing.T) {
 	}
 	var pages []int
 	api.searchChannels = func(search *model.ChannelSearch) (*model.ChannelsWithCount, *model.AppError) {
-		if !slices.Equal(search.TeamIds, []string{"team"}) || !search.Public || !search.Private || search.IncludeDeleted ||
+		if !slices.Equal(search.TeamIds, []string{"team"}) || !search.Public || !search.Private || !search.IncludeDeleted ||
 			search.Page == nil || search.PerPage == nil || *search.PerPage != 100 {
 			t.Errorf("incorrect admin search: %+v", search)
 			return nil, testAppError(http.StatusBadRequest)
@@ -110,6 +110,8 @@ func TestTeamCategorySyncPaginationAndMembers(t *testing.T) {
 	if len(api.reports) != 0 {
 		t.Fatal("report sent before all child jobs finished")
 	}
+	restarted.runCategoryJobs(context.Background())
+	restarted.runCategoryJobs(context.Background())
 	restarted.runCategoryJobs(context.Background())
 	if len(api.kv) != 0 || !slices.Equal(pages, []int{0, 1}) || api.updates != 4 {
 		t.Fatalf("sync incomplete: jobs=%d pages=%v updates=%d", len(api.kv), pages, api.updates)

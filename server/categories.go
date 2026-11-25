@@ -25,12 +25,16 @@ const (
 // progress. A team request expands into individual channel jobs. No credentials
 // are stored here.
 type categoryJob struct {
-	TeamID         string `json:"team_id,omitempty"`
-	ParentKey      string `json:"parent_key,omitempty"`
-	RequesterID    string `json:"requester_id,omitempty"`
-	ReplyChannelID string `json:"reply_channel_id,omitempty"`
-	Reported       bool   `json:"reported,omitempty"`
-	Done           bool   `json:"done,omitempty"`
+	TeamID         string            `json:"team_id,omitempty"`
+	ParentKey      string            `json:"parent_key,omitempty"`
+	RequesterID    string            `json:"requester_id,omitempty"`
+	ReplyChannelID string            `json:"reply_channel_id,omitempty"`
+	Reported       bool              `json:"reported,omitempty"`
+	Done           bool              `json:"done,omitempty"`
+	Action         string            `json:"action,omitempty"`
+	UserID         string            `json:"user_id,omitempty"`
+	Cleaning       bool              `json:"cleaning,omitempty"`
+	Archived       map[string]string `json:"archived,omitempty"`
 	// Count acknowledged mutations, not attempts or already-correct placement.
 	// API writes and KV saves are not atomic: a crash between them can undercount.
 	Moved       int    `json:"moved,omitempty"`
@@ -69,7 +73,7 @@ func (p *Plugin) forceSyncCategories(args *model.CommandArgs) (*model.CommandRes
 			p.API.LogError("Cannot queue team category synchronization", "team_id", args.TeamId, "error", err.Error())
 			response.Text = "Could not queue category synchronization. Please try again."
 		} else {
-			response.Text = "Queued category synchronization for all members of this team's public and private channels with a default category. Archived channels are skipped. This runs in the background and overrides personal placement, including Favorites. You'll receive an ephemeral report here when it finishes."
+			response.Text = "Queued category synchronization for all members of this team's public and private channels with a default category. Empty categories associated with archived defaults will also be cleaned up. This runs in the background and overrides personal placement, including Favorites. You'll receive an ephemeral report here when it finishes."
 		}
 	}
 	return response, nil
@@ -257,9 +261,15 @@ func (p *Plugin) runCategoryJobs(ctx context.Context) {
 }
 
 func (p *Plugin) runCategoryJob(ctx context.Context, rest *categoryREST, key string, job *categoryJob) (bool, error) {
+	if job.Action != "" {
+		return p.runCategoryCleanupJob(ctx, rest, key, job)
+	}
 	if job.ChannelID == "" {
 		if job.Scanned {
 			return p.finishTeamCategoryJob(key, job)
+		}
+		if job.Cleaning {
+			return p.queueTeamCategoryCleanupJobs(key, job)
 		}
 		return p.queueTeamCategoryJobs(ctx, rest, key, job)
 	}
@@ -376,7 +386,7 @@ func (p *Plugin) queueTeamCategoryJobs(ctx context.Context, rest *categoryREST, 
 	}
 	perPage := categoryPageSize
 	result, _, err := rest.client.SearchAllChannelsPaged(ctx, &model.ChannelSearch{
-		TeamIds: []string{job.TeamID}, Public: true, Private: true,
+		TeamIds: []string{job.TeamID}, Public: true, Private: true, IncludeDeleted: true,
 		Page: &job.Page, PerPage: &perPage,
 	})
 	if err != nil {
@@ -386,8 +396,15 @@ func (p *Plugin) queueTeamCategoryJobs(ctx context.Context, rest *categoryREST, 
 		if ctx.Err() != nil {
 			return false, ctx.Err()
 		}
-		if channel.TeamId != job.TeamID || channel.DeleteAt != 0 || channel.DefaultCategoryName == "" ||
+		if channel.TeamId != job.TeamID || channel.DefaultCategoryName == "" ||
 			(channel.Type != model.ChannelTypeOpen && channel.Type != model.ChannelTypePrivate) {
+			continue
+		}
+		if channel.DeleteAt != 0 {
+			if job.Archived == nil {
+				job.Archived = make(map[string]string)
+			}
+			job.Archived[channel.Id] = channel.DefaultCategoryName
 			continue
 		}
 		// Retrying a partially queued page must not overwrite a child's progress.
@@ -458,6 +475,12 @@ func (p *Plugin) finishTeamCategoryJob(key string, job *categoryJob) (bool, erro
 		if len(keys) < categoryPageSize {
 			break
 		}
+	}
+	if !job.Reported && !job.Cleaning && len(job.Archived) > 0 {
+		job.Cleaning = true
+		job.Scanned = false
+		job.Page = 0
+		return false, p.saveCategoryJob(key, job)
 	}
 	if !job.Reported {
 		post := p.API.SendEphemeralPost(job.RequesterID, &model.Post{

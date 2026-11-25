@@ -42,6 +42,8 @@ type categoryTestAPI struct {
 	afterUpdate    func()
 	adminTeam      string
 	channelMembers map[string]model.ChannelMembers
+	teamMembers    []*model.TeamMember
+	leftTeam       bool
 	searchChannels func(*model.ChannelSearch) (*model.ChannelsWithCount, *model.AppError)
 	reports        []*model.Post
 	recipients     []string
@@ -108,7 +110,9 @@ func newCategoryTestPlugin(t *testing.T) (*Plugin, *categoryTestAPI) {
 			for _, id := range category.Channels {
 				channel, err := api.GetChannel(id)
 				if err != nil || channel.DeleteAt == 0 {
-					t.Errorf("attempt to delete category with active or unknown channel %s", id)
+					if _, memberErr := api.GetChannelMember(id, userID); err != nil || memberErr == nil || memberErr.StatusCode != http.StatusNotFound {
+						t.Errorf("attempt to delete category with active or unknown channel %s", id)
+					}
 				}
 			}
 		}
@@ -192,6 +196,16 @@ func (a *categoryTestAPI) GetChannelMembers(channelID string, page, perPage int)
 		members = a.channelMembers[channelID]
 	}
 	return members[min(page*perPage, len(members)):min((page+1)*perPage, len(members))], nil
+}
+func (a *categoryTestAPI) GetTeamMembers(_ string, page, perPage int) ([]*model.TeamMember, *model.AppError) {
+	return a.teamMembers[min(page*perPage, len(a.teamMembers)):min((page+1)*perPage, len(a.teamMembers))], nil
+}
+func (a *categoryTestAPI) GetTeamMember(teamID, userID string) (*model.TeamMember, *model.AppError) {
+	member := &model.TeamMember{TeamId: teamID, UserId: userID}
+	if a.leftTeam {
+		member.DeleteAt = 1
+	}
+	return member, nil
 }
 func (a *categoryTestAPI) GetChannelMember(channelID, userID string) (*model.ChannelMember, *model.AppError) {
 	members := a.members

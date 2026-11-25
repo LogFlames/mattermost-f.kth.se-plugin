@@ -4,6 +4,8 @@ Customizes things in mattermost.fysiksektionen.se. Currently inserts zero-width 
 
 To easily deploy create `set_secret.sh` which exports MM\_ADMIN\_TOKEN as an environment variable. The script `deploy.sh` will then raise the file upload limit, build and upload, and lower the upload limit to the old value.
 
+## Keycloak Integration
+
 The `/keycloak` command requires system management permission. Its desktop
 autocomplete suggestion is restricted to system admins; command lists and some
 clients may still display it to other users. Execution remains permission-checked.
@@ -237,6 +239,11 @@ moves the channel to Channels. Sync runs in the background, retries failures, an
 resumes after restarts; it does not enforce placement continuously. Team admins can run
 `/force_sync_categories` to apply existing defaults to all members of all active public
 and private channels in the current team, with the same placement and cleanup behavior.
+It also removes empty custom categories matching archived channels' defaults, including
+categories containing only archived channels. Archiving or leaving a channel removes its
+matching default category for affected users when it has no other active channels.
+Built-in and unrelated categories are retained; cleanup retries failures. Empty categories
+whose former default was cleared or renamed cannot be identified from archived channels.
 An ephemeral completion report shows channels moved (including member-sidebar moves)
 and categories created/deleted. Counts track successful operations; a crash between a
 change and saving its count can undercount.
