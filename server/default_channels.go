@@ -226,8 +226,14 @@ func (p *Plugin) saveDefaultChannelJob(key string, job *defaultChannelJob) *mode
 }
 
 func (p *Plugin) UserHasJoinedTeam(_ *plugin.Context, member *model.TeamMember, _ *model.User) {
+	if member == nil || member.DeleteAt != 0 {
+		return
+	}
 	config := p.getConfiguration()
-	if !config.DefaultChannels_OnOffBool || member.DeleteAt != 0 {
+	if config.TeamJoinCategories_OnOffBool {
+		p.queueTeamJoinCategories(member)
+	}
+	if !config.DefaultChannels_OnOffBool {
 		return
 	}
 	for _, id := range config.defaultChannelIDs() {

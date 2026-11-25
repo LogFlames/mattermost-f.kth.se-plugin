@@ -75,6 +75,9 @@ func newDefaultChannelTestPlugin(t *testing.T) (*Plugin, *defaultChannelTestAPI)
 }
 
 func (a *defaultChannelTestAPI) GetPluginConfig() map[string]any { return a.settings }
+func (a *defaultChannelTestAPI) GetChannelsForTeamForUser(string, string, bool) ([]*model.Channel, *model.AppError) {
+	return nil, nil
+}
 func (a *defaultChannelTestAPI) GetChannelByName(teamID, name string, includeDeleted bool) (*model.Channel, *model.AppError) {
 	for _, channel := range a.channels {
 		if channel.TeamId == teamID && channel.Name == name && (includeDeleted || channel.DeleteAt == 0) {
@@ -377,6 +380,21 @@ func TestDefaultChannelJoinAndCancellation(t *testing.T) {
 				t.Fatal("completed/cancelled jobs retained")
 			}
 		})
+	}
+}
+
+func TestDefaultChannelJoinWithCategoryFixDisabled(t *testing.T) {
+	p, api := newDefaultChannelTestPlugin(t)
+	api.settings["teamjoincategories_onoffbool"] = false
+	api.settings["defaultchannels_custom"] = []string{"channel"}
+	api.users = []*model.User{{Id: "new-user"}}
+	if err := p.OnConfigurationChange(); err != nil {
+		t.Fatal(err)
+	}
+	p.UserHasJoinedTeam(nil, &model.TeamMember{TeamId: "team", UserId: "new-user"}, nil)
+	p.runDefaultChannelJobs(context.Background())
+	if !slices.Equal(api.added, []string{"channel:new-user"}) {
+		t.Fatalf("default channel addition affected by disabled category fix: %v", api.added)
 	}
 }
 

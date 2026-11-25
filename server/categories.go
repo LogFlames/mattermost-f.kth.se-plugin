@@ -102,6 +102,32 @@ func (p *Plugin) saveCategoryJob(key string, job *categoryJob) error {
 	return nil
 }
 
+func (p *Plugin) queueMemberDefaultCategory(userID string, channel *model.Channel) error {
+	if channel == nil || channel.DeleteAt != 0 || channel.DefaultCategoryName == "" ||
+		(channel.Type != model.ChannelTypeOpen && channel.Type != model.ChannelTypePrivate) {
+		return nil
+	}
+	job := &categoryJob{
+		TeamID: channel.TeamId, ChannelID: channel.Id, NewName: channel.DefaultCategoryName,
+		CreatedAt: time.Now().UnixMilli(), Confirmed: true, Scanned: true, FixedScope: true,
+		Pending: map[string][]string{userID: nil},
+	}
+	return p.saveCategoryJob(categoryJobPrefix+model.NewId(), job)
+}
+
+func (p *Plugin) queueTeamJoinCategories(member *model.TeamMember) {
+	channels, err := p.API.GetChannelsForTeamForUser(member.TeamId, member.UserId, false)
+	if err != nil {
+		p.API.LogError("Get channels for team join category synchronization failed", "team_id", member.TeamId, "user_id", member.UserId, "error", err.Error())
+		return
+	}
+	for _, channel := range channels {
+		if err := p.queueMemberDefaultCategory(member.UserId, channel); err != nil {
+			p.API.LogError("Queue team join category synchronization failed", "team_id", member.TeamId, "user_id", member.UserId, "channel_id", channel.Id, "error", err.Error())
+		}
+	}
+}
+
 func (p *Plugin) categorySiteURL() (string, error) {
 	siteURL := p.API.GetConfig().ServiceSettings.SiteURL
 	if siteURL == nil || *siteURL == "" {

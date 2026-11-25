@@ -15,9 +15,18 @@ import (
 
 type onboardingCategoryTestAPI struct {
 	*adminTestAPI
+	channelListError bool
+	errors           []string
+}
+
+func (a *onboardingCategoryTestAPI) LogError(message string, _ ...any) {
+	a.errors = append(a.errors, message)
 }
 
 func (a *onboardingCategoryTestAPI) GetChannelsForTeamForUser(teamID, userID string, includeDeleted bool) ([]*model.Channel, *model.AppError) {
+	if a.channelListError {
+		return nil, testAppError(http.StatusServiceUnavailable)
+	}
 	var result []*model.Channel
 	for _, channel := range a.channels {
 		if channel.TeamId != teamID || (!includeDeleted && channel.DeleteAt != 0) {
@@ -49,6 +58,100 @@ func (a *onboardingCategoryTestAPI) GetChannelSidebarCategories(userID, teamID s
 		}
 	}
 	return result, nil
+}
+
+func TestTeamJoinPlacesDefaultCategoriesForAnyUser(t *testing.T) {
+	p, base := newAdminTestPlugin(t)
+	api := &onboardingCategoryTestAPI{adminTestAPI: base}
+	p.SetAPI(api)
+	api.settings["defaultchannels_onoffbool"] = false
+	if err := p.OnConfigurationChange(); err != nil {
+		t.Fatal(err)
+	}
+	api.channels = map[string]model.Channel{
+		"town":     {Id: "town", TeamId: "team", Name: "town-square", Type: model.ChannelTypeOpen, DefaultCategoryName: "Welcome"},
+		"off":      {Id: "off", TeamId: "team", Name: "off-topic", Type: model.ChannelTypeOpen, DefaultCategoryName: "Welcome"},
+		"ordinary": {Id: "ordinary", TeamId: "team", Type: model.ChannelTypeOpen},
+		"unjoined": {Id: "unjoined", TeamId: "team", Type: model.ChannelTypeOpen, DefaultCategoryName: "Other"},
+		"archived": {Id: "archived", TeamId: "team", Type: model.ChannelTypeOpen, DefaultCategoryName: "Old", DeleteAt: 1},
+		"direct":   {Id: "direct", TeamId: "team", Type: model.ChannelTypeDirect, DefaultCategoryName: "Other"},
+		"foreign":  {Id: "foreign", TeamId: "other", Type: model.ChannelTypeOpen, DefaultCategoryName: "Other"},
+	}
+	api.channelMembers = make(map[string]model.ChannelMembers)
+	for id := range api.channels {
+		if id != "unjoined" {
+			api.channelMembers[id] = model.ChannelMembers{{UserId: "new-user", ChannelId: id}, {UserId: "existing", ChannelId: id}}
+		}
+	}
+	newCategory := testCategory("channels", "Channels", model.SidebarCategoryChannels, "town", "off", "ordinary", "archived", "direct")
+	newCategory.UserId, newCategory.TeamId = "new-user", "team"
+	existing := testCategory("favorites", "Favorites", model.SidebarCategoryFavorites, "town", "off")
+	existing.UserId, existing.TeamId = "existing", "team"
+	api.categories = map[string][]*model.SidebarCategoryWithChannels{"new-user": {newCategory}, "existing": {existing}}
+	before, _ := json.Marshal(api.categories["existing"])
+
+	if !p.getConfiguration().TeamJoinCategories_OnOffBool {
+		t.Fatal("team join category fix should default to enabled")
+	}
+	api.settings["teamjoincategories_onoffbool"] = false
+	if err := p.OnConfigurationChange(); err != nil {
+		t.Fatal(err)
+	}
+	p.UserHasJoinedTeam(nil, &model.TeamMember{TeamId: "team", UserId: "new-user"}, nil)
+	if len(api.kv) != 0 {
+		t.Fatal("disabled category fix queued jobs")
+	}
+	api.settings["teamjoincategories_onoffbool"] = true
+	if err := p.OnConfigurationChange(); err != nil {
+		t.Fatal(err)
+	}
+	p.UserHasJoinedTeam(nil, &model.TeamMember{TeamId: "team", UserId: "new-user"}, nil)
+	if len(api.kv) != 2 {
+		t.Fatalf("queued %d jobs, want two built-in channels", len(api.kv))
+	}
+	api.settings["teamjoincategories_onoffbool"] = false
+	if err := p.OnConfigurationChange(); err != nil {
+		t.Fatal(err)
+	}
+	p.runCategoryJobs(context.Background())
+	got := map[string][]string{}
+	for _, category := range api.categories["new-user"] {
+		channels := append([]string{}, category.Channels...)
+		slices.Sort(channels)
+		got[category.DisplayName] = channels
+	}
+	want := map[string][]string{"Channels": {"archived", "direct", "ordinary"}, "Welcome": {"off", "town"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("wrong team join sidebar placement: got %v, want %v", got, want)
+	}
+	after, _ := json.Marshal(api.categories["existing"])
+	if string(before) != string(after) {
+		t.Fatal("team join changed another user's sidebar")
+	}
+}
+
+func TestTeamJoinCategoryFailuresAreLogged(t *testing.T) {
+	for _, failure := range []string{"lookup", "queue"} {
+		t.Run(failure, func(t *testing.T) {
+			p, base := newAdminTestPlugin(t)
+			api := &onboardingCategoryTestAPI{adminTestAPI: base}
+			p.SetAPI(api)
+			api.settings["defaultchannels_onoffbool"] = false
+			if err := p.OnConfigurationChange(); err != nil {
+				t.Fatal(err)
+			}
+			api.channels = map[string]model.Channel{
+				"town": {Id: "town", TeamId: "team", Type: model.ChannelTypeOpen, DefaultCategoryName: "Welcome"},
+			}
+			api.channelMembers = map[string]model.ChannelMembers{"town": {{UserId: "user", ChannelId: "town"}}}
+			api.channelListError = failure == "lookup"
+			api.failSave = failure == "queue"
+			p.UserHasJoinedTeam(nil, &model.TeamMember{TeamId: "team", UserId: "user"}, nil)
+			if len(api.errors) != 1 || len(api.kv) != 0 {
+				t.Fatalf("failure not surfaced: errors=%v jobs=%d", api.errors, len(api.kv))
+			}
+		})
+	}
 }
 
 func TestInternationalOnboardingPlacesBuiltInDefaultChannels(t *testing.T) {
@@ -116,6 +219,9 @@ func TestInternationalOnboardingPlacesBuiltInDefaultChannels(t *testing.T) {
 	}
 	existingBefore, _ := json.Marshal(api.categories["existing-user"])
 	membersBefore, _ := json.Marshal(api.channelMembers)
+	for _, teamID := range []string{"fint", "fysiksektionen"} {
+		p.UserHasJoinedTeam(nil, &model.TeamMember{TeamId: teamID, UserId: user.Id}, nil)
+	}
 	p.UserHasBeenCreated(nil, user)
 	p.runCategoryJobs(context.Background())
 	got := map[string][]string{}

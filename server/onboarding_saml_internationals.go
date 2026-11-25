@@ -59,21 +59,12 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 	if err := p.muteExistingDefaultChannels(user.Id); err != nil && firstErr == nil {
 		firstErr = err
 	}
-	channelIDs := make(map[string]struct{})
+	seenChannels := make(map[string]struct{})
 	for _, channelID := range configuration.InternationalStudents_DefaultChannels {
-		channelIDs[channelID] = struct{}{}
-	}
-	for _, team := range teams {
-		channels, err := p.API.GetChannelsForTeamForUser(team.Id, user.Id, false)
-		if err != nil {
-			firstErr = firstError(firstErr, fmt.Errorf("get onboarding channels for team %q: %w", team.Name, err))
+		if _, seen := seenChannels[channelID]; seen {
 			continue
 		}
-		for _, channel := range channels {
-			channelIDs[channel.Id] = struct{}{}
-		}
-	}
-	for channelID := range channelIDs {
+		seenChannels[channelID] = struct{}{}
 		channel, err := p.API.GetChannel(channelID)
 		if err != nil {
 			firstErr = firstError(firstErr, fmt.Errorf("get default channel %q: %w", channelID, err))
@@ -83,16 +74,7 @@ func (p *Plugin) InternationalStudents_UserCreated(user *model.User) error {
 			firstErr = firstError(firstErr, fmt.Errorf("get default channel %q returned no channel", channelID))
 			continue
 		}
-		if channel.DeleteAt != 0 || channel.DefaultCategoryName == "" ||
-			(channel.Type != model.ChannelTypeOpen && channel.Type != model.ChannelTypePrivate) {
-			continue
-		}
-		job := &categoryJob{
-			TeamID: channel.TeamId, ChannelID: channel.Id, NewName: channel.DefaultCategoryName,
-			CreatedAt: time.Now().UnixMilli(), Confirmed: true, Scanned: true, FixedScope: true,
-			Pending: map[string][]string{user.Id: nil},
-		}
-		if err := p.saveCategoryJob(categoryJobPrefix+model.NewId(), job); err != nil {
+		if err := p.queueMemberDefaultCategory(user.Id, channel); err != nil {
 			firstErr = firstError(firstErr, fmt.Errorf("queue default category for channel %q: %w", channelID, err))
 		}
 	}

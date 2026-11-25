@@ -135,6 +135,20 @@
                 ]
             },
             {
+                "key": "team-join-categories",
+                "title": "Team Join Category Fix",
+                "subtitle": "Places newly joined team channels in their default categories.",
+                "settings": [
+                    {
+                        "key": "TeamJoinCategories_OnOffBool",
+                        "display_name": "Team Join Category Fix: Enabled?",
+                        "type": "bool",
+                        "default": true,
+                        "help_text": "Queue category placement for a user's joined channels when they join a team, including Town Square and Off-Topic. Disabling this does not cancel already queued jobs."
+                    }
+                ]
+            },
+            {
                 "key": "default-channels",
                 "title": "Default Channels Module",
                 "subtitle": "Sort users into standard channels for teams",

@@ -79,6 +79,13 @@ since the server's configuration API does not support compare-and-swap updates.
 
 Requires Mattermost 11.11.0+, a reachable `ServiceSettings.SiteURL`, and the Go version in `go.mod`.
 
+**Team Join Category Fix: Enabled?** is enabled by default. When a user joins a
+team, their joined channels with a default category are queued for placement in
+that category, including Mattermost's built-in default channels. This setting is
+independent of the Default Channels module and does not cancel already queued
+jobs when disabled. Failures to look up channels or queue jobs are logged.
+International onboarding's configured-channel placement is controlled separately.
+
 Changing a channel's default category moves it for all members, overriding Favorites
 and personal placement, then deletes affected custom categories with no active channels.
 Archived channels are kept and fall back to Channels if restored. Clearing the default
