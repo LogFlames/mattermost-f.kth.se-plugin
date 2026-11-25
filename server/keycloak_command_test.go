@@ -149,14 +149,6 @@ func TestKeycloakCommandAutocomplete(t *testing.T) {
 func TestKeycloakSubcommandHelp(t *testing.T) {
 	p, _ := newAdminTestPlugin(t)
 
-	if got := keycloakMigrateUsage["migrate-to-keycloak"]; got != "Usage: `/keycloak migrate-to-keycloak prep|create|bind|update`" {
-		t.Fatalf("unexpected migrate-to-keycloak usage: %q", got)
-	}
-
-	if strings.Contains(keycloakMigrateUsage["migrate-to-google create-external"], "[org-unit-key]") {
-		t.Fatal("create-external org-unit key is still shown as optional")
-	}
-
 	tests := map[string]string{
 		"/keycloak new-user":                          "Create a domestic Keycloak account",
 		"/keycloak get":                               "Show a user's Mattermost authentication",

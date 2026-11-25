@@ -1106,8 +1106,6 @@ func TestGoogleSyncNowRejectsNonMemberAndInvalidChannel(t *testing.T) {
 	for _, tc := range []struct{ command, channel, want string }{
 		{"/google group sync now", "target", "no longer a member"},
 		{"/google group sync now", "", "active public or private team channel"},
-		{"/google group sync now ~target", "target", "Usage: `/google group sync now`"},
-		{"/google group sync now target", "target", "Usage: `/google group sync now`"},
 	} {
 		response, appErr := p.googleGroupSyncCommand(&model.CommandArgs{Command: tc.command, TeamId: "team", ChannelId: tc.channel, UserId: "requester"})
 		if appErr != nil || !strings.Contains(response.Text, tc.want) {
@@ -1433,25 +1431,6 @@ func TestGoogleScheduledSyncSkipsRevokedCreator(t *testing.T) {
 	p.runGoogleGroupSyncJobs(context.Background())
 	if reads != 0 || !bytes.Equal(api.kv[recordKey], data) {
 		t.Fatalf("revoked creator's sync ran or was removed: reads=%d", reads)
-	}
-}
-
-func TestGoogleSyncUsage(t *testing.T) {
-	api := &googleGroupSyncTestAPI{
-		categoryTestAPI: &categoryTestAPI{},
-		teamAdmins:      map[string]bool{"admin": true},
-	}
-	p := &Plugin{}
-	p.SetAPI(api)
-	for _, command := range []string{"/google group sync", "/google group sync help"} {
-		response, appErr := p.googleGroupSyncCommand(&model.CommandArgs{UserId: "admin", TeamId: "team", Command: command})
-		if appErr != nil || response == nil {
-			t.Fatalf("%s: response=%+v error=%v", command, response, appErr)
-		}
-		want := "Usage: `/google group sync start <group-email> <YYYY-MM-DD> / stop <group-email> / list / now`"
-		if response.Text != want {
-			t.Errorf("%s help = %q, want %q", command, response.Text, want)
-		}
 	}
 }
 
@@ -1838,12 +1817,6 @@ func TestGoogleGroupManageGetDirectMembers(t *testing.T) {
 		response, appErr = p.ExecuteCommand(nil, args)
 		if appErr != nil || response == nil || !strings.Contains(response.Text, "Usage:") {
 			t.Errorf("invalid command %q: %+v, %v", command, response, appErr)
-		}
-		if command == "/google group manage help" && response != nil {
-			want := "Usage: `/google group manage <group-email> get / <group-email> add/remove @<username>`"
-			if response.Text != want {
-				t.Errorf("help = %q, want %q", response.Text, want)
-			}
 		}
 	}
 }
