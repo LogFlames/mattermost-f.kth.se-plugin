@@ -1,11 +1,6 @@
-import AbstractSelectInput from "../../abstract/abstract_select_input/abstract_select_input.jsx";
+import createSelectSetting from '../../select_setting_factory.jsx';
 
-export default class JoinLeaveFreeBotUserId extends AbstractSelectInput {
-    constructor(props) {
-        super(props, 'Select bot user id', 'users', false);
-    }
-
-    render() {
-        return super.render();
-    }
-}
+export default createSelectSetting({
+    type: 'users',
+    placeholder: 'Select bot user id',
+});
