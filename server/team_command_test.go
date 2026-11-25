@@ -71,6 +71,20 @@ func TestTeamCommandJoinLeaveAndList(t *testing.T) {
 	}
 }
 
+func TestTeamCommandUsage(t *testing.T) {
+	p := &Plugin{}
+	for _, command := range []string{"/team", "/team help"} {
+		response, err := p.teamCommand(&model.CommandArgs{Command: command})
+		if err != nil || response == nil {
+			t.Fatalf("%s: response=%+v err=%v", command, response, err)
+		}
+		want := "Usage: `/team join <team> / /team leave <team> / /team list`"
+		if response.Text != want {
+			t.Errorf("%s help = %q, want %q", command, response.Text, want)
+		}
+	}
+}
+
 func TestTeamCommandRejectsPrivateTeamJoin(t *testing.T) {
 	private := &model.Team{Id: "private-id", Name: "private", DisplayName: "Private", AllowOpenInvite: false}
 	api := &teamCommandTestAPI{teams: []*model.Team{private}}

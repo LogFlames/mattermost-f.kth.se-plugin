@@ -67,7 +67,7 @@ func (p *Plugin) defaultChannelCommand(args *model.CommandArgs) (*model.CommandR
 	} else if !p.API.HasPermissionToTeam(args.UserId, args.TeamId, model.PermissionManageTeam) {
 		response.Text = "Only team admins can run /default_channel."
 	} else if len(fields) != 2 || (fields[1] != "set" && fields[1] != "unset" && fields[1] != "list") {
-		response.Text = "Usage: /default_channel set|unset|list. Set and unset apply to the current channel."
+		response.Text = "Usage: `/default_channel set|unset|list`. Set and unset apply to the current channel."
 	} else {
 		// Serialize config read/modify/write and membership work across instances.
 		// Do not hold configurationLock: SavePluginConfig invokes its change hook.

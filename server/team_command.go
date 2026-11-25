@@ -8,35 +8,37 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
+const teamCommandUsage = "Usage: `/team join <team>`, `/team leave <team>` or `/team list`"
+
 func (p *Plugin) teamCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
 	fields := strings.Fields(args.Command)
 	if len(fields) < 2 {
-		response.Text = "Usage: /team join <team> | /team leave <team> | /team list"
+		response.Text = teamCommandUsage
 		return response, nil
 	}
 
 	switch fields[1] {
 	case "join":
 		if len(fields) != 3 {
-			response.Text = "Usage: /team join <team>"
+			response.Text = "Usage: `/team join <team>`"
 			return response, nil
 		}
 		return p.joinTeamCommand(args, fields[2])
 	case "leave":
 		if len(fields) != 3 {
-			response.Text = "Usage: /team leave <team>"
+			response.Text = "Usage: `/team leave <team>`"
 			return response, nil
 		}
 		return p.leaveTeamCommand(args, fields[2])
 	case "list":
 		if len(fields) != 2 {
-			response.Text = "Usage: /team list"
+			response.Text = "Usage: `/team list`"
 			return response, nil
 		}
 		return p.listTeamsCommand(args)
 	default:
-		response.Text = "Usage: /team join <team> | /team leave <team> | /team list"
+		response.Text = teamCommandUsage
 		return response, nil
 	}
 }

@@ -225,8 +225,8 @@ func (p *Plugin) OnActivate() error {
 	if err := p.API.RegisterCommand(&model.Command{
 		Trigger:          "member",
 		AutoComplete:     true,
-		AutoCompleteHint: "add|remove",
-		AutoCompleteDesc: "Add or remove a member from the current team",
+		AutoCompleteHint: "add|remove @<user> [team]",
+		AutoCompleteDesc: "Add or remove a member from a team (team admins only)",
 	}); err != nil {
 		return err
 	}

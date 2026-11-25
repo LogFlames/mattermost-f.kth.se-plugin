@@ -162,7 +162,7 @@ func (p *Plugin) forceSyncInternationals(args *model.CommandArgs) (*model.Comman
 		return response, nil
 	}
 	if len(strings.Fields(args.Command)) != 1 {
-		response.Text = "Usage: /force_sync_internationals (no arguments)."
+		response.Text = "Usage: `/force_sync_internationals` (no arguments)."
 		return response, nil
 	}
 

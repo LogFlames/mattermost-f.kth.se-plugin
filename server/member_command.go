@@ -12,7 +12,7 @@ func (p *Plugin) memberCommand(args *model.CommandArgs) (*model.CommandResponse,
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
 	fields := strings.Fields(args.Command)
 	if (len(fields) != 3 && len(fields) != 4) || (fields[1] != "add" && fields[1] != "remove") {
-		response.Text = "Usage: /member add|remove @<username> [team]"
+		response.Text = "Usage: `/member add|remove @<username> [team]`"
 		return response, nil
 	}
 	teamID := args.TeamId
@@ -66,7 +66,7 @@ func (p *Plugin) memberCommand(args *model.CommandArgs) (*model.CommandResponse,
 
 	username := strings.TrimPrefix(fields[2], "@")
 	if username == "" {
-		response.Text = "Usage: /member add|remove @<username> [team]"
+		response.Text = "Usage: `/member add|remove @<username> [team]`"
 		return response, nil
 	}
 	user, err := p.API.GetUserByUsername(username)

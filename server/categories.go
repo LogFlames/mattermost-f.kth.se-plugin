@@ -59,7 +59,7 @@ func (p *Plugin) forceSyncCategories(args *model.CommandArgs) (*model.CommandRes
 	} else if !p.API.HasPermissionToTeam(args.UserId, args.TeamId, model.PermissionManageTeam) {
 		response.Text = "Only team admins can run /force_sync_categories."
 	} else if len(strings.Fields(args.Command)) != 1 {
-		response.Text = "Usage: /force_sync_categories (no arguments)."
+		response.Text = "Usage: `/force_sync_categories` (no arguments)."
 	} else {
 		job := &categoryJob{
 			TeamID: args.TeamId, CreatedAt: time.Now().UnixMilli(),
