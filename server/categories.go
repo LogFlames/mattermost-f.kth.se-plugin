@@ -155,6 +155,7 @@ func (p *Plugin) startCategoryWorker() error {
 		defer close(p.categoryDone)
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
+		nextGoogleGroupSync := time.Time{}
 		for {
 			select {
 			case <-ctx.Done():
@@ -167,6 +168,10 @@ func (p *Plugin) startCategoryWorker() error {
 				}
 				p.runCategoryJobs(ctx)
 				lock.Unlock()
+				if time.Now().After(nextGoogleGroupSync) {
+					p.runGoogleGroupSyncJobs(ctx)
+					nextGoogleGroupSync = time.Now().Add(time.Hour)
+				}
 				p.runDefaultChannelJobs(ctx)
 			}
 		}

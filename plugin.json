@@ -424,8 +424,63 @@
                         "key": "GoogleGroupsSyncServiceAccountKey",
                         "display_name": "Google Groups Sync: Service account JSON key",
                         "type": "longtext",
-                        "help_text": "Service account JSON key with domain-wide delegation for synchronizing Google Groups.",
+                        "help_text": "Service account JSON key with domain-wide delegation. Group management is delegated to the requesting user's account.",
                         "secret": true
+                    },
+                    {
+                        "key": "GoogleGroupsSyncAdminEmail",
+                        "display_name": "Google Groups Sync: admin email",
+                        "type": "text",
+                        "help_text": "Google Workspace administrator to impersonate for channel operations by selected admin users. Never used for group management.",
+                        "default": ""
+                    },
+                    {
+                        "key": "GoogleGroupsSyncAdminUsers",
+                        "display_name": "Google Groups Sync: admin delegation users",
+                        "type": "custom",
+                        "help_text": "Mattermost users who automatically use the configured Google admin account for group channel operations. Group management always uses the caller's own account.",
+                        "default": []
+                    },
+                    {
+                        "key": "GoogleGroupsSyncDomain",
+                        "display_name": "Google Groups Sync: organization domain",
+                        "type": "text",
+                        "help_text": "Google Workspace domain for users, delegated accounts, and group names entered without a domain.",
+                        "default": "fysiksektionen.se"
+                    },
+                    {
+                        "key": "GoogleGroupsSyncAlternateDomain",
+                        "display_name": "Google Groups Sync: alternate Mattermost email domain",
+                        "type": "text",
+                        "help_text": "Mattermost user addresses in this domain are treated as addresses with the same local part in the organization domain. Clear to disable this mapping.",
+                        "default": "f.kth.se"
+                    },
+                    {
+                        "key": "GoogleGroupsSyncFallbackEmail",
+                        "display_name": "Google Groups Sync: fallback account email",
+                        "type": "text",
+                        "help_text": "Delegated Google account used only to view groups for Mattermost users without an address in the configured organization domain. It must not be added as a group member.",
+                        "default": "lonely-mattermost-utility-account@fysiksektionen.se"
+                    },
+                    {
+                        "key": "GoogleGroupChannelTeamAdminThreshold",
+                        "display_name": "Google Groups: channel operation team admin size threshold",
+                        "type": "number",
+                        "help_text": "Applies to /google group add, remove, sync add, sync remove, sync now, and scheduled syncs. Groups with more members require a team or system admin. Must be non-negative and no greater than the system admin threshold.",
+                        "default": 30
+                    },
+                    {
+                        "key": "GoogleGroupChannelSystemAdminThreshold",
+                        "display_name": "Google Groups: channel operation system admin size threshold",
+                        "type": "number",
+                        "help_text": "Applies to /google group add, remove, sync add, sync remove, sync now, and scheduled syncs. Groups with more members require a system admin. Must be at least the team admin threshold.",
+                        "default": 100
+                    },
+                    {
+                        "key": "GoogleGroupsSyncOverview",
+                        "display_name": "Google Groups Sync: configured syncs",
+                        "type": "custom",
+                        "help_text": "View configured Google Group syncs across all teams."
                     }
                 ]
             },

@@ -55,6 +55,12 @@ type configuration struct {
 	KeycloakMigrationExternalEmailText        string
 	GoogleGroupsSyncServiceAccountKey         string
 	GoogleGroupsSyncAdminEmail                string
+	GoogleGroupsSyncFallbackEmail             string
+	GoogleGroupsSyncDomain                    string
+	GoogleGroupsSyncAlternateDomain           string
+	GoogleGroupsSyncAdminUsers                []string
+	GoogleGroupChannelTeamAdminThreshold      int
+	GoogleGroupChannelSystemAdminThreshold    int
 
 	OIDCOnboarding_OnOffBool    bool
 	OIDCOnboarding_DefaultTeams []string
@@ -86,6 +92,7 @@ func (c *configuration) Clone() *configuration {
 	clone.InternationalStudents_DefaultEnglishTeams = slices.Clone(c.InternationalStudents_DefaultEnglishTeams)
 	clone.InternationalStudents_DefaultChannels = slices.Clone(c.InternationalStudents_DefaultChannels)
 	clone.OIDCOnboarding_DefaultTeams = slices.Clone(c.OIDCOnboarding_DefaultTeams)
+	clone.GoogleGroupsSyncAdminUsers = slices.Clone(c.GoogleGroupsSyncAdminUsers)
 	clone.TranslatorBot_Custom_ChannelList = slices.Clone(c.TranslatorBot_Custom_ChannelList)
 	clone.TranslatorBot_Custom_ExcludedChannels = slices.Clone(c.TranslatorBot_Custom_ExcludedChannels)
 
@@ -135,11 +142,20 @@ func (p *Plugin) setConfiguration(configuration *configuration) {
 
 // OnConfigurationChange is invoked when configuration changes may have been made.
 func (p *Plugin) OnConfigurationChange() error {
-	configuration := &configuration{TeamJoinCategories_OnOffBool: true}
+	configuration := &configuration{
+		TeamJoinCategories_OnOffBool:           true,
+		GoogleGroupChannelTeamAdminThreshold:   30,
+		GoogleGroupChannelSystemAdminThreshold: 100,
+	}
 
 	// Load the public configuration fields from the Mattermost server configuration.
 	if err := p.API.LoadPluginConfiguration(configuration); err != nil {
 		return errors.Wrap(err, "failed to load plugin configuration")
+	}
+
+	if configuration.GoogleGroupChannelTeamAdminThreshold < 0 ||
+		configuration.GoogleGroupChannelSystemAdminThreshold < configuration.GoogleGroupChannelTeamAdminThreshold {
+		return errors.New("Google Groups Sync thresholds must be non-negative and the system admin threshold must not be less than the team admin threshold")
 	}
 
 	p.setConfiguration(configuration)

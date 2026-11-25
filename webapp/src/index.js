@@ -1,6 +1,7 @@
 import manifest from './manifest';
 
 import DefaultChannelsSettings from './components/admin_settings/default_channels/default_channels_cs';
+import GoogleGroupsSyncOverview from './components/admin_settings/google_groups_sync_overview';
 import SelectChannel from './components/admin_settings/single_type_input/select_channel';
 import SelectChannels from './components/admin_settings/single_type_input/select_channels';
 import SelectTeams from './components/admin_settings/single_type_input/select_teams';
@@ -24,6 +25,8 @@ export default class Plugin {
         registry.registerAdminConsoleCustomSetting('LoggingChannelID', LoggingChannelId, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('KeycloakModerationLogChannelID', SelectChannel, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_Users', SelectUsers, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('GoogleGroupsSyncAdminUsers', SelectUsers, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('GoogleGroupsSyncOverview', GoogleGroupsSyncOverview);
         registry.registerAdminConsoleCustomSetting('InternationalStudents_DefaultSwedishTeams', SelectTeams, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_DefaultEnglishTeams', SelectTeams, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_DefaultChannels', SelectChannels, {showTitle: true});

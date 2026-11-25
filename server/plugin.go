@@ -149,6 +149,8 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 		return p.forceSyncInternationals(args)
 	case "default_channel":
 		return p.defaultChannelCommand(args)
+	case "google":
+		return p.googleGroupCommand(args)
 	case "keycloak":
 		return p.keycloakCommand(args)
 	case "team":
@@ -208,6 +210,14 @@ func (p *Plugin) OnActivate() error {
 		AutoComplete:     true,
 		AutoCompleteHint: "set|unset|list",
 		AutoCompleteDesc: "Manage this team's default channels (team admins only)",
+	}); err != nil {
+		return err
+	}
+	if err := p.API.RegisterCommand(&model.Command{
+		Trigger:          "google",
+		AutoComplete:     true,
+		AutoCompleteHint: "group add|remove|sync|manage ...",
+		AutoCompleteDesc: "Manage Google Groups and channel memberships",
 	}); err != nil {
 		return err
 	}

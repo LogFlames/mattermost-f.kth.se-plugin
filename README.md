@@ -85,6 +85,107 @@ requesting user in the configured reply or direct-message context.
 Successful translations are posted to the audit channel only when an audit
 channel is configured.
 
+## Google Groups
+
+Configure **Google Groups Sync: Service account JSON key** with a service
+account authorized for domain-wide delegation and the Google Directory API
+`admin.directory.group.readonly` and `admin.directory.user.readonly`, and Cloud
+Identity API `cloud-identity.groups.readonly` and `cloud-identity.groups`
+scopes. Enable the Cloud Identity API for the service account's Google Cloud
+project.
+Group reads are delegated to the invoking user's account in the configured
+**Google Groups Sync: organization domain**. Mattermost users without an
+organization address use **Google Groups Sync: fallback account email** for
+group reads. Select Mattermost users in **Google Groups Sync: admin delegation
+users** and configure **Google Groups Sync: admin email** to automatically use
+that admin account for their channel operations instead. Other users still use
+their own or the fallback account. Google Group management always uses the
+caller's own organization account, never switching to admin or fallback
+delegation. `/google group manage` resolves groups, reads direct members, and
+adds or removes members through the Cloud Identity API, so Google Groups
+owners and managers can manage groups without Directory API group permissions.
+For channel operations, the plugin reads the group and its direct and indirect
+members through the Directory API using the delegated account. If Google
+denies that read, the plugin checks direct-member access with Cloud Identity
+using the same account, then retries the Directory read using the configured
+admin email. Other errors are not retried this way.
+
+Cloud Identity's direct membership listing is used to check access, not to
+expand nested groups: its [transitive membership API](https://docs.cloud.google.com/identity/docs/reference/rest/v1/groups.memberships/searchTransitiveMemberships)
+requires permission to view all transitive memberships and a qualifying Google
+Workspace or Cloud Identity edition. The plugin uses the resulting Directory
+membership list with the Mattermost API to change channel membership; it does
+not add users to Mattermost through Cloud Identity.
+
+In `/google group` commands, group names may omit the domain; the configured
+organization domain is appended (for example, `team` becomes
+`team@fysiksektionen.se` with the default domain). Full group addresses remain
+supported. **Google Groups Sync: alternate Mattermost email domain** defaults to
+`f.kth.se`. User addresses in that domain are treated as the same local part in
+the configured organization domain for `/google` delegation, group management,
+and channel membership matching. Clear the setting to disable the mapping.
+When both addresses exist in Mattermost, channel operations prefer the exact
+Google member address.
+
+System or team admins can run these commands:
+
+- `/google group sync start <group-email> <YYYY-MM-DD>` previews the group and opens a
+  confirmation dialog. On confirmation, active group members with a matching
+  Mattermost account who already belong to the channel's team are added to the
+  channel. The sync runs hourly through 23:59:59 UTC on the deadline date.
+  Team admins can choose a deadline up to one year from the current UTC date;
+  only system admins can choose a later deadline.
+- `/google group sync stop <group-email>` confirms and stops future additions.
+  Existing channel members are never removed by sync or by removing a sync.
+- `/google group sync list` shows active syncs configured for the current channel.
+- `/google group sync now` previews and immediately runs all active syncs
+  for the current channel, without changing their hourly schedules or deadlines.
+
+Channel sync includes users with direct or indirect (nested-group) memberships;
+only user members are added, never groups. Manual syncs use the requesting
+admin's delegated account, subject to the admin retry described above. Scheduled
+syncs use the account recorded when the sync was created, including the admin
+account if it was needed for the initial read. Sync creation and every manual
+or scheduled run check the creator's own organization account for direct-member
+access. Scheduled syncs pause if the creator loses that access or the required
+admin permissions, or if a recorded account changes. Commands require membership
+in the target channel, and listing syncs requires access to every listed group.
+Sync reports identify the creator's Mattermost user ID and the Google account
+used for scheduled runs.
+System admins can view configured syncs across teams in the Google Workspace
+Integration settings. The read-only overview includes expired records awaiting
+cleanup; use the sync commands to change them.
+
+The confirmation shows the group name and address, member count, first five
+members alphabetically by email, and channel name. It expires after five
+minutes, and the group membership is rechecked before applying it. Failed
+scheduled syncs are logged and retried on the next hourly run.
+
+`/google group add <group-email>` and `/google group remove <group-email>` add or remove
+matching direct and indirect Google Group users from the current channel once,
+without changing Google Group membership or sync configuration. They require
+confirmation and Google read access. Groups above the configurable team-admin
+threshold (default 30 members) require a system or team admin; groups above
+the system-admin threshold (default 100) require a system admin. Thresholds
+must be non-negative, and the system-admin threshold must be at least the
+team-admin threshold.
+These limits also apply to sync additions, removals, and runs. You cannot remove
+yourself. An active sync may add removed members again.
+
+`/google group manage <group-email> get` lists all direct members, including
+directly nested groups, without expanding those groups. The result is visible
+only to the caller. Google determines whether the caller can read the group.
+
+`/google group manage <group-email> add/remove @<username>` adds or removes
+the selected Mattermost user's Google account directly in Google Groups after
+confirmation. Both the caller and target must have accounts in the configured
+organization domain. Google decides whether the caller can change that group;
+the plugin does not use group settings to infer permission. Only Google users,
+not groups or the configured fallback account, can be added; removal applies
+only to direct user membership. You cannot remove yourself, including through
+another address for the same Google account. Removal requires Google Directory
+access to verify both accounts.
+
 ## Default channels
 
 Enable **Default Channels: Module enabled?** in the plugin settings. Team admins

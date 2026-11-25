@@ -24,6 +24,14 @@ func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Req
 		p.serveMistralModels(w, r)
 		return
 	}
+	if r.URL.Path == "/google-groups/confirm" {
+		p.serveGoogleGroupConfirmation(w, r)
+		return
+	}
+	if r.URL.Path == "/google-groups/syncs" {
+		p.serveGoogleGroupSyncOverview(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/admin/") {
 		p.serveAdminDashboard(w, r)
 		return

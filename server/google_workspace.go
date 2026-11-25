@@ -29,7 +29,18 @@ type googleAPIError struct {
 }
 
 func (e *googleAPIError) Error() string {
-	return fmt.Sprintf("Google Directory API returned HTTP %d: %s", e.status, e.body)
+	return fmt.Sprintf("Google API returned HTTP %d: %s", e.status, e.body)
+}
+
+type googleTokenError struct {
+	status      int
+	body        string
+	code        string
+	description string
+}
+
+func (e *googleTokenError) Error() string {
+	return fmt.Sprintf("Google token endpoint returned HTTP %d: %s", e.status, e.body)
 }
 
 type googleServiceAccount struct {
@@ -75,7 +86,7 @@ func (p *Plugin) googleServiceAccountKey(keyName string) (string, error) {
 	}
 }
 
-func (p *Plugin) googleAccessToken(serviceAccountKey, adminEmail string) (string, error) {
+func (p *Plugin) googleAccessToken(serviceAccountKey, adminEmail string, additionalScopes ...string) (string, error) {
 	var account googleServiceAccount
 	if err := json.Unmarshal([]byte(serviceAccountKey), &account); err != nil {
 		return "", fmt.Errorf("decode Google service account key: %w", err)
@@ -104,8 +115,16 @@ func (p *Plugin) googleAccessToken(serviceAccountKey, adminEmail string) (string
 	}
 	now := time.Now()
 	header, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT"})
+	scopes := additionalScopes
+	if len(scopes) == 0 {
+		scopes = []string{
+			"https://www.googleapis.com/auth/admin.directory.user.readonly",
+			"https://www.googleapis.com/auth/admin.directory.user",
+			"https://www.googleapis.com/auth/admin.directory.orgunit.readonly",
+		}
+	}
 	claims, _ := json.Marshal(map[string]interface{}{
-		"iss": account.ClientEmail, "scope": "https://www.googleapis.com/auth/admin.directory.user.readonly https://www.googleapis.com/auth/admin.directory.user https://www.googleapis.com/auth/admin.directory.orgunit.readonly",
+		"iss": account.ClientEmail, "scope": strings.Join(scopes, " "),
 		"aud": account.TokenURI, "iat": now.Unix(), "exp": now.Add(time.Hour).Unix(),
 	})
 	if adminEmail != "" {
@@ -133,7 +152,15 @@ func (p *Plugin) googleAccessToken(serviceAccountKey, adminEmail string) (string
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
-		return "", fmt.Errorf("Google token endpoint returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		var oauthError struct {
+			Error       string `json:"error"`
+			Description string `json:"error_description"`
+		}
+		_ = json.Unmarshal(body, &oauthError)
+		return "", &googleTokenError{
+			status: response.StatusCode, body: strings.TrimSpace(string(body)),
+			code: oauthError.Error, description: oauthError.Description,
+		}
 	}
 	var token struct {
 		AccessToken string `json:"access_token"`
@@ -145,11 +172,23 @@ func (p *Plugin) googleAccessToken(serviceAccountKey, adminEmail string) (string
 }
 
 func (p *Plugin) googleRequest(serviceAccountKeyName, adminEmail, method, endpoint string, payload interface{}, result interface{}) error {
+	var additionalScopes []string
+	if serviceAccountKeyName == googleGroupsSyncServiceAccountKey {
+		additionalScopes = []string{
+			googleCloudIdentityWriteScope,
+			"https://www.googleapis.com/auth/admin.directory.group.readonly",
+			"https://www.googleapis.com/auth/admin.directory.user.readonly",
+		}
+	}
+	return p.googleRequestWithScopes(serviceAccountKeyName, adminEmail, method, endpoint, payload, result, additionalScopes...)
+}
+
+func (p *Plugin) googleRequestWithScopes(serviceAccountKeyName, adminEmail, method, endpoint string, payload interface{}, result interface{}, scopes ...string) error {
 	serviceAccountKey, err := p.googleServiceAccountKey(serviceAccountKeyName)
 	if err != nil {
 		return err
 	}
-	token, err := p.googleAccessToken(serviceAccountKey, adminEmail)
+	token, err := p.googleAccessToken(serviceAccountKey, adminEmail, scopes...)
 	if err != nil {
 		return err
 	}
@@ -171,7 +210,7 @@ func (p *Plugin) googleRequest(serviceAccountKeyName, adminEmail, method, endpoi
 	}
 	response, err := (&http.Client{Timeout: 15 * time.Second}).Do(request)
 	if err != nil {
-		return fmt.Errorf("call Google Directory API: %w", err)
+		return fmt.Errorf("call Google API: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -180,7 +219,7 @@ func (p *Plugin) googleRequest(serviceAccountKeyName, adminEmail, method, endpoi
 	}
 	if result != nil && response.StatusCode != http.StatusNoContent {
 		if err := json.NewDecoder(response.Body).Decode(result); err != nil {
-			return fmt.Errorf("decode Google Directory response: %w", err)
+			return fmt.Errorf("decode Google API response: %w", err)
 		}
 	}
 	return nil
