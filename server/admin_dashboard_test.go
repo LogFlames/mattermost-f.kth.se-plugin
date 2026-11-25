@@ -79,6 +79,16 @@ func (a *adminTestAPI) UpdateUser(user *model.User) (*model.User, *model.AppErro
 	}
 	return nil, testAppError(http.StatusNotFound)
 }
+func (a *adminTestAPI) UpdateUserAuth(userID string, auth *model.UserAuth) (*model.UserAuth, *model.AppError) {
+	for _, user := range a.users {
+		if user != nil && user.Id == userID {
+			user.AuthService = auth.AuthService
+			user.AuthData = auth.AuthData
+			return auth, nil
+		}
+	}
+	return nil, testAppError(http.StatusNotFound)
+}
 func (a *adminTestAPI) CreateUser(user *model.User) (*model.User, *model.AppError) {
 	if user.Id == "" {
 		user.Id = "created-" + user.Username

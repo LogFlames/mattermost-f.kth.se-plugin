@@ -22,6 +22,7 @@ export default class Plugin {
         registry.registerAdminConsoleCustomSetting('ModeratorBot_Channels', SelectChannels, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('JoinLeaveFree_BotUserId', JoinLeaveFreeBotUserId, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('LoggingChannelID', LoggingChannelId, {showTitle: true});
+        registry.registerAdminConsoleCustomSetting('KeycloakModerationLogChannelID', SelectChannel, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_Users', SelectUsers, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_DefaultSwedishTeams', SelectTeams, {showTitle: true});
         registry.registerAdminConsoleCustomSetting('InternationalStudents_DefaultEnglishTeams', SelectTeams, {showTitle: true});

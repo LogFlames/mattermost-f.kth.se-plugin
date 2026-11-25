@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/mail"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -40,6 +42,27 @@ type keycloakUserRepresentation struct {
 	Attributes map[string][]string `json:"attributes"`
 }
 
+type keycloakUserDetails struct {
+	keycloakUserRepresentation
+	Enabled       *bool `json:"enabled,omitempty"`
+	EmailVerified *bool `json:"emailVerified,omitempty"`
+}
+
+const keepKeycloakLoginFlag = "--keep-mamo-login-through-keycloak"
+const forceGoogleLoginFlag = "--force-mamo-login-through-google"
+
+func (p *Plugin) registerKeycloakCommand() error {
+	command := &model.Command{
+		Trigger:          "keycloak",
+		AutoComplete:     true,
+		AutoCompleteHint: "[get|ban|unban|new-user|delete-user|reset-password|set-login-method|migrate-to-google|migrate-to-keycloak]",
+		AutoCompleteDesc: "Manage or migrate a Keycloak account",
+	}
+	command.AutocompleteData = model.NewAutocompleteData(command.Trigger, command.AutoCompleteHint, command.AutoCompleteDesc)
+	command.AutocompleteData.RoleID = model.SystemAdminRoleId
+	return p.API.RegisterCommand(command)
+}
+
 func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
 	if !p.API.HasPermissionTo(args.UserId, model.PermissionManageSystem) {
@@ -54,22 +77,27 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 	}
 
 	switch fields[1] {
-	case "enable", "disable":
-		allowMattermostLogin := fields[1] == "enable"
-		return p.setKeycloakMattermostLogin(args, fields, allowMattermostLogin)
-	case "reset_password":
+	case "get":
+		return p.getKeycloakAccountDetails(fields)
+	case "ban", "unban":
+		return p.setKeycloakAccountBan(args, fields)
+	case "delete-user":
+		return p.deleteKeycloakAccount(fields)
+	case "reset-password":
 		if len(fields) != 3 {
-			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["reset_password"], "reset_password")
+			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["reset-password"], "reset-password")
 			return response, nil
 		}
 		return p.resetKeycloakUserPassword(args, fields[2])
-	case "migrate_to_google":
+	case "set-login-method":
+		return p.setLoginMethod(fields)
+	case "migrate-to-google":
 		return p.migrateKeycloakUserToGoogle(args, fields)
-	case "migrate_to_keycloak":
+	case "migrate-to-keycloak":
 		return p.migrateGoogleUserToKeycloak(args, fields)
-	case "new_user":
+	case "new-user":
 		if len(fields) == 2 {
-			response.Text = keycloakUsageWithDescriptions(keycloakNewUserUsage, "new_user")
+			response.Text = keycloakUsageWithDescriptions(keycloakNewUserUsage, "new-user")
 			return response, nil
 		}
 		if len(fields) != 8 {
@@ -107,38 +135,44 @@ func (p *Plugin) keycloakCommand(args *model.CommandArgs) (*model.CommandRespons
 }
 
 var keycloakMigrateUsage map[string]string = map[string]string{
-	"enable":                            "Usage: `/keycloak enable @<mattermost-user>`",
-	"disable":                           "Usage: `/keycloak disable @<mattermost-user>`",
-	"reset_password":                    "Usage: `/keycloak reset_password @<mattermost-user>`",
-	"migrate_to_google":                 "Usage: `/keycloak migrate_to_google list-org-units|create-kth|create-external|bind|unmigrate`",
-	"migrate_to_google list-org-units":  "Usage: `/keycloak migrate_to_google list-org-units`",
-	"migrate_to_google create-kth":      "Usage: `/keycloak migrate_to_google create-kth @<mattermost-user-to-migrate> <kth-id> <org-unit-key>`",
-	"migrate_to_google create-external": "Usage: `/keycloak migrate_to_google create-external @<mattermost-user-to-migrate> <fysiksektionen.se-address> <org-unit-key>`",
-	"migrate_to_google bind":            "Usage: `/keycloak migrate_to_google bind @<mattermost-user-to-migrate> <fysiksektionen.se-address>`",
-	"migrate_to_google unmigrate":       "Usage: `/keycloak migrate_to_google unmigrate @<mattermost-user-to-unmigrate>`",
-	"migrate_to_keycloak":               "Usage: `/keycloak migrate_to_keycloak prep|create|bind|update`",
-	"migrate_to_keycloak create":        "Usage: `/keycloak migrate_to_keycloak create @<mattermost-user-to-migrate> <keycloak-email>`",
-	"migrate_to_keycloak bind":          "Usage: `/keycloak migrate_to_keycloak bind @<mattermost-user-to-migrate> <keycloak-email>`",
-	"migrate_to_keycloak update":        "Usage: `/keycloak migrate_to_keycloak update @<mattermost-user-to-migrate>`",
-	"migrate_to_keycloak prep":          "Usage: `/keycloak migrate_to_keycloak prep <google-account-email>`",
+	"get":                               "Usage: `/keycloak get @<mattermost-user>`",
+	"ban":                               "Usage: `/keycloak ban @<mattermost-user> <reason>`",
+	"unban":                             "Usage: `/keycloak unban @<mattermost-user>`",
+	"delete-user":                       "Usage: `/keycloak delete-user by-email <mattermost-email> [--also-deactivate]` or `/keycloak delete-user by-authdata @<mattermost-user> [--also-deactivate]`",
+	"reset-password":                    "Usage: `/keycloak reset-password @<mattermost-user>`",
+	"set-login-method":                  "Usage: `/keycloak set-login-method @<mattermost-user> google|saml`",
+	"migrate-to-google":                 "Usage: `/keycloak migrate-to-google list-org-units|create-kth|create-external|bind|unmigrate`",
+	"migrate-to-google list-org-units":  "Usage: `/keycloak migrate-to-google list-org-units`",
+	"migrate-to-google create-kth":      "Usage: `/keycloak migrate-to-google create-kth @<mattermost-user-to-migrate> <kth-id> <org-unit-key> [--keep-mamo-login-through-keycloak]`",
+	"migrate-to-google create-external": "Usage: `/keycloak migrate-to-google create-external @<mattermost-user-to-migrate> <fysiksektionen.se-address> <org-unit-key> [--force-mamo-login-through-google]`",
+	"migrate-to-google bind":            "Usage: `/keycloak migrate-to-google bind @<mattermost-user-to-migrate> <fysiksektionen.se-address> [--keep-mamo-login-through-keycloak]`",
+	"migrate-to-google unmigrate":       "Usage: `/keycloak migrate-to-google unmigrate @<mattermost-user-to-unmigrate>`",
+	"migrate-to-keycloak":               "Usage: `/keycloak migrate-to-keycloak prep|create|bind|update`",
+	"migrate-to-keycloak create":        "Usage: `/keycloak migrate-to-keycloak create @<mattermost-user-to-migrate> <keycloak-email>`",
+	"migrate-to-keycloak bind":          "Usage: `/keycloak migrate-to-keycloak bind @<mattermost-user-to-migrate> <keycloak-email>`",
+	"migrate-to-keycloak update":        "Usage: `/keycloak migrate-to-keycloak update @<mattermost-user-to-migrate>`",
+	"migrate-to-keycloak prep":          "Usage: `/keycloak migrate-to-keycloak prep <google-account-email>`",
 }
 
 var keycloakSubcommandDescriptions map[string]string = map[string]string{
-	"enable":                            "Allow a Mattermost user to log in through their linked Keycloak account.",
-	"disable":                           "Prevent a Mattermost user from logging in through their linked Keycloak account.",
-	"new_user":                          "Create a domestic Keycloak account for a Mattermost username, with a temporary password.",
-	"reset_password":                    "Generate a new temporary password for the user's linked Keycloak account. The password must be changed on first login.",
-	"migrate_to_google":                 "Migrate a Mattermost account from Keycloak/SAML to Google Workspace/OpenID, including its Keycloak username and migration metadata.",
-	"migrate_to_google list-org-units":  "List the available org-unit keys and their Google Workspace organization units.",
-	"migrate_to_google create-kth":      "Create a KTH user's Google Workspace account using an f-Ø or f-XX org-unit key, then switch the Mattermost account to Google/OpenID immediately.",
-	"migrate_to_google create-external": "Create an external Google Workspace account using an alumner, external, or utility org-unit key, then switch the Mattermost account to Google/OpenID immediately.",
-	"migrate_to_google bind":            "Bind an existing Google Workspace account to a Mattermost account currently using Keycloak and switch the Mattermost account to Google/OpenID immediately.",
-	"migrate_to_google unmigrate":       "Reverse a Google migration and restore the Mattermost account's old Keycloak identity.",
-	"migrate_to_keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID to Keycloak/SAML.",
-	"migrate_to_keycloak create":        "Create a temporary-password Keycloak account from the Mattermost user's Google profile and immediately switch the Mattermost account to SAML/Keycloak.",
-	"migrate_to_keycloak bind":          "Bind an existing Keycloak account to a Mattermost account currently using Google and immediately switch the Mattermost account to SAML/Keycloak.",
-	"migrate_to_keycloak update":        "Synchronize a previously created or bound Keycloak account with the Mattermost user's current Google ID, username, profile data, and migration metadata.",
-	"migrate_to_keycloak prep":          "Create a Mattermost user from an existing Google account, if no matching Mattermost account already exists.",
+	"get":                               "Show a user's Mattermost authentication and linked Keycloak account details.",
+	"ban":                               "Ban a user's Keycloak account, record the reason, and deactivate their Mattermost account.",
+	"unban":                             "Unban a user's Keycloak account and clear the ban reason. This does not reactivate their Mattermost account.",
+	"delete-user":                       "Permanently delete a Keycloak account matched by its mattermostEmail attribute or a Mattermost user's auth data; optionally deactivate the Mattermost user.",
+	"new-user":                          "Create a domestic Keycloak account for a Mattermost username, with a temporary password.",
+	"reset-password":                    "Generate a new temporary password for the user's linked Keycloak account. The password must be changed on first login.",
+	"set-login-method":                  "Set Google/OpenID or Keycloak/SAML authentication when both accounts have the same authentication ID, and update Keycloak's Mattermost login permission.",
+	"migrate-to-google":                 "Migrate a Keycloak account to Google, including its username and migration metadata. Login defaults to Google/OpenID for create-kth and bind, and Keycloak/SAML for create-external.",
+	"migrate-to-google list-org-units":  "List the available org-unit keys and their Google Workspace organization units.",
+	"migrate-to-google create-kth":      "Create a KTH user's Google Workspace account using an f-Ø or f-XX org-unit key, then update the Mattermost login method.",
+	"migrate-to-google create-external": "Create an external Google Workspace account using an alumner, external, or utility org-unit key. Keep Keycloak/SAML unless --force-mamo-login-through-google is specified.",
+	"migrate-to-google bind":            "Bind an existing Google Workspace account to a Mattermost account currently using Keycloak, then update the Mattermost login method.",
+	"migrate-to-google unmigrate":       "Reverse a Google migration and restore the Mattermost account's old Keycloak/SAML identity.",
+	"migrate-to-keycloak":               "Migrate a Mattermost account from Google Workspace/OpenID to Keycloak/SAML.",
+	"migrate-to-keycloak create":        "Create a temporary-password Keycloak account from the Mattermost user's Google profile and immediately switch the Mattermost account to SAML/Keycloak.",
+	"migrate-to-keycloak bind":          "Bind an existing Keycloak account to a Mattermost account currently using Google and immediately switch the Mattermost account to SAML/Keycloak.",
+	"migrate-to-keycloak update":        "Synchronize a previously created or bound Keycloak account with the Mattermost user's current Google ID, username, profile data, and migration metadata.",
+	"migrate-to-keycloak prep":          "Create a Mattermost user from an existing Google account, if no matching Mattermost account already exists.",
 }
 
 func keycloakUsageWithDescriptions(usage, subcommand string) string {
@@ -148,14 +182,299 @@ func keycloakUsageWithDescriptions(usage, subcommand string) string {
 	return usage
 }
 
-func (p *Plugin) setKeycloakMattermostLogin(args *model.CommandArgs, fields []string, allow bool) (*model.CommandResponse, *model.AppError) {
+func (p *Plugin) getKeycloakAccountDetails(fields []string) (*model.CommandResponse, *model.AppError) {
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
-	action := "disable"
-	if allow {
-		action = "enable"
-	}
 	if len(fields) != 3 {
-		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage[action], action)
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["get"], "get")
+		return response, nil
+	}
+	user, err := p.migrationMattermostUser(fields[2])
+	if err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	service := user.AuthService
+	if service == "" {
+		service = "email/password"
+	}
+	auth, err := json.MarshalIndent(struct {
+		Username    string  `json:"username"`
+		AuthService string  `json:"auth_service"`
+		AuthData    *string `json:"auth_data"`
+	}{user.Username, service, user.AuthData}, "", "  ")
+	if err != nil {
+		response.Text = fmt.Sprintf("Could not format Mattermost authentication: %v", err)
+		return response, nil
+	}
+	response.Text = "#### Mattermost authentication\n\n" + indentKeycloakJSON(auth)
+	if user.AuthData == nil || *user.AuthData == "" {
+		response.Text += "\n\nCould not find the Keycloak account: Mattermost user has no authentication data."
+		return response, nil
+	}
+	authData := *user.AuthData
+	match, err := p.getKeycloakUserByQueryWithUniqueness("q", "mattermostID:"+authData, false, true)
+	if err != nil {
+		response.Text += fmt.Sprintf("\n\nCould not find a unique Keycloak account: %v", err)
+		return response, nil
+	}
+	if match.ID == "" {
+		response.Text += "\n\nCould not read the Keycloak account: the matching account has no ID."
+		return response, nil
+	}
+	profile, err := p.getKeycloakUserDetails(match.ID)
+	if err != nil {
+		response.Text += fmt.Sprintf("\n\nCould not read the Keycloak account: %v", err)
+		return response, nil
+	}
+	if profile.ID != match.ID || !slices.Contains(profile.Attributes["mattermostID"], authData) {
+		response.Text += "\n\nCould not verify that the Keycloak account matches the Mattermost authentication data."
+		return response, nil
+	}
+	details, err := json.MarshalIndent(profile, "", "  ")
+	if err != nil {
+		response.Text += fmt.Sprintf("\n\nCould not format the Keycloak account: %v", err)
+		return response, nil
+	}
+	response.Text += "\n\n#### Keycloak account\n\n" + indentKeycloakJSON(details)
+	return response, nil
+}
+
+func indentKeycloakJSON(data []byte) string {
+	return "    " + strings.ReplaceAll(string(data), "\n", "\n    ")
+}
+
+func (p *Plugin) getKeycloakUserDetails(userID string) (*keycloakUserDetails, error) {
+	configuration := p.getConfiguration()
+	if configuration.KeycloakClientID == "" || configuration.KeycloakClientSecret == "" {
+		return nil, fmt.Errorf("Keycloak client credentials are not configured")
+	}
+	token, err := p.getKeycloakAccessToken(configuration.KeycloakClientID, configuration.KeycloakClientSecret)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := fmt.Sprintf("%s/admin/realms/%s/users/%s", keycloakURL, url.PathEscape(keycloakRealm), url.PathEscape(userID))
+	request, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create Keycloak user details request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("get Keycloak user details: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Keycloak user details returned HTTP %d", response.StatusCode)
+	}
+	var user keycloakUserDetails
+	if err := json.NewDecoder(response.Body).Decode(&user); err != nil {
+		return nil, fmt.Errorf("decode Keycloak user details: %w", err)
+	}
+	return &user, nil
+}
+
+func (p *Plugin) setLoginMethod(fields []string) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	if len(fields) != 4 {
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["set-login-method"], "set-login-method")
+		return response, nil
+	}
+	var target string
+	switch strings.ToLower(fields[3]) {
+	case "google":
+		target = model.ServiceOpenid
+	case "saml":
+		target = model.UserAuthServiceSaml
+	default:
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["set-login-method"], "set-login-method")
+		return response, nil
+	}
+	user, err := p.migrationMattermostUser(fields[2])
+	if err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	switch user.AuthService {
+	case model.ServiceOpenid, model.UserAuthServiceSaml:
+	default:
+		response.Text = "Mattermost user is not authenticated with Google/OpenID or Keycloak/SAML."
+		return response, nil
+	}
+	if user.AuthData == nil || *user.AuthData == "" {
+		response.Text = "Mattermost user has no authentication data."
+		return response, nil
+	}
+	authData := *user.AuthData
+	keycloakUser, err := p.getKeycloakUserByMattermostID(authData)
+	if err != nil {
+		response.Text = fmt.Sprintf("Could not find the Keycloak account for @%s: %v", user.Username, err)
+		return response, nil
+	}
+	if keycloakMigrationAttribute(keycloakUser, "mattermostID") != authData {
+		response.Text = "Keycloak mattermostID does not match the Mattermost authentication data."
+		return response, nil
+	}
+	configuration := p.getConfiguration()
+	googleUser, err := p.getGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, authData)
+	if err != nil {
+		response.Text = fmt.Sprintf("Could not find the Google account for @%s: %v", user.Username, err)
+		return response, nil
+	}
+	if googleUser.ID != authData {
+		response.Text = "Google account ID does not match the Mattermost authentication data."
+		return response, nil
+	}
+	allowKeycloak := target == model.UserAuthServiceSaml
+	previousService := user.AuthService
+	previousPermission, hadPermission := keycloakUser.Attributes["allowMattermostLogin"]
+	if allowKeycloak {
+		if err = p.updateKeycloakMattermostLogin(keycloakUser, true); err != nil {
+			response.Text = fmt.Sprintf("Could not enable Keycloak Mattermost login; Mattermost authentication was not changed: %v", err)
+			return response, nil
+		}
+	}
+	if user.AuthService != target {
+		if err = p.updateMattermostIdentity(user, target, authData); err != nil {
+			if allowKeycloak {
+				if rollbackErr := p.writeKeycloakMattermostLogin(keycloakUser, previousPermission, hadPermission); rollbackErr != nil {
+					response.Text = fmt.Sprintf("Keycloak Mattermost login was enabled, but %v; restoring the previous Keycloak permission failed: %v", err, rollbackErr)
+				} else {
+					response.Text = fmt.Sprintf("Could not change Mattermost authentication: %v. The previous Keycloak login permission was restored.", err)
+				}
+			} else {
+				response.Text = fmt.Sprintf("Mattermost authentication was not changed; Keycloak Mattermost login was not changed: %v", err)
+			}
+			return response, nil
+		}
+	}
+	if !allowKeycloak {
+		if err = p.updateKeycloakMattermostLogin(keycloakUser, false); err != nil {
+			if previousService != target {
+				if rollbackErr := p.updateMattermostIdentity(user, previousService, authData); rollbackErr != nil {
+					response.Text = fmt.Sprintf("Mattermost authentication was set to Google/OpenID, but Keycloak login permission could not be disabled: %v. Restoring the previous Mattermost authentication failed: %v", err, rollbackErr)
+				} else {
+					response.Text = fmt.Sprintf("Could not disable Keycloak Mattermost login: %v. The previous Mattermost authentication was restored.", err)
+				}
+			} else {
+				response.Text = fmt.Sprintf("Mattermost authentication is set to Google/OpenID, but Keycloak Mattermost login permission could not be disabled: %v", err)
+			}
+			return response, nil
+		}
+	}
+	if allowKeycloak {
+		response.Text = fmt.Sprintf("Set @%s to Keycloak/SAML authentication and enabled Keycloak Mattermost login.", user.Username)
+	} else {
+		response.Text = fmt.Sprintf("Set @%s to Google/OpenID authentication and disabled Keycloak Mattermost login.", user.Username)
+	}
+	return response, nil
+}
+
+func (p *Plugin) deleteKeycloakAccount(fields []string) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	if (len(fields) != 4 && len(fields) != 5) || (len(fields) == 5 && fields[4] != "--also-deactivate") {
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["delete-user"], "delete-user")
+		return response, nil
+	}
+	deactivate := len(fields) == 5
+	var user *model.User
+	var attribute, value, label string
+	switch fields[2] {
+	case "by-email":
+		if err := validateKeycloakEmail(fields[3]); err != nil {
+			response.Text = err.Error()
+			return response, nil
+		}
+		attribute, value, label = "mattermostEmail", fields[3], fields[3]
+		if deactivate {
+			var appErr *model.AppError
+			user, appErr = p.API.GetUserByEmail(value)
+			if appErr != nil {
+				response.Text = fmt.Sprintf("Could not find Mattermost user by email %q; no account was deleted: %s", value, appErr.Error())
+				return response, nil
+			}
+			if user == nil || user.Id == "" {
+				response.Text = fmt.Sprintf("Mattermost user for email %q was not found; no account was deleted.", value)
+				return response, nil
+			}
+		}
+	case "by-authdata":
+		var err error
+		user, err = p.migrationMattermostUser(fields[3])
+		if err != nil {
+			response.Text = err.Error()
+			return response, nil
+		}
+		if user.AuthData == nil || *user.AuthData == "" {
+			response.Text = "Mattermost user has no authentication data; cannot find the Keycloak account."
+			return response, nil
+		}
+		attribute, value, label = "mattermostID", *user.AuthData, "@"+user.Username
+	default:
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["delete-user"], "delete-user")
+		return response, nil
+	}
+	keycloakUser, err := p.getKeycloakUserByQueryWithUniqueness("q", attribute+":"+value, false, true)
+	if err != nil {
+		response.Text = fmt.Sprintf("Could not find a unique Keycloak account for %s: %v", label, err)
+		return response, nil
+	}
+	if keycloakUser.ID == "" || keycloakMigrationAttribute(keycloakUser, attribute) != value {
+		response.Text = fmt.Sprintf("Keycloak account ID or %s is missing or does not match; no account was deleted.", attribute)
+		return response, nil
+	}
+	if err = p.deleteKeycloakUser(keycloakUser.ID); err != nil {
+		response.Text = fmt.Sprintf("Could not confirm deletion of the Keycloak account for %s: %v. Mattermost deactivation was not attempted.", label, err)
+		return response, nil
+	}
+	if deactivate {
+		if appErr := p.API.UpdateUserActive(user.Id, false); appErr != nil {
+			response.Text = fmt.Sprintf("Deleted the Keycloak account for @%s, but Mattermost deactivation failed or was incomplete: %s. Deactivate the Mattermost user separately.", user.Username, appErr.Error())
+			return response, nil
+		}
+		response.Text = fmt.Sprintf("Deleted the Keycloak account and deactivated the Mattermost account for @%s.", user.Username)
+	} else {
+		response.Text = fmt.Sprintf("Deleted the Keycloak account for %s. The Mattermost account was not deactivated.", label)
+		if user == nil {
+			response.Text += " A user relying on Keycloak/SAML can no longer log in through Keycloak."
+		} else if user.AuthService == model.UserAuthServiceSaml {
+			response.Text += " The user can no longer log in through Keycloak/SAML."
+		}
+	}
+	return response, nil
+}
+
+func (p *Plugin) deleteKeycloakUser(userID string) error {
+	configuration := p.getConfiguration()
+	token, err := p.getKeycloakAccessToken(configuration.KeycloakClientID, configuration.KeycloakClientSecret)
+	if err != nil {
+		return err
+	}
+	endpoint := fmt.Sprintf("%s/admin/realms/%s/users/%s", keycloakURL, url.PathEscape(keycloakRealm), url.PathEscape(userID))
+	request, err := http.NewRequest(http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("create Keycloak account deletion request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	if err != nil {
+		return fmt.Errorf("delete Keycloak account: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		details, readErr := io.ReadAll(io.LimitReader(response.Body, 4096))
+		if readErr != nil {
+			return fmt.Errorf("Keycloak account deletion returned HTTP %d (read error response: %w)", response.StatusCode, readErr)
+		}
+		return fmt.Errorf("Keycloak account deletion returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(details)))
+	}
+	return nil
+}
+
+func (p *Plugin) setKeycloakAccountBan(args *model.CommandArgs, fields []string) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	ban := fields[1] == "ban"
+	if (ban && len(fields) < 4) || (!ban && len(fields) != 3) {
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage[fields[1]], fields[1])
 		return response, nil
 	}
 
@@ -174,17 +493,50 @@ func (p *Plugin) setKeycloakMattermostLogin(args *model.CommandArgs, fields []st
 		response.Text = fmt.Sprintf("Could not find the Keycloak account for Mattermost user %s: %v", user.Username, err)
 		return response, nil
 	}
-	if err = p.updateKeycloakMattermostLogin(keycloakUser, allow); err != nil {
+	reason := strings.Join(fields[3:], " ")
+	if err = p.updateKeycloakAccountBan(keycloakUser, ban, reason); err != nil {
 		response.Text = err.Error()
 		return response, nil
 	}
 
-	if allow {
-		response.Text = fmt.Sprintf("Enabled Mattermost login for @%s.", user.Username)
+	if ban {
+		if appErr := p.API.UpdateUserActive(user.Id, false); appErr != nil {
+			response.Text = fmt.Sprintf("The Keycloak account for @%s was banned, but Mattermost deactivation failed or was incomplete: %s. Retry the ban command.", user.Username, appErr.Error())
+		} else {
+			response.Text = fmt.Sprintf("Banned the Keycloak account and deactivated the Mattermost account for @%s.", user.Username)
+		}
 	} else {
-		response.Text = fmt.Sprintf("Disabled Mattermost login for @%s.", user.Username)
+		response.Text = fmt.Sprintf("Unbanned the Keycloak account for @%s. Their Mattermost account was not reactivated.", user.Username)
+	}
+	if err := p.logKeycloakModerationDecision(args.UserId, user.Username, ban, reason); err != nil {
+		p.API.LogError("Could not post Keycloak moderation log", "user_id", args.UserId, "error", err.Error())
+		response.Text += "\n\nCould not post the moderation log. Check the server logs for details."
 	}
 	return response, nil
+}
+
+func (p *Plugin) logKeycloakModerationDecision(adminID, username string, ban bool, reason string) error {
+	channelID := p.getConfiguration().KeycloakModerationLogChannelID
+	if channelID == "" {
+		return nil
+	}
+	admin, appErr := p.API.GetUser(adminID)
+	if appErr != nil {
+		return fmt.Errorf("get moderation administrator: %w", appErr)
+	}
+	if admin == nil || admin.Username == "" {
+		return fmt.Errorf("moderation administrator %q has no username", adminID)
+	}
+	message := fmt.Sprintf("@%s unbanned @%s", admin.Username, username)
+	if ban {
+		message = fmt.Sprintf("@%s banned @%s for the reason: %s", admin.Username, username, reason)
+	}
+	if _, appErr = p.API.CreatePost(&model.Post{
+		UserId: p.pluginBot.UserId, ChannelId: channelID, Message: message,
+	}); appErr != nil {
+		return fmt.Errorf("post moderation decision: %w", appErr)
+	}
+	return nil
 }
 
 func (p *Plugin) resetKeycloakUserPassword(args *model.CommandArgs, reference string) (*model.CommandResponse, *model.AppError) {
@@ -224,14 +576,14 @@ func (p *Plugin) resetKeycloakUserPassword(args *model.CommandArgs, reference st
 func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []string) (*model.CommandResponse, *model.AppError) {
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
 	if len(fields) < 3 {
-		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google"], "migrate_to_google")
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate-to-google"], "migrate-to-google")
 		return response, nil
 	}
 	if fields[2] == "list-org-units" {
 		if len(fields) != 3 {
 			response.Text = keycloakUsageWithDescriptions(
-				keycloakMigrateUsage["migrate_to_google list-org-units"],
-				"migrate_to_google list-org-units",
+				keycloakMigrateUsage["migrate-to-google list-org-units"],
+				"migrate-to-google list-org-units",
 			)
 			return response, nil
 		}
@@ -262,25 +614,46 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 	if fields[2] == "unmigrate" {
 		if len(fields) != 4 {
 			response.Text = keycloakUsageWithDescriptions(
-				keycloakMigrateUsage["migrate_to_google unmigrate"],
-				"migrate_to_google unmigrate",
+				keycloakMigrateUsage["migrate-to-google unmigrate"],
+				"migrate-to-google unmigrate",
 			)
 			return response, nil
 		}
 		return p.unmigrateKeycloakUserFromGoogle(args, fields[3])
 	}
 	if len(fields) == 3 {
-		usageKey := "migrate_to_google " + fields[2]
+		usageKey := "migrate-to-google " + fields[2]
 		if usage := keycloakMigrateUsage[usageKey]; usage != "" {
 			response.Text = keycloakUsageWithDescriptions(usage, usageKey)
 			return response, nil
 		}
-		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google"], "migrate_to_google")
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate-to-google"], "migrate-to-google")
 		return response, nil
 	}
 	if fields[2] != "create-kth" && fields[2] != "create-external" && fields[2] != "bind" {
-		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google"], "migrate_to_google")
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate-to-google"], "migrate-to-google")
 		return response, nil
+	}
+	usageKey := "migrate-to-google " + fields[2]
+	expectedLength := 6
+	if fields[2] == "bind" {
+		expectedLength = 5
+	}
+	keepKeycloakLogin := fields[2] == "create-external"
+	if len(fields) == expectedLength+1 && ((fields[2] == "create-external" && fields[len(fields)-1] == forceGoogleLoginFlag) ||
+		(fields[2] != "create-external" && fields[len(fields)-1] == keepKeycloakLoginFlag)) {
+		keepKeycloakLogin = !keepKeycloakLogin
+		fields = fields[:len(fields)-1]
+	}
+	if len(fields) != expectedLength {
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage[usageKey], usageKey)
+		return response, nil
+	}
+	for _, field := range fields[3:] {
+		if strings.HasPrefix(field, "--") {
+			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage[usageKey], usageKey)
+			return response, nil
+		}
 	}
 	user, err := p.migrationMattermostUser(fields[3])
 	if err != nil {
@@ -307,13 +680,6 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 
 	var googleUser *googleDirectoryUser
 	var password string
-	if len(fields) < 4 {
-		response.Text = keycloakUsageWithDescriptions(
-			keycloakMigrateUsage["migrate_to_google "+fields[2]],
-			"migrate_to_google "+fields[2],
-		)
-		return response, nil
-	}
 	if keycloakMigrationAttributeIsTrue(keycloakUser, "accountMigrated") {
 		response.Text = "Keycloak account is already marked as migrated."
 		return response, nil
@@ -324,10 +690,6 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 	}
 	switch fields[2] {
 	case "create-kth":
-		if len(fields) != 6 {
-			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google create-kth"], "migrate_to_google create-kth")
-			return response, nil
-		}
 		password = randomPassword(16)
 		configuration := p.getConfiguration()
 		units, resolveErr := p.listGoogleOrgUnits(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail)
@@ -343,10 +705,6 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		googleEmail := fmt.Sprintf("%s@fysiksektionen.se", fields[4])
 		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, googleEmail, keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password, keycloakUser.Email)
 	case "create-external":
-		if len(fields) != 6 {
-			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google create-external"], "migrate_to_google create-external")
-			return response, nil
-		}
 		if err = validateFysiksektionenEmail(fields[4]); err != nil {
 			response.Text = err.Error()
 			return response, nil
@@ -365,10 +723,6 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		}
 		googleUser, err = p.createGoogleUser(keycloakMigrationGoogleServiceAccountKey, configuration.KeycloakMigrationGoogleAdminEmail, fields[4], keycloakUser.FirstName, keycloakUser.LastName, orgUnit, password, keycloakUser.Email)
 	case "bind":
-		if len(fields) != 5 {
-			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_google bind"], "migrate_to_google bind")
-			return response, nil
-		}
 		if err = validateFysiksektionenEmail(fields[4]); err != nil {
 			response.Text = err.Error()
 			return response, nil
@@ -379,7 +733,7 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 			err = fmt.Errorf("Google account %q does not exist; use create-kth or create-external first", fields[4])
 		}
 	default:
-		response.Text = keycloakMigrateUsage["migrate_to_google"]
+		response.Text = keycloakMigrateUsage["migrate-to-google"]
 		return response, nil
 	}
 	if err != nil {
@@ -404,18 +758,31 @@ func (p *Plugin) migrateKeycloakUserToGoogle(args *model.CommandArgs, fields []s
 		response.Text = err.Error()
 		return response, nil
 	}
-	if err = p.updateKeycloakMigrationProfile(keycloakUser, true, *user.AuthData, googleUser.ID, googleUser.PrimaryEmail, false, false, keycloakUser.FirstName, keycloakUser.LastName, keycloakUser.Email, keycloakUser.Username, googleUsername(googleUser.PrimaryEmail)); err != nil {
+	previousKeycloakUser := *keycloakUser
+	previousKeycloakUser.Attributes = maps.Clone(keycloakUser.Attributes)
+	if err = p.updateKeycloakMigrationProfile(keycloakUser, true, *user.AuthData, googleUser.ID, googleUser.PrimaryEmail, false, keepKeycloakLogin, keycloakUser.FirstName, keycloakUser.LastName, keycloakUser.Email, keycloakUser.Username, googleUsername(googleUser.PrimaryEmail)); err != nil {
 		response.Text = err.Error()
 		return response, nil
 	}
-	if err = p.updateMattermostIdentity(user, model.ServiceOpenid, googleUser.ID); err != nil {
-		response.Text = err.Error()
+	targetService := model.ServiceOpenid
+	if keepKeycloakLogin {
+		targetService = model.UserAuthServiceSaml
+	}
+	if err = p.updateMattermostIdentity(user, targetService, googleUser.ID); err != nil {
+		if rollbackErr := p.writeKeycloakMigrationProfile(&previousKeycloakUser); rollbackErr != nil {
+			response.Text = fmt.Sprintf("Keycloak migration profile was updated, but %v; restoring the previous Keycloak profile failed: %v", err, rollbackErr)
+		} else {
+			response.Text = fmt.Sprintf("Could not update Mattermost authentication: %v. The previous Keycloak profile was restored; the Google account may already have been created or updated.", err)
+		}
+		if password != "" && fields[2] == "create-external" {
+			response.Text += fmt.Sprintf("\n\nTemporary Google password: `%s`", password)
+		}
 		return response, nil
 	}
 	if fields[2] == "create-kth" || fields[2] == "create-external" || fields[2] == "bind" {
-		p.notifyMigrationInitiator(args.UserId, user.Username, keycloakUser.Username, password, fields[2])
+		p.notifyMigrationInitiator(args.UserId, user.Username, googleUser.PrimaryEmail, keycloakUser.Email, password, fields[2], keepKeycloakLogin)
 	}
-	response.Text = fmt.Sprintf("Migrated @%s to Google account %s. The Mattermost account now uses Google/OpenID authentication with Google ID %s.", user.Username, googleUser.PrimaryEmail, googleUser.ID)
+	response.Text = fmt.Sprintf("Migrated @%s to Google account %s with Google ID %s. %s", user.Username, googleUser.PrimaryEmail, googleUser.ID, keycloakLoginPermissionMessage(keepKeycloakLogin))
 	if password != "" && fields[2] == "create-external" {
 		response.Text += fmt.Sprintf("\n\nTemporary Google password: `%s`", password)
 	}
@@ -429,8 +796,8 @@ func (p *Plugin) unmigrateKeycloakUserFromGoogle(args *model.CommandArgs, refere
 		response.Text = err.Error()
 		return response, nil
 	}
-	if user.AuthService != model.ServiceOpenid {
-		response.Text = "Mattermost user is not currently authenticated with Google/OpenID."
+	if user.AuthService != model.ServiceOpenid && user.AuthService != model.UserAuthServiceSaml {
+		response.Text = "Mattermost user is not currently authenticated with Google/OpenID or Keycloak/SAML."
 		return response, nil
 	}
 	if user.AuthData == nil || *user.AuthData == "" {
@@ -467,7 +834,7 @@ func (p *Plugin) unmigrateKeycloakUserFromGoogle(args *model.CommandArgs, refere
 		return response, nil
 	}
 	if err = p.updateMattermostIdentity(user, model.UserAuthServiceSaml, oldMattermostID); err != nil {
-		response.Text = err.Error()
+		response.Text = fmt.Sprintf("Keycloak migration profile was restored, but %v", err)
 		return response, nil
 	}
 	response.Text = fmt.Sprintf("Unmigrated @%s back to Keycloak account %s.", user.Username, keycloakUser.Username)
@@ -559,30 +926,30 @@ func (p *Plugin) prepMattermostUserFromGoogle(googleEmail string) (*model.Comman
 func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []string) (*model.CommandResponse, *model.AppError) {
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
 	if len(fields) < 3 {
-		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak"], "migrate_to_keycloak")
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate-to-keycloak"], "migrate-to-keycloak")
 		return response, nil
 	}
 	if len(fields) == 3 {
-		usageKey := "migrate_to_keycloak " + fields[2]
+		usageKey := "migrate-to-keycloak " + fields[2]
 		if usage := keycloakMigrateUsage[usageKey]; usage != "" {
 			response.Text = keycloakUsageWithDescriptions(usage, usageKey)
 			return response, nil
 		}
-		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak"], "migrate_to_keycloak")
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate-to-keycloak"], "migrate-to-keycloak")
 		return response, nil
 	}
 	if fields[2] == "prep" {
 		if len(fields) != 4 {
 			response.Text = keycloakUsageWithDescriptions(
-				keycloakMigrateUsage["migrate_to_keycloak prep"],
-				"migrate_to_keycloak prep",
+				keycloakMigrateUsage["migrate-to-keycloak prep"],
+				"migrate-to-keycloak prep",
 			)
 			return response, nil
 		}
 		return p.prepMattermostUserFromGoogle(fields[3])
 	}
 	if len(fields) < 4 {
-		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak"], "migrate_to_keycloak")
+		response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate-to-keycloak"], "migrate-to-keycloak")
 		return response, nil
 	}
 	user, err := p.migrationMattermostUser(fields[3])
@@ -617,7 +984,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 	keycloakEmail := ""
 	if fields[2] != "update" {
 		if len(fields) != 5 {
-			usageKey := "migrate_to_keycloak " + fields[2]
+			usageKey := "migrate-to-keycloak " + fields[2]
 			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage[usageKey], usageKey)
 			return response, nil
 		}
@@ -628,7 +995,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 	switch fields[2] {
 	case "create":
 		if len(fields) != 5 {
-			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate_to_keycloak create"], "migrate_to_keycloak create")
+			response.Text = keycloakUsageWithDescriptions(keycloakMigrateUsage["migrate-to-keycloak create"], "migrate-to-keycloak create")
 			return response, nil
 		}
 		if err = validateKeycloakEmail(keycloakEmail); err == nil {
@@ -644,8 +1011,8 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 	case "bind":
 		if len(fields) != 5 {
 			response.Text = keycloakUsageWithDescriptions(
-				keycloakMigrateUsage["migrate_to_keycloak "+fields[2]],
-				"migrate_to_keycloak "+fields[2],
+				keycloakMigrateUsage["migrate-to-keycloak "+fields[2]],
+				"migrate-to-keycloak "+fields[2],
 			)
 			return response, nil
 		}
@@ -668,8 +1035,8 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 	case "update":
 		if len(fields) != 4 {
 			response.Text = keycloakUsageWithDescriptions(
-				keycloakMigrateUsage["migrate_to_keycloak update"],
-				"migrate_to_keycloak update",
+				keycloakMigrateUsage["migrate-to-keycloak update"],
+				"migrate-to-keycloak update",
 			)
 			return response, nil
 		}
@@ -687,7 +1054,7 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 			}
 		}
 	default:
-		response.Text = keycloakMigrateUsage["migrate_to_keycloak"]
+		response.Text = keycloakMigrateUsage["migrate-to-keycloak"]
 		return response, nil
 	}
 	if err != nil {
@@ -715,8 +1082,11 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 			return response, nil
 		}
 	}
-	if err = p.updateMattermostIdentity(user, model.UserAuthServiceSaml, keycloakUser.ID); err != nil {
-		response.Text = err.Error()
+	if err = p.updateMattermostIdentity(user, model.UserAuthServiceSaml, googleUser.ID); err != nil {
+		response.Text = fmt.Sprintf("Keycloak migration profile was updated, but %v", err)
+		if migrationPassword != "" {
+			response.Text += fmt.Sprintf("\n\nTemporary Keycloak password: `%s`", migrationPassword)
+		}
 		return response, nil
 	}
 	response.Text = fmt.Sprintf("Migrated @%s to Keycloak account %s. The Mattermost account now uses SAML/Keycloak authentication.", user.Username, keycloakUser.Username)
@@ -727,15 +1097,41 @@ func (p *Plugin) migrateGoogleUserToKeycloak(args *model.CommandArgs, fields []s
 }
 
 const (
-	defaultKeycloakMigrationDMText    = "Example DM text:\n\nHi @{{username}},\n\nYour account has successfully been migrated. You can now use {{account}}."
-	defaultKeycloakMigrationEmailText = "Example e-mail text:\n\nHello {{username}},\n\nYour account migration was successful. Your account is: {{account}}."
+	defaultKeycloakMigrationDMText    = "Hi @{{username}},\n\nYour Mattermost account has been migrated to Google account {{account}}. {{login_instructions}}\n\nIf you have any questions, you can DM me or get help at mattermaster@f.kth.se."
+	defaultKeycloakMigrationEmailText = "Hello {{username}},\n\nYour Mattermost account has been migrated to Google account {{account}}. {{login_instructions}}\n\nIf you have any questions, reply to this e-mail or get help from mattermaster@f.kth.se."
 )
 
-func renderKeycloakMigrationText(text, username, account, password string) string {
+func keycloakLoginPermissionMessage(allow bool) string {
+	if allow {
+		return "Mattermost uses Keycloak/SAML authentication and Keycloak's Mattermost login permission is enabled."
+	}
+	return "Mattermost uses Google/OpenID authentication and Keycloak's Mattermost login permission is disabled."
+}
+
+func keycloakMigrationLoginInstructions(googleCreationMethod string, keepKeycloakLogin bool, account string) string {
+	if keepKeycloakLogin {
+		return "Although a Google account has been created for you, you should continue signing in to Mattermost through the 'International Student' sign-in."
+	}
+	switch googleCreationMethod {
+	case "create-external":
+		return fmt.Sprintf("To sign in to Mattermost, first log-in to %s at accounts.google.com with your temporary password, then use the KTH button in Mattermost with your @fysiksektionen.se account.", account)
+	case "create-kth":
+		return "To sign in to Mattermost, select the KTH button and sign in with your KTH account."
+	default:
+		return "To sign in to Mattermost, use the @fysiksektionen.se-account associated with your Mattermost account."
+	}
+}
+
+func renderKeycloakMigrationText(text, username, account, password, googleCreationMethod string, keepKeycloakLogin bool) string {
+	loginInstructions := keycloakMigrationLoginInstructions(googleCreationMethod, keepKeycloakLogin, account)
+	if !strings.Contains(text, "{{login_instructions}}") && !strings.Contains(text, "{{login_method}}") {
+		text += loginInstructions
+	}
 	replacer := strings.NewReplacer(
 		"{{username}}", username,
 		"{{account}}", account,
 		"{{password}}", password,
+		"{{login_instructions}}", loginInstructions,
 	)
 	return replacer.Replace(text)
 }
@@ -770,7 +1166,7 @@ func keycloakMigrationNotificationTexts(configuration *configuration, googleCrea
 	return dmText, emailText
 }
 
-func (p *Plugin) notifyMigrationInitiator(userID, username, account, password, googleCreationMethod string) {
+func (p *Plugin) notifyMigrationInitiator(userID, username, googleEmail, keycloakEmail, password, googleCreationMethod string, keepKeycloakLogin bool) {
 	dmText, emailText := keycloakMigrationNotificationTexts(p.getConfiguration(), googleCreationMethod)
 
 	dm, err := p.API.GetDirectChannel(userID, p.pluginBot.UserId)
@@ -779,13 +1175,24 @@ func (p *Plugin) notifyMigrationInitiator(userID, username, account, password, g
 		return
 	}
 
+	root, err := p.API.CreatePost(&model.Post{
+		UserId:    p.pluginBot.UserId,
+		ChannelId: dm.Id,
+		Message:   fmt.Sprintf("You migrated @%s to Google account %s. Their Keycloak e-mail is %s. %s Please review the attached example DM and e-mail before sending them.", username, googleEmail, keycloakEmail, keycloakLoginPermissionMessage(keepKeycloakLogin)),
+	})
+	if err != nil {
+		p.API.LogError("Could not send migration notification thread", "user_id", userID, "error", err.Error())
+		return
+	}
+
 	for _, text := range []string{
-		renderKeycloakMigrationText(dmText, username, account, password),
-		renderKeycloakMigrationText(emailText, username, account, password),
+		renderKeycloakMigrationText(dmText, username, googleEmail, password, googleCreationMethod, keepKeycloakLogin),
+		renderKeycloakMigrationText(emailText, username, googleEmail, password, googleCreationMethod, keepKeycloakLogin),
 	} {
 		if _, appErr := p.API.CreatePost(&model.Post{
 			UserId:    p.pluginBot.UserId,
 			ChannelId: dm.Id,
+			RootId:    root.Id,
 			Message:   text,
 		}); appErr != nil {
 			p.API.LogError("Could not send migration notification direct message", "user_id", userID, "error", appErr.Error())
@@ -898,10 +1305,14 @@ func (p *Plugin) createKeycloakMigrationUser(email, password, firstName, lastNam
 		FirstName:     firstName,
 		LastName:      lastName,
 		Attributes: map[string][]string{
-			"mattermostUsername": {mattermostUsername},
-			"creationMethod":     {"MattermostPluginCommand"},
-			"accountType":        {"Unknown (created by Mattermost plugin)"},
-			"accountMigrated":    {"False"},
+			"mattermostUsername":      {mattermostUsername},
+			"creationMethod":          {"MattermostPluginCommand"},
+			"isActuallyInternational": {"No"}, // international students should create their own accounts
+			"confirmsIsInternational": {"Yes"},
+			"kthProgram":              {"None"},
+			"kthExpectedEndOfStudies": {"2099-12"},
+			"accountType":             {"Unknown (created by Mattermost plugin)"},
+			"accountMigrated":         {"False"},
 		},
 		Credentials: []keycloakCredential{{Type: "password", Value: password, Temporary: true}},
 	}
@@ -940,7 +1351,7 @@ func (p *Plugin) createKeycloakMigrationUser(email, password, firstName, lastNam
 	return nil
 }
 
-const keycloakNewUserUsage = "Usage: `/keycloak new_user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes|no>`"
+const keycloakNewUserUsage = "Usage: `/keycloak new-user <email> <temp-password> <first-name> <last-name> <mattermost-username> <international: yes/no>`"
 
 func validateKeycloakEmail(email string) error {
 	parsedEmail, err := mail.ParseAddress(email)
@@ -1132,6 +1543,10 @@ func (p *Plugin) findKeycloakUserByQuery(parameter, value string, exact bool) (*
 }
 
 func (p *Plugin) getKeycloakUserByQuery(parameter, value string, exact bool) (*keycloakUserRepresentation, error) {
+	return p.getKeycloakUserByQueryWithUniqueness(parameter, value, exact, false)
+}
+
+func (p *Plugin) getKeycloakUserByQueryWithUniqueness(parameter, value string, exact, requireUnique bool) (*keycloakUserRepresentation, error) {
 	configuration := p.getConfiguration()
 	if configuration.KeycloakClientID == "" || configuration.KeycloakClientSecret == "" {
 		return nil, fmt.Errorf("Keycloak client credentials are not configured")
@@ -1165,6 +1580,9 @@ func (p *Plugin) getKeycloakUserByQuery(parameter, value string, exact bool) (*k
 	if len(users) == 0 {
 		return nil, fmt.Errorf("Keycloak account matching %s %q was not found", parameter, value)
 	}
+	if requireUnique && len(users) != 1 {
+		return nil, fmt.Errorf("multiple Keycloak accounts match %s %q", parameter, value)
+	}
 	return &users[0], nil
 }
 
@@ -1174,11 +1592,6 @@ func googleUsername(primaryEmail string) string {
 }
 
 func (p *Plugin) updateKeycloakMigrationProfile(user *keycloakUserRepresentation, migrated bool, fromID, mattermostID, mattermostEmail string, allowProfileUpdates, allowMattermostLogin bool, firstName, lastName, email string, usernameMigration ...string) error {
-	configuration := p.getConfiguration()
-	token, err := p.getKeycloakAccessToken(configuration.KeycloakClientID, configuration.KeycloakClientSecret)
-	if err != nil {
-		return err
-	}
 	if user.Attributes == nil {
 		user.Attributes = map[string][]string{}
 	}
@@ -1217,6 +1630,15 @@ func (p *Plugin) updateKeycloakMigrationProfile(user *keycloakUserRepresentation
 	if email != "" {
 		user.Email = email
 	}
+	return p.writeKeycloakMigrationProfile(user)
+}
+
+func (p *Plugin) writeKeycloakMigrationProfile(user *keycloakUserRepresentation) error {
+	configuration := p.getConfiguration()
+	token, err := p.getKeycloakAccessToken(configuration.KeycloakClientID, configuration.KeycloakClientSecret)
+	if err != nil {
+		return err
+	}
 	body, err := json.Marshal(user)
 	if err != nil {
 		return fmt.Errorf("encode Keycloak migration update: %w", err)
@@ -1241,6 +1663,10 @@ func (p *Plugin) updateKeycloakMigrationProfile(user *keycloakUserRepresentation
 }
 
 func (p *Plugin) updateKeycloakMattermostLogin(user *keycloakUserRepresentation, allow bool) error {
+	return p.writeKeycloakMattermostLogin(user, []string{keycloakBooleanString(allow)}, true)
+}
+
+func (p *Plugin) writeKeycloakMattermostLogin(user *keycloakUserRepresentation, values []string, present bool) error {
 	configuration := p.getConfiguration()
 	token, err := p.getKeycloakAccessToken(configuration.KeycloakClientID, configuration.KeycloakClientSecret)
 	if err != nil {
@@ -1249,7 +1675,11 @@ func (p *Plugin) updateKeycloakMattermostLogin(user *keycloakUserRepresentation,
 	if user.Attributes == nil {
 		user.Attributes = map[string][]string{}
 	}
-	user.Attributes["allowMattermostLogin"] = []string{keycloakBooleanString(allow)}
+	if present {
+		user.Attributes["allowMattermostLogin"] = values
+	} else {
+		delete(user.Attributes, "allowMattermostLogin")
+	}
 
 	body, err := json.Marshal(user)
 	if err != nil {
@@ -1270,6 +1700,45 @@ func (p *Plugin) updateKeycloakMattermostLogin(user *keycloakUserRepresentation,
 	if response.StatusCode != http.StatusNoContent {
 		details, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 		return fmt.Errorf("Keycloak Mattermost login update returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(details)))
+	}
+	return nil
+}
+
+func (p *Plugin) updateKeycloakAccountBan(user *keycloakUserRepresentation, ban bool, reason string) error {
+	configuration := p.getConfiguration()
+	token, err := p.getKeycloakAccessToken(configuration.KeycloakClientID, configuration.KeycloakClientSecret)
+	if err != nil {
+		return err
+	}
+	if user.Attributes == nil {
+		user.Attributes = map[string][]string{}
+	}
+	user.Attributes["accountBanned"] = []string{keycloakBooleanString(ban)}
+	if ban {
+		user.Attributes["banReason"] = []string{reason}
+	} else {
+		delete(user.Attributes, "banReason")
+	}
+
+	body, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("encode Keycloak account ban update: %w", err)
+	}
+	endpoint := fmt.Sprintf("%s/admin/realms/%s/users/%s", keycloakURL, url.PathEscape(keycloakRealm), url.PathEscape(user.ID))
+	request, err := http.NewRequest(http.MethodPut, endpoint, strings.NewReader(string(body)))
+	if err != nil {
+		return fmt.Errorf("create Keycloak account ban update: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+	if err != nil {
+		return fmt.Errorf("update Keycloak account ban attributes: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		details, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		return fmt.Errorf("Keycloak account ban update returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(details)))
 	}
 	return nil
 }

@@ -4,6 +4,49 @@ Customizes things in mattermost.fysiksektionen.se. Currently inserts zero-width 
 
 To easily deploy create `set_secret.sh` which exports MM\_ADMIN\_TOKEN as an environment variable. The script `deploy.sh` will then raise the file upload limit, build and upload, and lower the upload limit to the old value.
 
+The `/keycloak` command requires system management permission. Its desktop
+autocomplete suggestion is restricted to system admins; command lists and some
+clients may still display it to other users. Execution remains permission-checked.
+Configure **Keycloak: Moderation log channel** to record successful Keycloak
+ban and unban decisions, including the ban reason. Ensure the plugin bot can post
+in that channel; clear the selection to disable the log. A ban deactivates the Mattermost
+account, while an unban does not reactivate it. Log delivery failures are reported
+to the command issuer and the server log.
+
+`/keycloak get @user` displays the user's Mattermost authentication service and
+auth data alongside their linked Keycloak profile and all its attributes. It
+matches Keycloak's `mattermostID` against the Mattermost auth data and shows the
+result only to the caller.
+
+`/keycloak set-login-method @user google|saml` sets Google/OpenID or Keycloak/SAML
+authentication when both providers have an account for the Mattermost
+authentication ID. This enables Keycloak's Mattermost
+login permission for SAML and disables it for OpenID, including when the
+requested method is already selected.
+
+`/keycloak delete-user by-email <mattermost-email> [--also-deactivate]`
+permanently deletes the Keycloak account whose `mattermostEmail` attribute
+matches. `/keycloak delete-user by-authdata @user [--also-deactivate]` matches
+the Mattermost user's auth data against Keycloak's `mattermostID` instead.
+The optional flag also deactivates the Mattermost user; the email form resolves
+that user by email. Without it, a user still using SAML can no longer log in
+through Keycloak.
+
+`/keycloak migrate-to-google create-kth` and `bind` default to Google/OpenID;
+the optional final `--keep-mamo-login-through-keycloak` flag keeps Keycloak/SAML.
+`create-external` defaults to Keycloak/SAML; use the optional final
+`--force-mamo-login-through-google` flag to select Google/OpenID instead.
+Keycloak's Mattermost login permission is enabled for SAML and disabled for
+Google/OpenID. `/keycloak migrate-to-keycloak` migrates in the other direction.
+Migration notification examples state the resulting method and permission; configured
+templates are preserved, and `{{account}}` is the full Google email address.
+`{{login_instructions}}` inserts instructions for the actual login path: external
+accounts use the KTH button with their `@fysiksektionen.se` account, KTH accounts
+use the KTH button directly, and accounts retaining SAML can still use their
+existing SAML login. Existing templates using `{{login_method}}` remain supported;
+templates without either placeholder have the appropriate instructions appended.
+Review existing customized templates for login instructions before sending them.
+
 ## Message statistics
 
 Signed-in users can open `/plug/se.fysiksektionen.mattermost.plugin/stats` to compare

@@ -452,9 +452,8 @@ func (p *Plugin) migrationMattermostUser(reference string) (*model.User, error) 
 }
 
 func (p *Plugin) updateMattermostIdentity(user *model.User, authService, authData string) error {
-	user.AuthService = authService
-	user.AuthData = model.NewPointer(authData)
-	if _, appErr := p.API.UpdateUser(user); appErr != nil {
+	userAuth := &model.UserAuth{AuthService: authService, AuthData: model.NewPointer(authData)}
+	if _, appErr := p.API.UpdateUserAuth(user.Id, userAuth); appErr != nil {
 		return fmt.Errorf("update Mattermost authentication data: %s", appErr.Error())
 	}
 	return nil

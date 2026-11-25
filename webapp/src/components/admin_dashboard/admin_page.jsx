@@ -14,7 +14,7 @@ const actions = [
     {id: 'default_set', label: 'Set default channel', command: '/default_channel set', description: 'Add current and future team members automatically.'},
     {id: 'default_unset', label: 'Unset default channel', command: '/default_channel unset', description: 'Stop automatic additions without removing existing members.'},
     {id: 'mass_add', label: 'Add team members', command: '/mass_add', description: 'Add current team members to one channel.'},
-    {id: 'keycloak_new_user', label: 'Create Keycloak account', command: '/keycloak new_user', description: 'Create a non-international account with a temporary password.'},
+    {id: 'keycloak_new_user', label: 'Create Keycloak account', command: '/keycloak new-user', description: 'Create a non-international account with a temporary password.'},
 ];
 const pageSize = 25;
 
