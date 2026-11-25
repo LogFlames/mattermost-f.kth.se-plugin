@@ -101,6 +101,15 @@ Startup ensures `f.kth.se-plugin-bot` exists with `system_admin`. REST requests 
 short-lived bot sessions; tokens stay in memory and existing access tokens are untouched.
 Concurrent manual sidebar edits can race with synchronization, including empty-category deletion.
 
+## Team leave cleanup workaround
+
+For server-initiated team leaves, the plugin webapp applies Mattermost's per-channel
+client cleanup and clears remaining stale post-order lists. This works around a
+Mattermost 11.11 issue when rejoining without a reload. It only applies while the
+plugin webapp is loaded; it does not make additional channel-leave API requests.
+
+* Issue related to this: https://github.com/mattermost/mattermost/issues/40273
+
 Verify with `go test -race ./...`, `go vet ./...`, and `make dist`.
 
 Se template readme below:

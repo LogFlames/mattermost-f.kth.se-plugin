@@ -11,9 +11,11 @@ import StatsPage from './components/stats/stats_page';
 import TranslatorChannels from './components/admin_settings/translator_channels';
 import MistralModelSetting from './components/admin_settings/mistral_model';
 import AdminPage from './components/admin_dashboard/admin_page';
+import {registerTeamLeaveCleanup} from './team_leave_cleanup';
 
 export default class Plugin {
-    initialize(registry) {
+    initialize(registry, store) {
+        registerTeamLeaveCleanup(registry, store);
         registry.registerCustomRoute('/stats', StatsPage);
         registry.registerCustomRoute('/admin', AdminPage);
         registry.registerAdminConsoleCustomSetting('DefaultChannels_Custom', DefaultChannelsSettings);
