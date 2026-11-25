@@ -42,7 +42,7 @@ export default class ChannelsInput extends React.PureComponent {
             );
         }
 
-        return (<React.Fragment>{"<Invalid option>"}</React.Fragment>);
+        return (<React.Fragment>{'<Invalid option>'}</React.Fragment>);
     };
 
     searchChannels = debounce((term, callback) => {
@@ -95,7 +95,7 @@ export default class ChannelsInput extends React.PureComponent {
                 formatOptionLabel={this.formatOptionLabel}
                 defaultMenuIsOpen={false}
                 openMenuOnClick={false}
-                isClearable={false}
+                isClearable={this.props.isMulti === false}
                 placeholder={this.props.placeholder}
                 value={this.props.channels}
                 components={{DropdownIndicator: () => null, IndicatorSeparator: () => null}}

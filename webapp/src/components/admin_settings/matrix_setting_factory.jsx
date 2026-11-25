@@ -29,7 +29,7 @@ const getId = (value) => {
 const getError = (response) => response && (response.error || response.err);
 
 const asArray = (value) => {
-    if (value === null || value === undefined) {
+    if (value === null || typeof value === 'undefined') {
         return [];
     }
 
@@ -64,7 +64,7 @@ const normalizeFields = (fields) => {
 };
 
 const getDefaultValue = (field) => {
-    if (field.defaultValue !== undefined) {
+    if (typeof field.defaultValue !== 'undefined') {
         return field.defaultValue;
     }
 
@@ -80,7 +80,7 @@ const getDefaultValue = (field) => {
 };
 
 const getRecordValue = (record, field) => {
-    if (record && record[field.name] !== undefined) {
+    if (record && typeof record[field.name] !== 'undefined') {
         return record[field.name];
     }
 
@@ -93,7 +93,7 @@ const serializeValue = (field, value) => {
     }
 
     if (field.isMulti) {
-        return asArray(value).map(getId).filter((id) => id !== undefined && id !== null && id !== '');
+        return asArray(value).map(getId).filter((id) => typeof id !== 'undefined' && id !== null && id !== '');
     }
 
     return value ? getId(value) : null;
@@ -101,6 +101,11 @@ const serializeValue = (field, value) => {
 
 const getInitialRecord = (record, fields) => fields.reduce((result, field) => {
     result[field.name] = getRecordValue(record, field);
+    return result;
+}, {});
+
+const entriesToRecord = (entries) => entries.reduce((result, [name, fieldValue]) => {
+    result[name] = fieldValue;
     return result;
 }, {});
 
@@ -144,13 +149,10 @@ const MatrixEntry = ({fields, id, value, onChange, onDelete, hideDelete, actions
 
     React.useEffect(() => {
         let mounted = true;
-        Promise.all(fields.map(async (field) => [field.name, await hydrateField(field, getRecordValue(value, field), actions)]))
-            .then((entries) => {
+        Promise.all(fields.map(async (field) => [field.name, await hydrateField(field, getRecordValue(value, field), actions)])).
+            then((entries) => {
                 if (mounted) {
-                    setHydratedValue(entries.reduce((result, [name, fieldValue]) => {
-                        result[name] = fieldValue;
-                        return result;
-                    }, {}));
+                    setHydratedValue(entriesToRecord(entries));
                 }
             });
 
@@ -170,7 +172,10 @@ const MatrixEntry = ({fields, id, value, onChange, onDelete, hideDelete, actions
 
     return (
         <div style={styles.attributeRow}>
-            <div className='row' style={{ display: 'flex', flexWrap: 'nowrap', width: 'max-content', minWidth: '100%' }}>
+            <div
+                className='row'
+                style={{display: 'flex', flexWrap: 'nowrap', width: 'max-content', minWidth: '100%'}}
+            >
                 {fields.map((field) => (
                     <FieldInput
                         key={field.name}
@@ -180,8 +185,11 @@ const MatrixEntry = ({fields, id, value, onChange, onDelete, hideDelete, actions
                     />
                 ))}
                 {!hideDelete &&
-                    <div style={{ flexShrink: 0, padding: '0 15px' }}>
-                        <a style={styles.deleteIcon} onClick={() => onDelete(id)}>
+                    <div style={{flexShrink: 0, padding: '0 15px'}}>
+                        <a
+                            style={styles.deleteIcon}
+                            onClick={() => onDelete(id)}
+                        >
                             <i className='fa fa-trash'/>
                         </a>
                     </div>}
@@ -208,23 +216,71 @@ const FieldInput = ({field, value, onChange}) => {
     };
 
     if (field.type === 'channels' || field.type === 'channel') {
-        return <div className={field.className || 'col-xs-12 col-sm-3'}><ChannelsInput {...commonProps} channels={asArray(value)} isMulti={field.isMulti} onChange={onChange}/></div>;
+        return (
+            <div className={field.className || 'col-xs-12 col-sm-3'}>
+                <ChannelsInput
+                    {...commonProps}
+                    channels={asArray(value)}
+                    isMulti={field.isMulti}
+                    onChange={onChange}
+                />
+            </div>
+        );
     }
 
     if (field.type === 'teams' || field.type === 'team') {
-        return <div className={field.className || 'col-xs-12 col-sm-3'}><TeamsInput {...commonProps} teams={asArray(value)} isMulti={field.isMulti} onChange={onChange}/></div>;
+        return (
+            <div className={field.className || 'col-xs-12 col-sm-3'}>
+                <TeamsInput
+                    {...commonProps}
+                    teams={asArray(value)}
+                    isMulti={field.isMulti}
+                    onChange={onChange}
+                />
+            </div>
+        );
     }
 
     if (field.type === 'users' || field.type === 'user') {
-        return <div className={field.className || 'col-xs-12 col-sm-3'}><UsersInput {...commonProps} users={asArray(value)} isMulti={field.isMulti} onChange={onChange}/></div>;
+        return (
+            <div className={field.className || 'col-xs-12 col-sm-3'}>
+                <UsersInput
+                    {...commonProps}
+                    users={asArray(value)}
+                    isMulti={field.isMulti}
+                    onChange={onChange}
+                />
+            </div>
+        );
     }
 
     if (field.type === 'boolean' || field.type === 'bool') {
-        return <div className={field.className || 'col-xs-12 col-sm-2'}><label><input {...commonProps} type='checkbox' checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)}/>{field.label || field.name}</label></div>;
+        return (
+            <div className={field.className || 'col-xs-12 col-sm-2'}>
+                <label>
+                    <input
+                        {...commonProps}
+                        type='checkbox'
+                        checked={Boolean(value)}
+                        onChange={(event) => onChange(event.target.checked)}
+                    />
+                    {field.label || field.name}
+                </label>
+            </div>
+        );
     }
 
     const type = field.type === 'number' || field.type === 'int' ? 'number' : 'text';
-    return <div className={field.className || 'col-xs-12 col-sm-3'}><input {...commonProps} type={type} value={value === null || value === undefined ? '' : value} onChange={(event) => onChange(type === 'number' ? Number(event.target.value) : event.target.value)}/></div>;
+    return (
+        <div className={field.className || 'col-xs-12 col-sm-3'}>
+            <input
+                {...commonProps}
+                type={type}
+                value={value === null || typeof value === 'undefined' ? '' : value}
+                onChange={(event) => onChange(type === 'number' ? Number(event.target.value) : event.target.value)}
+            />
+        </div>
+    );
 };
 
 FieldInput.propTypes = {
@@ -238,8 +294,13 @@ const createConnectedEntry = (fields) => connect(
     (dispatch) => ({
         actions: bindActionCreators({getProfilesByIds, getTeam, getTeams, getChannel}, dispatch),
     }),
-)(function ConnectedMatrixEntry(props) {
-    return <MatrixEntry {...props} fields={fields}/>;
+)((props) => {
+    return (
+        <MatrixEntry
+            {...props}
+            fields={fields}
+        />
+    );
 });
 
 export default function createMatrixSetting({fields, title}) {
@@ -271,7 +332,7 @@ export default function createMatrixSetting({fields, title}) {
                 key={index}
                 id={index}
                 value={entry}
-                onChange={(nextEntry) => this.emit(this.state.entries.map((current, currentIndex) => currentIndex === index ? nextEntry : current))}
+                onChange={(nextEntry) => this.emit(this.state.entries.map((current, currentIndex) => (currentIndex === index ? nextEntry : current)))}
                 onDelete={(deleteIndex) => this.emit(this.state.entries.filter((current, currentIndex) => currentIndex !== deleteIndex))}
             />
         );
@@ -293,10 +354,10 @@ export default function createMatrixSetting({fields, title}) {
             return (
                 <div>
                     <strong>{title}</strong>
-                    {this.state.entries.length === 0 && <div style={styles.emptyState}>You have no entries for this setting yet.</div>}
-                    
-                    <div style={{ overflowX: 'auto' }}>
-                        <div style={{ minWidth: 'max-content' }}>
+                    {this.state.entries.length === 0 && <div style={styles.emptyState}>{'You have no entries for this setting yet.'}</div>}
+
+                    <div style={{overflowX: 'auto'}}>
+                        <div style={{minWidth: 'max-content'}}>
                             {this.state.entries.map(this.renderEntry)}
                             {this.state.showAddEntry ?
                                 <div>
@@ -306,10 +367,16 @@ export default function createMatrixSetting({fields, title}) {
                                         hideDelete={true}
                                         onChange={(entry) => this.setState({draft: entry})}
                                     />
-                                    <button className='btn btn-primary' onClick={this.addDraft}>Add Entry</button>
-                                    <button className='btn btn-link' onClick={this.cancelAdding}>Cancel</button>
+                                    <button
+                                        className='btn btn-primary'
+                                        onClick={this.addDraft}
+                                    >{'Add Entry'}</button>
+                                    <button
+                                        className='btn btn-link'
+                                        onClick={this.cancelAdding}
+                                    >{'Cancel'}</button>
                                 </div> :
-                                <a onClick={this.startAdding}><strong>+ Add Entry</strong></a>}
+                                <a onClick={this.startAdding}><strong>{'+ Add Entry'}</strong></a>}
                         </div>
                     </div>
                 </div>

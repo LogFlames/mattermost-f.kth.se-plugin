@@ -116,11 +116,10 @@ export default class AbstractEntry extends React.Component {
         const teamResponse = await teamPromise;
         const channelsData = channelResponses.filter((res) => !res.error).map((res) => res.data);
         const teamsData = teamResponse.data;
-        
+
         if (teamResponse.error) {
             // eslint-disable-next-line no-console
             console.error('Error getting team for channel in setting. ' + teamResponse.error);
-            callback([]);
             return;
         }
 
@@ -228,125 +227,125 @@ export default class AbstractEntry extends React.Component {
 
         return (
             <div>
-            <div style={styles.attributeRow}>
-            <div className='row'></div>
-                <div className='col-xs-12 col-sm-3'>
-                    <input
-                    id={`string1-${this.props.id}`}
-                    className='form-control'
-                    type='text'
-                    placeholder='string'
-                    value={this.state.string1}
-                    onChange={this.handleString1Input}
-                    />
+                <div style={styles.attributeRow}>
+                    <div className='row'/>
+                    <div className='col-xs-12 col-sm-3'>
+                        <input
+                            id={`string1-${this.props.id}`}
+                            className='form-control'
+                            type='text'
+                            placeholder='string'
+                            value={this.state.string1}
+                            onChange={this.handleString1Input}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
+                        <input
+                            id={`string2-${this.props.id}`}
+                            className='form-control'
+                            type='text'
+                            placeholder='string'
+                            value={this.state.string2}
+                            onChange={this.handleString2Input}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
+                        <input
+                            id={`string3-${this.props.id}`}
+                            className='form-control'
+                            type='text'
+                            placeholder='string'
+                            value={this.state.string3}
+                            onChange={this.handleString3Input}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
+                        <input
+                            id={`string4-${this.props.id}`}
+                            className='form-control'
+                            type='text'
+                            placeholder='string'
+                            value={this.state.string4}
+                            onChange={this.handleString4Input}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
+                        <input
+                            id={`string5-${this.props.id}`}
+                            className='form-control'
+                            type='text'
+                            placeholder='string'
+                            value={this.state.string5}
+                            onChange={this.handleString5Input}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-2'>
+                        <label style={{marginRight: '8px'}}>
+                            <input
+                                id={`bool-${this.props.id}`}
+                                type='checkbox'
+                                checked={Boolean(this.state.bool)}
+                                onChange={this.handleBoolInput}
+                                style={{marginRight: '4px'}}
+                            />
+                        </label>
+                    </div>
+                    <div className='col-xs-12 col-sm-2'>
+                        <input
+                            id={`int-${this.props.id}`}
+                            className='form-control'
+                            type='number'
+                            placeholder='int'
+                            value={this.state.int || ''}
+                            onChange={this.handleIntInput}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
+                        <UsersInput
+                            placeholder='@username1 @username2'
+                            users={this.state.users}
+                            onChange={this.handleUsersInput}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
+                        <TeamsInput
+                            placeholder='teamName'
+                            teams={this.state.team ? [this.state.team] : []}
+                            onChange={([team]) => this.handleTeamsInput([team])}
+                            isMulti={false}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
+                        <TeamsInput
+                            placeholder='teamName1 teamName2'
+                            teams={this.state.teams}
+                            onChange={this.handleTeamsInput}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
+                        <ChannelsInput
+                            placeholder='~channel1 ~channel2'
+                            channels={this.state.channels}
+                            onChange={this.handleChannelsInput}
+                        />
+                    </div>
+                    <div className='col-xs-12 col-sm-3'>
+                        <input
+                            id={`groups-${this.props.id}`}
+                            className='form-control'
+                            type='text'
+                            placeholder='GroupID1 GroupID2'
+                            value={this.state.groups}
+                            onChange={this.handleGroupsInput}
+                        />
+                    </div>
+                    {deleteButton}
                 </div>
-                <div className='col-xs-12 col-sm-3'>
-                    <input
-                    id={`string2-${this.props.id}`}
-                    className='form-control'
-                    type='text'
-                    placeholder='string'
-                    value={this.state.string2}
-                    onChange={this.handleString2Input}
-                    />
-                </div>
-                <div className='col-xs-12 col-sm-3'>
-                    <input
-                    id={`string3-${this.props.id}`}
-                    className='form-control'
-                    type='text'
-                    placeholder='string'
-                    value={this.state.string3}
-                    onChange={this.handleString3Input}
-                    />
-                </div>
-                <div className='col-xs-12 col-sm-3'>
-                    <input
-                    id={`string4-${this.props.id}`}
-                    className='form-control'
-                    type='text'
-                    placeholder='string'
-                    value={this.state.string4}
-                    onChange={this.handleString4Input}
-                    />
-                </div>
-                <div className='col-xs-12 col-sm-3'>
-                    <input
-                    id={`string5-${this.props.id}`}
-                    className='form-control'
-                    type='text'
-                    placeholder='string'
-                    value={this.state.string5}
-                    onChange={this.handleString5Input}
-                    />
-                </div>
-                <div className='col-xs-12 col-sm-2'>
-                    <label style={{marginRight: '8px'}}>
-                    <input
-                        id={`bool-${this.props.id}`}
-                        type='checkbox'
-                        checked={!!this.state.bool}
-                        onChange={this.handleBoolInput}
-                        style={{marginRight: '4px'}}
-                    />
-                    </label>
-                </div>
-                <div className='col-xs-12 col-sm-2'>
-                    <input
-                    id={`int-${this.props.id}`}
-                    className='form-control'
-                    type='number'
-                    placeholder='int'
-                    value={this.state.int || ''}
-                    onChange={this.handleIntInput}
-                    />
-                </div>
-                <div className='col-xs-12 col-sm-3'>
-                    <UsersInput
-                    placeholder='@username1 @username2'
-                    users={this.state.users}
-                    onChange={this.handleUsersInput}
-                    />
-                </div>
-                <div className='col-xs-12 col-sm-3'>
-                    <TeamsInput
-                    placeholder='teamName'
-                    teams={this.state.team ? [this.state.team] : []}
-                    onChange={([team]) => this.handleTeamsInput([team])}
-                    isMulti={false}
-                    />
-                </div>
-                <div className='col-xs-12 col-sm-3'>
-                    <TeamsInput
-                    placeholder='teamName1 teamName2'
-                    teams={this.state.teams}
-                    onChange={this.handleTeamsInput}
-                    />
-                </div>
-                <div className='col-xs-12 col-sm-3'>
-                    <ChannelsInput
-                    placeholder='~channel1 ~channel2'
-                    channels={this.state.channels}
-                    onChange={this.handleChannelsInput}
-                    />
-                </div>
-                <div className='col-xs-12 col-sm-3'>
-                    <input
-                    id={`groups-${this.props.id}`}
-                    className='form-control'
-                    type='text'
-                    placeholder='GroupID1 GroupID2'
-                    value={this.state.groups}
-                    onChange={this.handleGroupsInput}
-                    />
-                </div>
-                {deleteButton}
-            </div>
                 <div style={styles.errorLabel}>
                     {errorLabel}
                 </div>
             </div>
-        );   
+        );
     }
 }
 

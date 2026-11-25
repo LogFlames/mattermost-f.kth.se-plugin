@@ -4,9 +4,19 @@ import PropTypes from 'prop-types';
 export default class AbstractAddEntry extends React.Component {
     static propTypes = {
         id: PropTypes.string,
+        is_active: PropTypes.bool,
+        string1: PropTypes.string,
+        string2: PropTypes.string,
+        string3: PropTypes.string,
+        string4: PropTypes.string,
+        string5: PropTypes.string,
+        bool: PropTypes.bool,
+        int: PropTypes.number,
         users: PropTypes.array,
+        team: PropTypes.string,
         teams: PropTypes.array,
         groups: PropTypes.array,
+        channels: PropTypes.array,
         onChange: PropTypes.func.isRequired,
     };
 
@@ -43,8 +53,8 @@ export default class AbstractAddEntry extends React.Component {
         });
     };
 
-    onInput = ({id, is_active, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels}) => {
-        this.setState({id, is_active, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels, error: false});
+    onInput = ({id, is_active: isActive, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels}) => {
+        this.setState({id, is_active: isActive, string1, string2, string3, string4, string5, bool, int, users, team, teams, groups, channels, error: false});
     };
 
     handleSave = () => {

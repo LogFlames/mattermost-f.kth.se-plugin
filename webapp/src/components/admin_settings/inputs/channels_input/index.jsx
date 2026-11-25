@@ -8,7 +8,7 @@ import ChannelsInput from './channels_input.jsx';
 
 const searchChannels = (term, options = {}) => {
     if (!term) {
-        return null // might cause error
+        return null; // might cause error
     }
     return reduxSearchAllChannels(term, options);
 };

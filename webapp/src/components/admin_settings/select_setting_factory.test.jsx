@@ -26,13 +26,18 @@ jest.mock('./inputs/channels_input', () => {
     // eslint-disable-next-line global-require
     const mockReact = require('react');
     return ({channels, onChange}) => mockReact.createElement(
-        'button',
-        {
-            'data-selected': JSON.stringify(channels),
-            onClick: () => onChange([{id: 'next-channel'}]),
-            type: 'button',
-        },
-        'Select channels',
+        mockReact.Fragment,
+        null,
+        mockReact.createElement(
+            'button',
+            {
+                'data-selected': JSON.stringify(channels),
+                onClick: () => onChange([{id: 'next-channel'}]),
+                type: 'button',
+            },
+            'Select channels',
+        ),
+        mockReact.createElement('button', {onClick: () => onChange(null), type: 'button'}, 'Clear channel'),
     );
 });
 
@@ -106,4 +111,21 @@ it('hydrates channel labels and serializes selected channel IDs', async () => {
     act(() => container.querySelector('button').click());
     expect(onChange).toHaveBeenCalledWith('channels', ['next-channel']);
     expect(setSaveNeeded).toHaveBeenCalledTimes(1);
+});
+
+it('clears a single channel setting and marks it for saving', async () => {
+    const Setting = createSelectSetting({type: 'channels', placeholder: 'Select channel'});
+    const onChange = jest.fn();
+    const setSaveNeeded = jest.fn();
+    const actions = {
+        getChannel: jest.fn((id) => Promise.resolve({data: {id, team_id: 'team-id'}})),
+        getTeam: jest.fn(() => Promise.resolve({data: {display_name: 'Team'}})),
+        getUser: jest.fn(),
+    };
+
+    await renderSetting(Setting, {actions, id: 'moderation', onChange, setSaveNeeded, value: 'saved-channel'});
+    act(() => container.querySelectorAll('button')[1].click());
+    expect(onChange).toHaveBeenCalledWith('moderation', null);
+    expect(setSaveNeeded).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('button').getAttribute('data-selected')).toBe('[]');
 });

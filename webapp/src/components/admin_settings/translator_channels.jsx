@@ -11,7 +11,7 @@ const TranslatorChannelMatrix = createMatrixSetting({
         {name: 'delivery', label: 'reply|dm', type: 'string', className: 'col-xs-12 col-sm-2'},
         {name: 'add_to_channel_ids', label: 'Add author to', type: 'channels', className: 'col-xs-12 col-sm-4'},
         {name: 'direct_message_prefix', label: 'DM prefix', type: 'string', className: 'col-xs-12 col-sm-6'},
-        {name: 'model-override', label: 'Mistral model override', type: 'string', className: 'col-xs-12 col-sm-4'}
+        {name: 'model-override', label: 'Mistral model override', type: 'string', className: 'col-xs-12 col-sm-4'},
     ],
 });
 

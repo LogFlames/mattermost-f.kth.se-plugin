@@ -1,9 +1,8 @@
 {
 "compilerOptions": {
     "target": "esnext",
-    "baseUrl": "./",
     "paths": {
-        "@/*": ["src/*"],
+        "@/*": ["./src/*"],
     },
     "lib": [
         "dom",
@@ -17,8 +16,8 @@
     "strict": true,
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,

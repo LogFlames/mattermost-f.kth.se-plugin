@@ -88,21 +88,21 @@ export default class AbstractSettings extends React.Component {
     };
 
     handleChange = ({
-                id,
-                is_active,
-                string1,
-                string2,
-                string3,
-                string4,
-                string5,
-                bool,
-                int,
-                users,
-                team,
-                teams,
-                groups,
-                channels,
-            }) => {
+        id,
+        is_active: isActive,
+        string1,
+        string2,
+        string3,
+        string4,
+        string5,
+        bool,
+        int,
+        users,
+        team,
+        teams,
+        groups,
+        channels,
+    }) => {
         let userIds = [];
         if (users) {
             userIds = users.map((v) => {
@@ -113,7 +113,7 @@ export default class AbstractSettings extends React.Component {
                 return v;
             });
         }
-        
+
         let teamId = '';
         if (team) {
             teamId = team.id;
@@ -121,11 +121,11 @@ export default class AbstractSettings extends React.Component {
 
         let teamIds = [];
         if (teams) {
-            teamIds = teams.map((team) => {
-                if (team.id) {
-                    return team.id;
+            teamIds = teams.map((entry) => {
+                if (entry.id) {
+                    return entry.id;
                 }
-                return team;
+                return entry;
             });
         }
 
@@ -140,7 +140,7 @@ export default class AbstractSettings extends React.Component {
         }
 
         this.state.attributes.set(id, {
-            IsActive: is_active,
+            IsActive: isActive,
             String1: string1,
             String2: string2,
             String3: string3,
