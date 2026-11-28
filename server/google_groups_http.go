@@ -17,6 +17,12 @@ type googleGroupSyncConsoleEntry struct {
 	ChannelDeleted bool   `json:"channel_deleted"`
 	CreatorName    string `json:"creator_name"`
 	NextSyncAt     int64  `json:"next_sync_at"`
+	SyncMode       string `json:"sync_mode,omitempty"`
+}
+
+type googleGroupSyncOverview struct {
+	Syncs []googleGroupSyncConsoleEntry `json:"syncs"`
+	Cycle string                        `json:"cycle"`
 }
 
 func (p *Plugin) serveGoogleGroupSyncOverview(w http.ResponseWriter, r *http.Request) {
@@ -38,16 +44,16 @@ func (p *Plugin) serveGoogleGroupSyncOverview(w http.ResponseWriter, r *http.Req
 		fail(http.StatusMethodNotAllowed, "Method not allowed.")
 		return
 	}
-	entries, err := p.googleGroupSyncsForConsole()
+	overview, err := p.googleGroupSyncsForConsole()
 	if err != nil {
 		p.API.LogError("Load Google Group sync overview failed", "error", err.Error())
 		fail(http.StatusInternalServerError, "Could not load Google Group syncs. Check server logs and try again.")
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"syncs": entries})
+	_ = json.NewEncoder(w).Encode(overview)
 }
 
-func (p *Plugin) googleGroupSyncsForConsole() ([]googleGroupSyncConsoleEntry, error) {
+func (p *Plugin) googleGroupSyncsForConsole() (*googleGroupSyncOverview, error) {
 	records, err := p.googleGroupSyncRecords()
 	if err != nil {
 		return nil, err
@@ -57,6 +63,11 @@ func (p *Plugin) googleGroupSyncsForConsole() ([]googleGroupSyncConsoleEntry, er
 	users := make(map[string]*model.User)
 	entries := make([]googleGroupSyncConsoleEntry, 0, len(records))
 	now := time.Now()
+	config := p.getConfiguration()
+	cycle, _, err := googleGroupSyncCycleDescription(records, config, now)
+	if err != nil {
+		return nil, err
+	}
 	for _, record := range records {
 		job := record.Job
 		if _, ok := teams[job.TeamID]; !ok && job.TeamID != "" {
@@ -91,7 +102,11 @@ func (p *Plugin) googleGroupSyncsForConsole() ([]googleGroupSyncConsoleEntry, er
 		}
 		entry := googleGroupSyncConsoleEntry{
 			googleGroupSync: job,
-			NextSyncAt:      googleGroupNextSyncAt(job, now),
+		}
+		if config.GoogleGroupsSyncMode == "continuous" {
+			entry.SyncMode = "continuous"
+		} else {
+			entry.NextSyncAt = googleGroupNextSyncAt(job, now)
 		}
 		if team := teams[job.TeamID]; team != nil {
 			entry.TeamName = team.DisplayName
@@ -106,5 +121,5 @@ func (p *Plugin) googleGroupSyncsForConsole() ([]googleGroupSyncConsoleEntry, er
 		}
 		entries = append(entries, entry)
 	}
-	return entries, nil
+	return &googleGroupSyncOverview{Syncs: entries, Cycle: cycle}, nil
 }

@@ -155,11 +155,21 @@ func (p *Plugin) startCategoryWorker() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.categoryCancel = cancel
 	p.categoryDone = make(chan struct{})
+	p.configurationLock.Lock()
+	p.googleSyncWake = make(chan struct{}, 1)
+	wake := p.googleSyncWake
+	p.configurationLock.Unlock()
 	go func() {
+		googleDone := make(chan struct{})
+		go func() {
+			defer close(googleDone)
+			p.runContinuousGoogleGroupSyncs(ctx, wake)
+		}()
 		defer close(p.categoryDone)
+		defer func() { <-googleDone }()
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
-		nextGoogleGroupSync := time.Time{}
+		nextGoogleGroupSync := nextGoogleGroupSyncRun(time.Now())
 		for {
 			select {
 			case <-ctx.Done():
@@ -172,9 +182,9 @@ func (p *Plugin) startCategoryWorker() error {
 				}
 				p.runCategoryJobs(ctx)
 				lock.Unlock()
-				if time.Now().After(nextGoogleGroupSync) {
+				if !time.Now().Before(nextGoogleGroupSync) {
 					p.runGoogleGroupSyncJobs(ctx)
-					nextGoogleGroupSync = time.Now().Add(time.Hour)
+					nextGoogleGroupSync = nextGoogleGroupSyncRun(time.Now())
 				}
 				p.runDefaultChannelJobs(ctx)
 			}

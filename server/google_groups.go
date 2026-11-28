@@ -20,14 +20,16 @@ import (
 )
 
 const (
-	googleGroupSyncPrefix         = "google_group_sync_"
-	googleGroupConfirmationPrefix = "google_group_confirmation_"
-	googleGroupConfirmationID     = "google_group_confirmation"
-	googleGroupSyncEvery          = time.Hour
-	googleGroupSyncMaxResults     = 200
-	googleCloudIdentityURL        = "https://cloudidentity.googleapis.com/v1"
-	googleCloudIdentityReadScope  = "https://www.googleapis.com/auth/cloud-identity.groups.readonly"
-	googleCloudIdentityWriteScope = "https://www.googleapis.com/auth/cloud-identity.groups"
+	googleGroupSyncPrefix          = "google_group_sync_"
+	googleGroupContinuousStateKey  = "google_continuous_sync_state"
+	googleGroupConfirmationPrefix  = "google_group_confirmation_"
+	googleGroupConfirmationID      = "google_group_confirmation"
+	googleGroupSyncEvery           = time.Hour
+	googleGroupSyncMaxResults      = 200
+	googleGroupSyncDisplayTimeZone = "Europe/Stockholm"
+	googleCloudIdentityURL         = "https://cloudidentity.googleapis.com/v1"
+	googleCloudIdentityReadScope   = "https://www.googleapis.com/auth/cloud-identity.groups.readonly"
+	googleCloudIdentityWriteScope  = "https://www.googleapis.com/auth/cloud-identity.groups"
 )
 
 type googleDirectoryGroup struct {
@@ -83,21 +85,23 @@ type googleGroupSyncPreview struct {
 }
 
 type googleGroupConfirmation struct {
-	Action          string                   `json:"action"`
-	UserID          string                   `json:"user_id"`
-	RequesterEmail  string                   `json:"requester_email,omitempty"`
-	TeamID          string                   `json:"team_id"`
-	ChannelID       string                   `json:"channel_id"`
-	GroupEmail      string                   `json:"group_email"`
-	MemberEmail     string                   `json:"member_email,omitempty"`
-	MemberUserID    string                   `json:"member_user_id,omitempty"`
-	ActingEmail     string                   `json:"acting_email"`
-	SnapshotEmail   string                   `json:"snapshot_email,omitempty"`
-	DeadlineAt      int64                    `json:"deadline_at,omitempty"`
-	SnapshotHash    string                   `json:"snapshot_hash"`
-	ExpiresAt       int64                    `json:"expires_at"`
-	TargetChannelID string                   `json:"target_channel_id,omitempty"`
-	SyncPreviews    []googleGroupSyncPreview `json:"sync_previews,omitempty"`
+	Action           string                   `json:"action"`
+	UserID           string                   `json:"user_id"`
+	RequesterEmail   string                   `json:"requester_email,omitempty"`
+	TeamID           string                   `json:"team_id"`
+	ChannelID        string                   `json:"channel_id"`
+	TargetTeam       bool                     `json:"target_team,omitempty"`
+	AlsoInviteToTeam bool                     `json:"also_invite_to_team,omitempty"`
+	GroupEmail       string                   `json:"group_email"`
+	MemberEmail      string                   `json:"member_email,omitempty"`
+	MemberUserID     string                   `json:"member_user_id,omitempty"`
+	ActingEmail      string                   `json:"acting_email"`
+	SnapshotEmail    string                   `json:"snapshot_email,omitempty"`
+	DeadlineAt       int64                    `json:"deadline_at,omitempty"`
+	SnapshotHash     string                   `json:"snapshot_hash"`
+	ExpiresAt        int64                    `json:"expires_at"`
+	TargetChannelID  string                   `json:"target_channel_id,omitempty"`
+	SyncPreviews     []googleGroupSyncPreview `json:"sync_previews,omitempty"`
 }
 
 func googleUserFacingError(err error) string {
@@ -149,11 +153,13 @@ func googlePermissionDenied(err error) bool {
 func (p *Plugin) googleGroupCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	fields := strings.Fields(args.Command)
 	if len(fields) < 3 || fields[1] != "group" {
-		return &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral, Text: "Usage: `/google group add|remove|sync|manage ...`"}, nil
+		return &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral, Text: "Usage: `/google group add|remove|team|sync|manage ...`"}, nil
 	}
 	switch fields[2] {
 	case "sync":
 		return p.googleGroupSyncCommand(args)
+	case "team":
+		return p.googleGroupTeamCommand(args)
 	case "manage":
 		return p.googleGroupMemberCommand(args)
 	default:
@@ -162,19 +168,57 @@ func (p *Plugin) googleGroupCommand(args *model.CommandArgs) (*model.CommandResp
 }
 
 func (p *Plugin) googleGroupSyncCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
+	return p.googleGroupSyncCommandForTarget(args, false)
+}
+
+func (p *Plugin) googleGroupTeamCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	fields := strings.Fields(args.Command)
+	if len(fields) < 4 {
+		response.Text = "Usage: `/google group team add|remove|sync ...`"
+		return response, nil
+	}
+	if !p.googleGroupTeamAdmin(args.UserId, args.TeamId) {
+		response.Text = "Only system or team admins can manage Google Groups for a team."
+		return response, nil
+	}
+	switch fields[3] {
+	case "add", "remove":
+		return p.googleGroupTeamMemberCommand(args, fields[3])
+	case "sync":
+		targetArgs := *args
+		targetArgs.Command = "/google group sync " + strings.Join(fields[4:], " ")
+		return p.googleGroupSyncCommandForTarget(&targetArgs, true)
+	default:
+		response.Text = "Usage: `/google group team add|remove|sync ...`"
+		return response, nil
+	}
+}
+
+func (p *Plugin) googleGroupSyncCommandForTarget(args *model.CommandArgs, teamTarget bool) (*model.CommandResponse, *model.AppError) {
 	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
 	if !p.googleGroupTeamAdmin(args.UserId, args.TeamId) {
 		response.Text = "Only system or team admins can manage Google Group syncs."
 		return response, nil
 	}
 	fields := strings.Fields(args.Command)
+	usagePrefix := "/google group sync"
+	if teamTarget {
+		usagePrefix = "/google group team sync"
+	}
 	if len(fields) < 4 {
-		response.Text = "Usage: `/google group sync start <group-email> <YYYY-MM-DD> / stop <group-email> / list / now`"
+		response.Text = googleGroupSyncUsage(teamTarget,
+			fmt.Sprintf("Usage: `%s start <group-email> <YYYY-MM-DD> / stop <group-email> / list`", usagePrefix))
 		return response, nil
 	}
 
 	switch fields[3] {
 	case "now":
+		if teamTarget {
+			response.Text = googleGroupSyncUsage(true,
+				"Usage: `/google group team sync start <group-email> <YYYY-MM-DD> / stop <group-email> / list`")
+			return response, nil
+		}
 		if len(fields) != 4 {
 			response.Text = "Usage: `/google group sync now`"
 			return response, nil
@@ -182,13 +226,19 @@ func (p *Plugin) googleGroupSyncCommand(args *model.CommandArgs) (*model.Command
 		return p.googleGroupSyncNow(args)
 	case "list":
 		if len(fields) != 4 {
-			response.Text = "Usage: `/google group sync list`"
+			response.Text = googleGroupSyncUsage(teamTarget, fmt.Sprintf("Usage: `%s list`", usagePrefix))
 			return response, nil
 		}
 		return p.listGoogleGroupSyncs(args)
 	case "start":
-		if len(fields) != 6 {
-			response.Text = "Usage: `/google group sync start <group-email> <YYYY-MM-DD>`"
+		alsoInviteToTeam := len(fields) == 7 && fields[6] == "--also-invite-to-team"
+		if (len(fields) != 6 && !alsoInviteToTeam) || (teamTarget && len(fields) != 6) {
+			flagHint := " [--also-invite-to-team]"
+			if teamTarget {
+				flagHint = ""
+			}
+			response.Text = googleGroupSyncUsage(teamTarget,
+				fmt.Sprintf("Usage: `%s start <group-email> <YYYY-MM-DD>%s`", usagePrefix, flagHint))
 			return response, nil
 		}
 		groupEmail, err := p.normalizeGoogleGroupEmail(fields[4])
@@ -217,6 +267,12 @@ func (p *Plugin) googleGroupSyncCommand(args *model.CommandArgs) (*model.Command
 			response.Text = err.Error()
 			return response, nil
 		}
+		if teamTarget || alsoInviteToTeam {
+			if message := p.googleGroupTeamPermissionMessage(args.UserId, args.TeamId, model.PermissionAddUserToTeam, "add"); message != "" {
+				response.Text = message
+				return response, nil
+			}
+		}
 		actorEmail, err := p.googleGroupActingEmail(args.UserId)
 		if err != nil {
 			response.Text = err.Error()
@@ -231,17 +287,27 @@ func (p *Plugin) googleGroupSyncCommand(args *model.CommandArgs) (*model.Command
 			response.Text = message
 			return response, nil
 		}
-		key := googleGroupSyncKey(args.TeamId, args.ChannelId, groupEmail)
-		data, appErr := p.API.KVGet(key)
-		if appErr != nil {
-			return nil, appErr
+		channelKey := googleGroupSyncKey(args.TeamId, channel.Id, groupEmail)
+		teamKey := googleGroupSyncKey(args.TeamId, "", groupEmail)
+		keys := []string{channelKey}
+		if teamTarget {
+			keys = []string{teamKey}
+		} else if alsoInviteToTeam {
+			keys = append(keys, teamKey)
 		}
-		if len(data) != 0 {
-			response.Text = "This Google Group already has a sync configured for this channel. Stop it first to replace its deadline."
-			return response, nil
+		for _, key := range keys {
+			data, appErr := p.API.KVGet(key)
+			if appErr != nil {
+				return nil, appErr
+			}
+			if len(data) != 0 {
+				response.Text = "This Google Group already has a sync configured for that target. Stop it first to replace its deadline."
+				return response, nil
+			}
 		}
 		plan := googleGroupConfirmation{
 			Action: "sync_add", UserID: args.UserId, TeamID: args.TeamId, ChannelID: args.ChannelId,
+			TargetTeam: teamTarget, AlsoInviteToTeam: alsoInviteToTeam,
 			GroupEmail: groupEmail, ActingEmail: actorEmail, SnapshotEmail: snapshotEmail, DeadlineAt: deadline,
 			SnapshotHash: googleGroupSnapshotHash(snapshot),
 		}
@@ -251,11 +317,18 @@ func (p *Plugin) googleGroupSyncCommand(args *model.CommandArgs) (*model.Command
 			return response, nil
 		}
 		plan.RequesterEmail = requesterEmail
-		job := googleGroupSync{CreatedBy: args.UserId, ActingEmail: snapshotEmail, RequesterEmail: requesterEmail}
-		return p.openGoogleGroupConfirmation(args, plan, snapshot, channel.Name, "Add this group to the channel and sync it hourly until the deadline?\n\n"+googleGroupSyncAccountDescription(job))
+		action := fmt.Sprintf("Add this group to the channel and sync it hourly through %s (UTC)?", time.UnixMilli(deadline).UTC().Format("2006-01-02"))
+		confirmationChannelName := channel.Name
+		if teamTarget {
+			action = fmt.Sprintf("Add this group to the team and sync it hourly through %s (UTC)?", time.UnixMilli(deadline).UTC().Format("2006-01-02"))
+			confirmationChannelName = ""
+		} else if alsoInviteToTeam {
+			action = fmt.Sprintf("Add this group to the channel and team and sync it hourly through %s (UTC)?", time.UnixMilli(deadline).UTC().Format("2006-01-02"))
+		}
+		return p.openGoogleGroupConfirmation(args, plan, snapshot, confirmationChannelName, action)
 	case "stop":
 		if len(fields) != 5 {
-			response.Text = "Usage: `/google group sync stop <group-email>`"
+			response.Text = googleGroupSyncUsage(teamTarget, fmt.Sprintf("Usage: `%s stop <group-email>`", usagePrefix))
 			return response, nil
 		}
 		groupEmail, err := p.normalizeGoogleGroupEmail(fields[4])
@@ -275,13 +348,26 @@ func (p *Plugin) googleGroupSyncCommand(args *model.CommandArgs) (*model.Command
 			response.Text = err.Error()
 			return response, nil
 		}
+		if teamTarget {
+			if message := p.googleGroupTeamPermissionMessage(args.UserId, args.TeamId, model.PermissionAddUserToTeam, "add"); message != "" {
+				response.Text = message
+				return response, nil
+			}
+		}
 		key := googleGroupSyncKey(args.TeamId, args.ChannelId, groupEmail)
+		if teamTarget {
+			key = googleGroupSyncKey(args.TeamId, "", groupEmail)
+		}
 		data, appErr := p.API.KVGet(key)
 		if appErr != nil {
 			return nil, appErr
 		}
 		if len(data) == 0 {
-			response.Text = fmt.Sprintf("Google Group %q does not have a sync configured for this channel.", groupEmail)
+			target := "channel"
+			if teamTarget {
+				target = "team"
+			}
+			response.Text = fmt.Sprintf("Google Group %q does not have a sync configured for this %s.", groupEmail, target)
 			return response, nil
 		}
 		actorEmail, err := p.googleGroupActingEmail(args.UserId)
@@ -300,17 +386,38 @@ func (p *Plugin) googleGroupSyncCommand(args *model.CommandArgs) (*model.Command
 		}
 		plan := googleGroupConfirmation{
 			Action: "sync_remove", UserID: args.UserId, TeamID: args.TeamId, ChannelID: args.ChannelId,
+			TargetTeam: teamTarget,
 			GroupEmail: groupEmail, ActingEmail: actorEmail, SnapshotEmail: snapshotEmail, SnapshotHash: googleGroupSnapshotHash(snapshot),
 		}
-		var job googleGroupSync
-		if err := json.Unmarshal(data, &job); err != nil {
+		if err := json.Unmarshal(data, new(googleGroupSync)); err != nil {
 			return nil, model.NewAppError("googleGroupSyncCommand", "plugin.google_groups.sync", nil, err.Error(), http.StatusInternalServerError)
 		}
-		return p.openGoogleGroupConfirmation(args, plan, snapshot, channel.Name, "Stop syncing this group to the channel? Existing channel members will not be removed.\n\n"+googleGroupSyncAccountDescription(job))
+		requesterEmail, err := p.googleGroupMattermostEmail(args.UserId)
+		if err != nil {
+			response.Text = err.Error()
+			return response, nil
+		}
+		plan.RequesterEmail = requesterEmail
+		targetDescription := "channel"
+		confirmationChannelName := channel.Name
+		if teamTarget {
+			targetDescription = "team"
+			confirmationChannelName = ""
+		}
+		return p.openGoogleGroupConfirmation(args, plan, snapshot, confirmationChannelName,
+			"Stop syncing this group to the "+targetDescription+"? Existing members will not be removed.")
 	default:
-		response.Text = "Usage: `/google group sync start <group-email> <YYYY-MM-DD> / stop <group-email> / list / now`"
+		response.Text = googleGroupSyncUsage(teamTarget,
+			fmt.Sprintf("Usage: `%s start <group-email> <YYYY-MM-DD> / stop <group-email> / list`", usagePrefix))
 		return response, nil
 	}
+}
+
+func googleGroupSyncUsage(teamTarget bool, detail string) string {
+	if !teamTarget {
+		return detail
+	}
+	return "Usage: `/google group team sync start|stop|list`\n" + detail
 }
 
 func (p *Plugin) googleGroupChannelCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
@@ -360,6 +467,64 @@ func (p *Plugin) googleGroupChannelCommand(args *model.CommandArgs) (*model.Comm
 		description = "Remove this group's users from the channel once? You will not be removed; active syncs may add members again."
 	}
 	return p.openGoogleGroupConfirmation(args, plan, snapshot, channel.Name, description)
+}
+
+func (p *Plugin) googleGroupTeamMemberCommand(args *model.CommandArgs, action string) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	fields := strings.Fields(args.Command)
+	if len(fields) != 5 {
+		response.Text = "Usage: `/google group team add|remove <group-email>`"
+		return response, nil
+	}
+	groupEmail, err := p.normalizeGoogleGroupEmail(fields[4])
+	if err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	permission, actionDescription := model.PermissionAddUserToTeam, "add"
+	if action == "remove" {
+		permission, actionDescription = model.PermissionRemoveUserFromTeam, "remove"
+	}
+	if message := p.googleGroupTeamPermissionMessage(args.UserId, args.TeamId, permission, actionDescription); message != "" {
+		response.Text = message
+		return response, nil
+	}
+	channel, appErr := p.googleGroupSyncChannel(args)
+	if appErr != nil {
+		return nil, appErr
+	}
+	if channel == nil {
+		response.Text = "Run this command in an active public or private team channel."
+		return response, nil
+	}
+	if err := p.requireGoogleSyncChannelMember(channel.Id, args.UserId); err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	actingEmail, err := p.googleGroupActingEmail(args.UserId)
+	if err != nil {
+		response.Text = err.Error()
+		return response, nil
+	}
+	snapshot, snapshotEmail, err := p.googleGroupChannelSnapshot(groupEmail, actingEmail)
+	if err != nil {
+		response.Text = fmt.Sprintf("Could not read Google Group %q: %s", groupEmail, googleUserFacingError(err))
+		return response, nil
+	}
+	if message := p.googleGroupChannelPermissionMessage(args.UserId, args.TeamId, len(snapshot.Members)); message != "" {
+		response.Text = message
+		return response, nil
+	}
+	plan := googleGroupConfirmation{
+		Action: "team_" + action, UserID: args.UserId, TeamID: args.TeamId, ChannelID: channel.Id,
+		GroupEmail: groupEmail, ActingEmail: actingEmail, SnapshotEmail: snapshotEmail,
+		SnapshotHash: googleGroupSnapshotHash(snapshot),
+	}
+	description := "Add this group's users to the team once, without configuring a sync?"
+	if action == "remove" {
+		description = "Remove this group's users from the team once? Active syncs may add them again."
+	}
+	return p.openGoogleGroupConfirmation(args, plan, snapshot, "", description)
 }
 
 func (p *Plugin) googleGroupMemberCommand(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
@@ -460,12 +625,41 @@ func (p *Plugin) listGoogleGroupSyncs(args *model.CommandArgs) (*model.CommandRe
 		return response, nil
 	}
 
+	displayLocation, err := time.LoadLocation(googleGroupSyncDisplayTimeZone)
+	if err != nil {
+		return nil, model.NewAppError("listGoogleGroupSyncs", "plugin.google_groups.list", nil,
+			fmt.Sprintf("load time zone %q: %v", googleGroupSyncDisplayTimeZone, err), http.StatusInternalServerError)
+	}
+
 	jobs, err := p.googleGroupSyncRecords()
 	if err != nil {
 		return nil, model.NewAppError("listGoogleGroupSyncs", "plugin.google_groups.list", nil, err.Error(), http.StatusInternalServerError)
 	}
+	sort.Slice(jobs, func(i, j int) bool {
+		iTeamSync, jTeamSync := jobs[i].Job.ChannelID == "", jobs[j].Job.ChannelID == ""
+		if iTeamSync != jTeamSync {
+			return iTeamSync
+		}
+		iName, jName := jobs[i].Job.GroupName, jobs[j].Job.GroupName
+		if iName == "" {
+			iName = jobs[i].Job.GroupEmail
+		}
+		if jName == "" {
+			jName = jobs[j].Job.GroupEmail
+		}
+		if !strings.EqualFold(iName, jName) {
+			return strings.ToLower(iName) < strings.ToLower(jName)
+		}
+		return strings.ToLower(jobs[i].Job.GroupEmail) < strings.ToLower(jobs[j].Job.GroupEmail)
+	})
 	var lines []string
+	creatorNames := make(map[string]string)
 	now := time.Now()
+	config := p.getConfiguration()
+	cycle, cycleSeconds, err := googleGroupSyncCycleDescription(jobs, config, now)
+	if err != nil {
+		return nil, model.NewAppError("listGoogleGroupSyncs", "plugin.google_groups.list", nil, err.Error(), http.StatusInternalServerError)
+	}
 	actingEmail, err := p.googleGroupActingEmail(args.UserId)
 	if err != nil {
 		response.Text = err.Error()
@@ -473,7 +667,8 @@ func (p *Plugin) listGoogleGroupSyncs(args *model.CommandArgs) (*model.CommandRe
 	}
 	for _, record := range jobs {
 		job := record.Job
-		if job.TeamID != args.TeamId || job.ChannelID != args.ChannelId || job.DeadlineAt <= now.UnixMilli() {
+		teamSync := job.ChannelID == ""
+		if job.TeamID != args.TeamId || (!teamSync && job.ChannelID != channel.Id) || job.DeadlineAt <= now.UnixMilli() {
 			continue
 		}
 		if _, _, err := p.googleGroupChannelSnapshot(job.GroupEmail, actingEmail); err != nil {
@@ -481,51 +676,102 @@ func (p *Plugin) listGoogleGroupSyncs(args *model.CommandArgs) (*model.CommandRe
 			response.Text = "Could not verify access to a configured Google Group; no syncs were listed. Check Google permissions and server logs."
 			return response, nil
 		}
+		creatorName, ok := creatorNames[job.CreatedBy]
+		if !ok {
+			creatorName = "@unknown"
+			if job.CreatedBy != "" {
+				creator, appErr := p.API.GetUser(job.CreatedBy)
+				if appErr != nil && appErr.StatusCode != http.StatusNotFound {
+					return nil, appErr
+				}
+				if appErr == nil && creator != nil && creator.Username != "" {
+					creatorName = "@" + creator.Username
+				}
+			}
+			creatorNames[job.CreatedBy] = creatorName
+		}
 		name := job.GroupName
 		if name == "" {
 			name = job.GroupEmail
 		}
-		line := fmt.Sprintf("- `%s` (`%s`) — expires %s UTC; %s", strings.ReplaceAll(name, "`", "'"), job.GroupEmail, time.UnixMilli(job.DeadlineAt).UTC().Format("2006-01-02"), googleGroupSyncAccountDescription(job))
-		if job.LastSyncedAt > 0 {
-			line += fmt.Sprintf("; last synced %s UTC", time.UnixMilli(job.LastSyncedAt).UTC().Format("2006-01-02 15:04"))
-		} else {
-			line += "; first sync pending"
+		target := "Channel"
+		if teamSync {
+			target = "Team"
 		}
-		line += "; " + googleGroupSyncNextDescription(job, now)
+		account := strings.ReplaceAll(job.RequesterEmail, "`", "'")
+		if account == "" {
+			account = "unknown"
+		}
+		lastSynced := "First sync pending"
+		if job.LastSyncedAt > 0 {
+			lastSynced = fmt.Sprintf("Last synced: %s", formatGoogleGroupSyncTime(job.LastSyncedAt, displayLocation))
+		}
+		line := fmt.Sprintf("- **%s sync: %s** (`%s`)\n  - Started by: %s\n  - Scheduled Google account: `%s`\n  - Expires: %s UTC\n  - %s\n  - %s",
+			target, strings.ReplaceAll(name, "`", "'"), strings.ReplaceAll(job.GroupEmail, "`", "'"),
+			creatorName, account, time.UnixMilli(job.DeadlineAt).UTC().Format("2006-01-02"),
+			lastSynced, googleGroupSyncNextDescriptionForMode(job, config, cycleSeconds, now, displayLocation))
 		lines = append(lines, line)
 	}
-	sort.Strings(lines)
 	if len(lines) == 0 {
-		response.Text = "No active Google Group syncs are configured for this channel."
+		response.Text = "No active Google Group syncs are configured for this team or channel."
 	} else {
-		response.Text = "#### Google Group syncs for `~" + strings.ReplaceAll(channel.Name, "`", "'") + "`\n\n" + strings.Join(lines, "\n")
+		response.Text = "#### Google Group syncs for `~" + strings.ReplaceAll(channel.Name, "`", "'") + "` and this team\n\n" + cycle + "\n\n" + strings.Join(lines, "\n\n")
 	}
 	return response, nil
+}
+
+func formatGoogleGroupSyncTime(timestamp int64, location *time.Location) string {
+	return time.UnixMilli(timestamp).In(location).Format("2006-01-02 15:04 MST")
 }
 
 func googleGroupNextSyncAt(job googleGroupSync, now time.Time) int64 {
 	if job.LastSyncedAt <= 0 || job.DeadlineAt <= now.UnixMilli() {
 		return 0
 	}
-	nextSyncAt := time.UnixMilli(job.LastSyncedAt).Add(googleGroupSyncEvery).UnixMilli()
+	lastSynced := time.UnixMilli(job.LastSyncedAt).UTC()
+	nextSync := time.Date(lastSynced.Year(), lastSynced.Month(), lastSynced.Day(), lastSynced.Hour(), 23, 0, 0, time.UTC)
+	if !nextSync.After(lastSynced) {
+		nextSync = nextSync.Add(time.Hour)
+	}
+	nextSyncAt := nextSync.UnixMilli()
 	if nextSyncAt >= job.DeadlineAt {
 		return 0
 	}
 	return nextSyncAt
 }
 
-func googleGroupSyncNextDescription(job googleGroupSync, now time.Time) string {
+func nextGoogleGroupSyncRun(now time.Time) time.Time {
+	now = now.UTC()
+	nextRun := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 23, 0, 0, time.UTC)
+	if !nextRun.After(now) {
+		nextRun = nextRun.Add(time.Hour)
+	}
+	return nextRun
+}
+
+func googleGroupSyncNextDescription(job googleGroupSync, now time.Time, location *time.Location) string {
 	nextSyncAt := googleGroupNextSyncAt(job, now)
 	if nextSyncAt > 0 {
-		return fmt.Sprintf("next sync %s UTC", time.UnixMilli(nextSyncAt).UTC().Format("2006-01-02 15:04"))
+		return fmt.Sprintf("Next sync: %s", formatGoogleGroupSyncTime(nextSyncAt, location))
 	}
 	if job.DeadlineAt <= now.UnixMilli() {
-		return "no next sync (expired)"
+		return "No next sync (expired)"
 	}
 	if job.LastSyncedAt <= 0 {
-		return "next sync pending (first sync)"
+		return "Next sync pending (first sync)"
 	}
-	return "no next sync before deadline"
+	return "No next sync before deadline"
+}
+
+func googleGroupSyncNextDescriptionForMode(job googleGroupSync, config *configuration, cycleSeconds int64, now time.Time, location *time.Location) string {
+	if config.GoogleGroupsSyncMode == "continuous" && job.DeadlineAt > now.UnixMilli() {
+		minutes := cycleSeconds / 60
+		if cycleSeconds%60 != 0 {
+			minutes++
+		}
+		return fmt.Sprintf("Sync approximately every %d min", minutes)
+	}
+	return googleGroupSyncNextDescription(job, now, location)
 }
 
 func (p *Plugin) googleGroupSyncNow(args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
@@ -560,7 +806,7 @@ func (p *Plugin) googleGroupSyncNow(args *model.CommandArgs) (*model.CommandResp
 		Action: "sync_now", UserID: args.UserId, TeamID: args.TeamId, ChannelID: args.ChannelId,
 		TargetChannelID: channel.Id, ActingEmail: actingEmail, RequesterEmail: requesterEmail,
 	}
-	introductions := []string{fmt.Sprintf("Sync all active Google Groups configured for `~%s` now?", channel.Name)}
+	var introductions []string
 	for _, record := range records {
 		job := record.Job
 		if job.TeamID != args.TeamId || job.ChannelID != channel.Id || job.DeadlineAt <= time.Now().UnixMilli() {
@@ -579,19 +825,21 @@ func (p *Plugin) googleGroupSyncNow(args *model.CommandArgs) (*model.CommandResp
 			Key: record.Key, RecordHash: googleGroupRecordHash(record.Data),
 			SnapshotHash: googleGroupSnapshotHash(snapshot), ActingEmail: snapshotEmail,
 		})
-		introduction, err := p.googleGroupConfirmationIntroduction(snapshot, channel.Name, "")
+		introduction, err := p.googleGroupConfirmationIntroduction(snapshot, "", "")
 		if err != nil {
 			p.API.LogError("Filter Google Group members for manual sync preview failed", "group", job.GroupEmail, "error", err.Error())
 			response.Text = "Could not check Mattermost accounts for Google Group members; no sync was run."
 			return response, nil
 		}
-		introductions = append(introductions, introduction+"\n\n"+googleGroupSyncAccountDescription(job)+"\n\n**Manual sync requested by:** `"+strings.ReplaceAll(requesterEmail, "`", "'")+"`")
+		introductions = append(introductions, introduction)
 	}
 	if len(plan.SyncPreviews) == 0 {
 		response.Text = fmt.Sprintf("No active Google Group syncs are configured for ~%s.", channel.Name)
 		return response, nil
 	}
-	return p.openGoogleGroupConfirmationText(args, plan, strings.Join(introductions, "\n\n---\n\n"))
+	introduction := fmt.Sprintf("Sync all active Google Groups configured for `~%s` now?\n\n%s",
+		strings.ReplaceAll(channel.Name, "`", "'"), strings.Join(introductions, "\n\n---\n\n"))
+	return p.openGoogleGroupConfirmationText(args, plan, introduction)
 }
 
 func googleGroupRecordHash(data []byte) string {
@@ -709,6 +957,13 @@ func (p *Plugin) googleGroupSyncChannel(args *model.CommandArgs) (*model.Channel
 		return nil, nil
 	}
 	return channel, nil
+}
+
+func (p *Plugin) googleGroupTeamPermissionMessage(userID, teamID string, permission *model.Permission, action string) string {
+	if teamID == "" || !p.API.HasPermissionToTeam(userID, teamID, permission) {
+		return fmt.Sprintf("You do not have permission to %s members in this team.", action)
+	}
+	return ""
 }
 
 func (p *Plugin) googleGroupChannelPermissionMessage(userID, teamID string, memberCount int) string {
@@ -1212,31 +1467,38 @@ func formatGoogleGroupConfirmationIntroduction(snapshot *googleDirectoryGroupSna
 		if member.Email == "" {
 			continue
 		}
-		members = append(members, "`"+strings.ReplaceAll(member.Email, "`", "'")+"`")
+		members = append(members, "- `"+strings.ReplaceAll(member.Email, "`", "'")+"`")
 		if len(members) == 5 {
 			break
 		}
 	}
 	if len(members) == 0 {
 		if len(snapshot.Members) == 0 {
-			members = append(members, "_No members_")
+			members = append(members, "- _No members_")
 		} else {
-			members = append(members, "_No reportable members_")
+			members = append(members, "- _No reportable members_")
 		}
 	}
 	if omittedSubgroups > 0 {
-		subgroupLabel := "subgroups"
 		if omittedSubgroups == 1 {
-			subgroupLabel = "subgroup"
+			members = append(members, "- (and a subgroup)")
+		} else {
+			members = append(members, "- (and some subgroups)")
 		}
-		members = append(members, fmt.Sprintf("(and %d+ %s)", omittedSubgroups, subgroupLabel))
 	}
-	introduction := fmt.Sprintf(
-		"%s\n\n**Group:** `%s`\n\n**Address:** `%s`\n\n**Members:** %d\n\n**First five alphabetically:**\n%s",
-		action, strings.ReplaceAll(googleGroupName(snapshot.Group), "`", "'"), strings.ReplaceAll(snapshot.Group.Email, "`", "'"), len(snapshot.Members), strings.Join(members, "\n"),
+	introduction := "> **Google Group details**"
+	if name := googleGroupName(snapshot.Group); !strings.EqualFold(name, snapshot.Group.Email) {
+		introduction += "\n>\n> **Group:** `" + strings.ReplaceAll(name, "`", "'") + "`"
+	}
+	introduction += fmt.Sprintf(
+		"\n>\n> **Address:** `%s`\n>\n> **Members:** %d\n>\n> **First five alphabetically:**\n> %s",
+		strings.ReplaceAll(snapshot.Group.Email, "`", "'"), len(snapshot.Members), strings.Join(members, "\n> "),
 	)
 	if channelName != "" {
-		introduction += "\n\n**Channel:** `~" + strings.ReplaceAll(channelName, "`", "'") + "`"
+		introduction += "\n>\n> **Channel:** `~" + strings.ReplaceAll(channelName, "`", "'") + "`"
+	}
+	if action != "" {
+		introduction = action + "\n\n" + introduction
 	}
 	return introduction
 }
@@ -1273,7 +1535,11 @@ func (p *Plugin) openGoogleGroupConfirmationText(args *model.CommandArgs, plan g
 			return response, nil
 		}
 	}
-	introduction += "\n\n**Mattermost user e-mail:** `" + strings.ReplaceAll(requesterEmail, "`", "'") + "`"
+	account := "`" + strings.ReplaceAll(requesterEmail, "`", "'") + "`"
+	if p.isGoogleFallbackEmail(plan.ActingEmail) {
+		account = "an external account"
+	}
+	introduction += "\n\nYou are performing this action as " + account
 	id := model.NewId()
 	plan.ExpiresAt = time.Now().Add(5 * time.Minute).UnixMilli()
 	data, err := json.Marshal(plan)
@@ -1288,11 +1554,21 @@ func (p *Plugin) openGoogleGroupConfirmationText(args *model.CommandArgs, plan g
 		URL:       "/plugins/" + p.API.GetPluginID() + "/google-groups/confirm",
 		Dialog: model.Dialog{
 			CallbackId:       googleGroupConfirmationID,
-			Title:            "Confirm Google Group",
+			Title:            "Confirm /google group",
 			IntroductionText: introduction,
 			SubmitLabel:      "Confirm",
-			NotifyOnCancel:   true,
-			State:            id,
+			Elements: []model.DialogElement{{
+				DisplayName: "Account permission:",
+				Name:        "confirm",
+				Type:        "radio",
+				Default:     "ok",
+				Options: []*model.PostActionOptions{{
+					Text:  "OK. You can perform this operation.",
+					Value: "ok",
+				}},
+			}},
+			NotifyOnCancel: true,
+			State:          id,
 		},
 	}
 	if err := dialog.IsValid(); err != nil {
@@ -1307,7 +1583,7 @@ func (p *Plugin) openGoogleGroupConfirmationText(args *model.CommandArgs, plan g
 		}
 		return nil, appErr
 	}
-	response.Text = "Review and confirm the Google Group action in the dialog."
+	response.Text = "Review and confirm the `/google group` action in the dialog."
 	return response, nil
 }
 
@@ -1359,6 +1635,12 @@ func (p *Plugin) serveGoogleGroupConfirmation(w http.ResponseWriter, r *http.Req
 		_ = json.NewEncoder(w).Encode(map[string]string{"text": "Cancelled."})
 		return
 	}
+	if confirmation, ok := submission.Submission["confirm"].(string); !ok || confirmation != "ok" {
+		_ = json.NewEncoder(w).Encode(model.SubmitDialogResponse{Errors: map[string]string{
+			"confirm": "Select OK to confirm the operation.",
+		}})
+		return
+	}
 	consumed, consumeErr := p.API.KVSetWithOptions(key, nil, model.PluginKVSetOptions{Atomic: true, OldValue: data})
 	if consumeErr != nil {
 		fail(http.StatusInternalServerError, "Could not consume the confirmation.")
@@ -1393,9 +1675,21 @@ func (p *Plugin) applyGoogleGroupConfirmation(plan googleGroupConfirmation) (str
 	}
 	defer lock.Unlock()
 
-	if (plan.Action == "sync_add" || plan.Action == "sync_remove" || plan.Action == "sync_now") &&
+	if (plan.Action == "sync_add" || plan.Action == "sync_remove" || plan.Action == "sync_now" ||
+		plan.Action == "team_add" || plan.Action == "team_remove") &&
 		!p.googleGroupTeamAdmin(plan.UserID, plan.TeamID) {
 		return "", fmt.Errorf("only system or team admins can manage Google Group syncs")
+	}
+	if plan.Action == "team_add" || (plan.Action == "sync_add" && (plan.TargetTeam || plan.AlsoInviteToTeam)) ||
+		(plan.Action == "sync_remove" && plan.TargetTeam) {
+		if message := p.googleGroupTeamPermissionMessage(plan.UserID, plan.TeamID, model.PermissionAddUserToTeam, "add"); message != "" {
+			return "", fmt.Errorf("%s", message)
+		}
+	}
+	if plan.Action == "team_remove" {
+		if message := p.googleGroupTeamPermissionMessage(plan.UserID, plan.TeamID, model.PermissionRemoveUserFromTeam, "remove"); message != "" {
+			return "", fmt.Errorf("%s", message)
+		}
 	}
 	var actingEmail string
 	if plan.Action == "manage_add" || plan.Action == "manage_remove" {
@@ -1417,7 +1711,8 @@ func (p *Plugin) applyGoogleGroupConfirmation(plan googleGroupConfirmation) (str
 	}
 	var snapshot *googleDirectoryGroupSnapshot
 	snapshotEmail := actingEmail
-	if plan.Action == "sync_add" || plan.Action == "sync_remove" || plan.Action == "channel_add" || plan.Action == "channel_remove" {
+	if plan.Action == "sync_add" || plan.Action == "sync_remove" || plan.Action == "channel_add" ||
+		plan.Action == "channel_remove" || plan.Action == "team_add" || plan.Action == "team_remove" {
 		snapshot, snapshotEmail, err = p.googleGroupChannelSnapshot(plan.GroupEmail, actingEmail)
 	} else {
 		snapshot, err = p.googleGroupSnapshot(plan.GroupEmail, actingEmail, false)
@@ -1463,76 +1758,41 @@ func (p *Plugin) applyGoogleGroupConfirmation(plan googleGroupConfirmation) (str
 			return fmt.Sprintf("Removed %d channel members, but some could not be removed: %v", removed, err), nil
 		}
 		return fmt.Sprintf("Removed %d members of %s from ~%s. Active syncs may add them again.", removed, snapshot.Group.Email, channel.Name), nil
-	case "sync_add":
+	case "team_add", "team_remove":
 		if message := p.googleGroupChannelPermissionMessage(plan.UserID, plan.TeamID, len(snapshot.Members)); message != "" {
 			return "", fmt.Errorf("%s", message)
 		}
-		if message := p.googleGroupSyncDeadlinePermissionMessage(plan.UserID, plan.DeadlineAt, time.Now()); message != "" {
-			return "", fmt.Errorf("%s", message)
-		}
-		if time.Now().UnixMilli() >= plan.DeadlineAt {
-			return "", fmt.Errorf("the sync deadline has passed; run the command again with a future date")
-		}
-		channel, appErr := p.API.GetChannel(plan.ChannelID)
+		channel, appErr := p.googleGroupSyncChannel(&model.CommandArgs{TeamId: plan.TeamID, ChannelId: plan.ChannelID})
 		if appErr != nil {
 			return "", fmt.Errorf("load channel: %s", appErr.Error())
 		}
-		if channel == nil || channel.DeleteAt != 0 || channel.TeamId != plan.TeamID ||
-			(channel.Type != model.ChannelTypeOpen && channel.Type != model.ChannelTypePrivate) {
+		if channel == nil {
 			return "", fmt.Errorf("the target channel is no longer active")
 		}
-		if err := p.requireGoogleSyncChannelMember(plan.ChannelID, plan.UserID); err != nil {
+		if err := p.requireGoogleSyncChannelMember(channel.Id, plan.UserID); err != nil {
 			return "", err
 		}
-		key := googleGroupSyncKey(plan.TeamID, plan.ChannelID, plan.GroupEmail)
-		oldData, appErr := p.API.KVGet(key)
+		team, appErr := p.API.GetTeam(plan.TeamID)
 		if appErr != nil {
-			return "", fmt.Errorf("check existing sync: %s", appErr.Error())
+			return "", fmt.Errorf("load team: %s", appErr.Error())
 		}
-		if len(oldData) != 0 {
-			return "", fmt.Errorf("this group already has a sync configured for the channel")
+		if team == nil || team.DeleteAt != 0 {
+			return "", fmt.Errorf("the target team is no longer active")
 		}
-		job := googleGroupSync{
-			GroupEmail: snapshot.Group.Email, GroupName: googleGroupName(snapshot.Group),
-			TeamID: plan.TeamID, ChannelID: plan.ChannelID, CreatedBy: plan.UserID,
-			ActingEmail: snapshotEmail, DelegatedEmail: actingEmail, DeadlineAt: plan.DeadlineAt,
-			AdminFallback: !strings.EqualFold(snapshotEmail, actingEmail),
+		if plan.Action == "team_add" {
+			added, err := p.syncGoogleGroupTeamMembers(snapshot, team.Id)
+			if err != nil {
+				return fmt.Sprintf("Added %d team members, but some could not be added: %v", added, err), nil
+			}
+			return fmt.Sprintf("Added %d members of %s to team %s.", added, snapshot.Group.Email, team.DisplayName), nil
 		}
-		job.RequesterEmail, err = p.googleGroupOwnActingEmail(plan.UserID)
+		removed, err := p.removeGoogleGroupTeamMembers(snapshot, team.Id, plan.UserID)
 		if err != nil {
-			return "", fmt.Errorf("could not identify sync creator's Google account: %w", err)
+			return fmt.Sprintf("Removed %d team members, but some could not be removed: %v", removed, err), nil
 		}
-		if plan.RequesterEmail != "" && !strings.EqualFold(job.RequesterEmail, plan.RequesterEmail) {
-			return "", fmt.Errorf("the sync creator's Google account changed; run the command again")
-		}
-		if err := p.verifyGoogleGroupSyncRequester(job); err != nil {
-			return "", fmt.Errorf("could not verify sync creator's access: %s", googleUserFacingError(err))
-		}
-		data, err := json.Marshal(job)
-		if err != nil {
-			return "", fmt.Errorf("encode sync settings: %w", err)
-		}
-		if appErr := p.API.KVSet(key, data); appErr != nil {
-			return "", fmt.Errorf("save sync settings: %s", appErr.Error())
-		}
-		added, syncErr := p.syncGoogleGroupMembers(snapshot, job)
-		if syncErr != nil {
-			p.API.LogError("Initial Google Group channel sync completed with errors", "group", job.GroupEmail, "channel_id", job.ChannelID, "error", syncErr.Error())
-			return fmt.Sprintf("Sync configured for %s until %s UTC (%s). Added %d channel members, but some group members could not be added: %v. The hourly sync will retry.", job.GroupEmail, time.UnixMilli(job.DeadlineAt).UTC().Format("2006-01-02"), googleGroupSyncAccountDescription(job), added, syncErr), nil
-		}
-		job.LastSyncedAt = time.Now().UnixMilli()
-		updated, err := json.Marshal(job)
-		if err != nil {
-			return "", fmt.Errorf("encode sync status: %w", err)
-		}
-		saved, appErr := p.API.KVSetWithOptions(key, updated, model.PluginKVSetOptions{Atomic: true, OldValue: data})
-		if appErr != nil {
-			return "", fmt.Errorf("members were added but the sync status could not be saved: %s", appErr.Error())
-		}
-		if !saved {
-			return "", fmt.Errorf("members were added but the sync status changed concurrently; the sync may retry")
-		}
-		return fmt.Sprintf("Sync configured for %s in ~%s until %s UTC (%s). Added %d channel members; future syncs run hourly. Members are never removed automatically.", job.GroupEmail, channel.Name, time.UnixMilli(job.DeadlineAt).UTC().Format("2006-01-02"), googleGroupSyncAccountDescription(job), added), nil
+		return fmt.Sprintf("Removed %d members of %s from team %s. Active syncs may add them again.", removed, snapshot.Group.Email, team.DisplayName), nil
+	case "sync_add":
+		return p.applyGoogleGroupSyncAdd(plan, snapshot, snapshotEmail, actingEmail)
 	case "sync_remove":
 		if message := p.googleGroupChannelPermissionMessage(plan.UserID, plan.TeamID, len(snapshot.Members)); message != "" {
 			return "", fmt.Errorf("%s", message)
@@ -1548,6 +1808,9 @@ func (p *Plugin) applyGoogleGroupConfirmation(plan googleGroupConfirmation) (str
 			return "", err
 		}
 		key := googleGroupSyncKey(plan.TeamID, plan.ChannelID, plan.GroupEmail)
+		if plan.TargetTeam {
+			key = googleGroupSyncKey(plan.TeamID, "", plan.GroupEmail)
+		}
 		data, appErr := p.API.KVGet(key)
 		if appErr != nil {
 			return "", fmt.Errorf("load sync settings: %s", appErr.Error())
@@ -1562,7 +1825,11 @@ func (p *Plugin) applyGoogleGroupConfirmation(plan googleGroupConfirmation) (str
 		if appErr := p.API.KVDelete(key); appErr != nil {
 			return "", fmt.Errorf("remove sync settings: %s", appErr.Error())
 		}
-		return fmt.Sprintf("Stopped syncing %s to the channel (%s). Existing channel members were not removed.", plan.GroupEmail, googleGroupSyncAccountDescription(job)), nil
+		target := "channel"
+		if plan.TargetTeam {
+			target = "team"
+		}
+		return fmt.Sprintf("Stopped syncing %s to the %s (%s). Existing members were not removed.", plan.GroupEmail, target, googleGroupSyncAccountDescription(job)), nil
 	case "manage_add", "manage_remove":
 		target, appErr := p.API.GetUser(plan.MemberUserID)
 		if appErr != nil {
@@ -1640,6 +1907,164 @@ func (p *Plugin) applyGoogleGroupConfirmation(plan googleGroupConfirmation) (str
 	}
 }
 
+func (p *Plugin) applyGoogleGroupSyncAdd(plan googleGroupConfirmation, snapshot *googleDirectoryGroupSnapshot, snapshotEmail, actingEmail string) (string, error) {
+	if message := p.googleGroupChannelPermissionMessage(plan.UserID, plan.TeamID, len(snapshot.Members)); message != "" {
+		return "", fmt.Errorf("%s", message)
+	}
+	if message := p.googleGroupSyncDeadlinePermissionMessage(plan.UserID, plan.DeadlineAt, time.Now()); message != "" {
+		return "", fmt.Errorf("%s", message)
+	}
+	if time.Now().UnixMilli() >= plan.DeadlineAt {
+		return "", fmt.Errorf("the sync deadline has passed; run the command again with a future date")
+	}
+	channel, appErr := p.googleGroupSyncChannel(&model.CommandArgs{TeamId: plan.TeamID, ChannelId: plan.ChannelID})
+	if appErr != nil {
+		return "", fmt.Errorf("load channel: %s", appErr.Error())
+	}
+	if channel == nil {
+		return "", fmt.Errorf("the target channel is no longer active")
+	}
+	if err := p.requireGoogleSyncChannelMember(plan.ChannelID, plan.UserID); err != nil {
+		return "", err
+	}
+	if plan.TargetTeam || plan.AlsoInviteToTeam {
+		if message := p.googleGroupTeamPermissionMessage(plan.UserID, plan.TeamID, model.PermissionAddUserToTeam, "add"); message != "" {
+			return "", fmt.Errorf("%s", message)
+		}
+		team, appErr := p.API.GetTeam(plan.TeamID)
+		if appErr != nil {
+			return "", fmt.Errorf("load team: %s", appErr.Error())
+		}
+		if team == nil || team.DeleteAt != 0 {
+			return "", fmt.Errorf("the target team is no longer active")
+		}
+	}
+	requesterEmail, err := p.googleGroupOwnActingEmail(plan.UserID)
+	if err != nil {
+		return "", fmt.Errorf("could not identify sync creator's Google account: %w", err)
+	}
+	if plan.RequesterEmail != "" && !strings.EqualFold(requesterEmail, plan.RequesterEmail) {
+		return "", fmt.Errorf("the sync creator's Google account changed; run the command again")
+	}
+
+	type targetSync struct {
+		key         string
+		job         googleGroupSync
+		initialData []byte
+	}
+	newSyncs := make([]targetSync, 0, 2)
+	baseJob := googleGroupSync{
+		GroupEmail: snapshot.Group.Email, GroupName: googleGroupName(snapshot.Group),
+		TeamID: plan.TeamID, CreatedBy: plan.UserID, RequesterEmail: requesterEmail,
+		ActingEmail: snapshotEmail, DelegatedEmail: actingEmail, DeadlineAt: plan.DeadlineAt,
+		AdminFallback: !strings.EqualFold(snapshotEmail, actingEmail),
+	}
+	if plan.TargetTeam || plan.AlsoInviteToTeam {
+		teamJob := baseJob
+		newSyncs = append(newSyncs, targetSync{
+			key: googleGroupSyncKey(plan.TeamID, "", plan.GroupEmail),
+			job: teamJob,
+		})
+	}
+	if !plan.TargetTeam {
+		channelJob := baseJob
+		channelJob.ChannelID = plan.ChannelID
+		newSyncs = append(newSyncs, targetSync{
+			key: googleGroupSyncKey(plan.TeamID, plan.ChannelID, plan.GroupEmail),
+			job: channelJob,
+		})
+	}
+	for _, target := range newSyncs {
+		if err := p.verifyGoogleGroupSyncRequester(target.job); err != nil {
+			return "", fmt.Errorf("could not verify sync creator's access: %s", googleUserFacingError(err))
+		}
+		oldData, appErr := p.API.KVGet(target.key)
+		if appErr != nil {
+			return "", fmt.Errorf("check existing sync: %s", appErr.Error())
+		}
+		if len(oldData) != 0 {
+			return "", fmt.Errorf("this group already has a sync configured for that target")
+		}
+	}
+
+	savedKeys := make([]string, 0, len(newSyncs))
+	for index := range newSyncs {
+		target := &newSyncs[index]
+		data, err := json.Marshal(target.job)
+		if err != nil {
+			return "", fmt.Errorf("encode sync settings: %w", err)
+		}
+		if appErr := p.API.KVSet(target.key, data); appErr != nil {
+			for _, key := range savedKeys {
+				if deleteErr := p.API.KVDelete(key); deleteErr != nil {
+					p.API.LogError("Rollback partial Google Group sync setup failed", "key", key, "error", deleteErr.Error())
+				}
+			}
+			return "", fmt.Errorf("save sync settings: %s", appErr.Error())
+		}
+		target.initialData = data
+		savedKeys = append(savedKeys, target.key)
+	}
+	defer p.wakeGoogleGroupSync()
+
+	var failures []string
+	teamAdded, channelAdded := 0, 0
+	for index := range newSyncs {
+		target := &newSyncs[index]
+		if target.job.ChannelID == "" {
+			teamAdded, err = p.syncGoogleGroupTeamMembers(snapshot, target.job.TeamID)
+		} else {
+			channelAdded, err = p.syncGoogleGroupMembers(snapshot, target.job)
+		}
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s sync: %v", syncTargetLabel(target.job), err))
+			p.API.LogError("Initial Google Group sync completed with errors",
+				"group", target.job.GroupEmail, "team_id", target.job.TeamID, "channel_id", target.job.ChannelID, "error", err.Error())
+			continue
+		}
+		target.job.LastSyncedAt = time.Now().UnixMilli()
+		updated, marshalErr := json.Marshal(target.job)
+		if marshalErr != nil {
+			return "", fmt.Errorf("encode sync status: %w", marshalErr)
+		}
+		saved, appErr := p.API.KVSetWithOptions(target.key, updated, model.PluginKVSetOptions{Atomic: true, OldValue: target.initialData})
+		if appErr != nil || !saved {
+			if appErr != nil {
+				return "", fmt.Errorf("members were added but the sync status could not be saved: %s", appErr.Error())
+			}
+			return "", fmt.Errorf("members were added but the sync status changed concurrently; the sync may retry")
+		}
+	}
+
+	message := fmt.Sprintf("Sync configured for %s until %s UTC (%s).",
+		snapshot.Group.Email, time.UnixMilli(plan.DeadlineAt).UTC().Format("2006-01-02"), googleGroupSyncAccountDescription(baseJob))
+	if plan.TargetTeam {
+		message += fmt.Sprintf(" Added %d team members.", teamAdded)
+	} else {
+		message += fmt.Sprintf(" Added %d channel members to ~%s.", channelAdded, channel.Name)
+		if plan.AlsoInviteToTeam {
+			message += fmt.Sprintf(" Added %d team members.", teamAdded)
+		}
+	}
+	if p.getConfiguration().GoogleGroupsSyncMode == "continuous" {
+		message += " Future syncs run continuously with the configured delay between operations."
+	} else {
+		message += " Next runs are scheduled at the 23rd minute of each hour."
+	}
+	message += " Members are never removed automatically."
+	if len(failures) > 0 {
+		message += " Some members could not be added: " + strings.Join(failures, "; ") + ". The next scheduled run will retry."
+	}
+	return message, nil
+}
+
+func syncTargetLabel(job googleGroupSync) string {
+	if job.ChannelID == "" {
+		return "team"
+	}
+	return "channel"
+}
+
 func (p *Plugin) requireGoogleSyncChannelMember(channelID, userID string) error {
 	member, appErr := p.API.GetChannelMember(channelID, userID)
 	if appErr != nil {
@@ -1702,6 +2127,80 @@ func (p *Plugin) syncGoogleGroupMembers(snapshot *googleDirectoryGroupSnapshot, 
 		added++
 	}
 	return added, firstErr
+}
+
+func (p *Plugin) syncGoogleGroupTeamMembers(snapshot *googleDirectoryGroupSnapshot, teamID string) (int, error) {
+	added := 0
+	var firstErr error
+	for _, member := range snapshot.Members {
+		if member.Email == "" || !strings.EqualFold(member.Type, "USER") || p.isGoogleFallbackEmail(member.Email) {
+			continue
+		}
+		user, appErr := p.googleGroupMattermostUser(member.Email)
+		if appErr != nil {
+			if appErr.StatusCode != http.StatusNotFound {
+				firstErr = firstError(firstErr, fmt.Errorf("find Mattermost user %q: %s", member.Email, appErr.Error()))
+			}
+			continue
+		}
+		if user == nil || user.DeleteAt != 0 || user.IsBot {
+			continue
+		}
+		teamMember, appErr := p.API.GetTeamMember(teamID, user.Id)
+		if appErr == nil && teamMember != nil && teamMember.DeleteAt == 0 {
+			continue
+		}
+		if appErr != nil && appErr.StatusCode != http.StatusNotFound {
+			firstErr = firstError(firstErr, fmt.Errorf("check team membership for %q: %s", member.Email, appErr.Error()))
+			continue
+		}
+		if _, appErr := p.API.CreateTeamMember(teamID, user.Id); appErr != nil {
+			memberNow, checkErr := p.API.GetTeamMember(teamID, user.Id)
+			if checkErr == nil && memberNow != nil && memberNow.DeleteAt == 0 {
+				continue
+			}
+			firstErr = firstError(firstErr, fmt.Errorf("add %q to team: %s", member.Email, appErr.Error()))
+			continue
+		}
+		added++
+	}
+	return added, firstErr
+}
+
+func (p *Plugin) removeGoogleGroupTeamMembers(snapshot *googleDirectoryGroupSnapshot, teamID, requesterID string) (int, error) {
+	removed := 0
+	var firstErr error
+	for _, member := range snapshot.Members {
+		if member.Email == "" || !strings.EqualFold(member.Type, "USER") {
+			continue
+		}
+		user, appErr := p.googleGroupMattermostUser(member.Email)
+		if appErr != nil {
+			if appErr.StatusCode != http.StatusNotFound {
+				firstErr = firstError(firstErr, fmt.Errorf("find Mattermost user %q: %s", member.Email, appErr.Error()))
+			}
+			continue
+		}
+		if user == nil || user.Id == requesterID {
+			continue
+		}
+		teamMember, appErr := p.API.GetTeamMember(teamID, user.Id)
+		if appErr != nil {
+			if appErr.StatusCode != http.StatusNotFound {
+				firstErr = firstError(firstErr, fmt.Errorf("check team membership for %q: %s", member.Email, appErr.Error()))
+			}
+			continue
+		}
+		if teamMember == nil || teamMember.DeleteAt != 0 {
+			continue
+		}
+		if appErr := p.API.DeleteTeamMember(teamID, user.Id, requesterID); appErr != nil {
+			firstErr = firstError(firstErr, fmt.Errorf("remove %q from team: %s", member.Email, appErr.Error()))
+			continue
+		}
+		removed++
+	}
+	return removed, firstErr
 }
 
 func (p *Plugin) removeGoogleGroupChannelMembers(snapshot *googleDirectoryGroupSnapshot, channelID, requesterID string) (int, error) {
@@ -1772,10 +2271,15 @@ func (p *Plugin) googleGroupSyncRecords() ([]googleGroupSyncRecord, error) {
 }
 
 func (p *Plugin) runGoogleGroupSyncJobs(ctx context.Context) {
+	p.runGoogleGroupSyncJobsMode(ctx, false)
+}
+
+func (p *Plugin) runGoogleGroupSyncJobsMode(ctx context.Context, continuous bool) (wait time.Duration) {
+	const retryDelay = 2 * time.Second
 	lock, err := cluster.NewMutex(p.API, "google_groups_sync")
 	if err != nil {
 		p.API.LogError("Create Google Group sync lock failed", "error", err.Error())
-		return
+		return retryDelay
 	}
 	lockCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -1783,16 +2287,51 @@ func (p *Plugin) runGoogleGroupSyncJobs(ctx context.Context) {
 		if ctx.Err() == nil {
 			p.API.LogError("Lock Google Group sync failed", "error", err.Error())
 		}
-		return
+		return retryDelay
 	}
 	defer lock.Unlock()
+
+	config := p.getConfiguration()
+	if !continuous {
+		p.runGoogleUsergroupSyncs(ctx)
+		if p.getConfiguration().GoogleGroupsSyncMode == "continuous" {
+			return 0
+		}
+	} else if config.GoogleGroupsSyncMode != "continuous" {
+		return 0
+	}
+
+	var state googleContinuousSyncState
+	if continuous {
+		data, appErr := p.API.KVGet(googleGroupContinuousStateKey)
+		if appErr != nil {
+			p.API.LogError("Read continuous Google Group sync state failed", "error", appErr.Error())
+			return retryDelay
+		}
+		if len(data) > 0 {
+			if err := json.Unmarshal(data, &state); err != nil {
+				p.API.LogError("Decode continuous Google Group sync state failed", "error", err.Error())
+				return retryDelay
+			}
+		}
+		delay := time.Duration(config.GoogleGroupsSyncDelaySeconds) * time.Second
+		if delay <= 0 {
+			p.API.LogError("Invalid continuous Google Group sync delay")
+			return retryDelay
+		}
+		if state.CompletedAt != 0 {
+			if remaining := time.Until(time.Unix(0, state.CompletedAt).Add(delay)); remaining > 0 {
+				return remaining
+			}
+		}
+	}
 
 	var keys []string
 	for page := 0; ; page++ {
 		batch, appErr := p.API.KVList(page, 100)
 		if appErr != nil {
 			p.API.LogError("List Google Group syncs failed", "error", appErr.Error())
-			return
+			return retryDelay
 		}
 		for _, key := range batch {
 			if strings.HasPrefix(key, googleGroupSyncPrefix) {
@@ -1803,10 +2342,10 @@ func (p *Plugin) runGoogleGroupSyncJobs(ctx context.Context) {
 			break
 		}
 	}
-	now := time.Now()
+	var records []googleGroupSyncRecord
 	for _, key := range keys {
 		if ctx.Err() != nil {
-			return
+			return retryDelay
 		}
 		data, appErr := p.API.KVGet(key)
 		if appErr != nil {
@@ -1821,6 +2360,55 @@ func (p *Plugin) runGoogleGroupSyncJobs(ctx context.Context) {
 			p.API.LogError("Decode Google Group sync failed", "key", key, "error", err.Error())
 			continue
 		}
+		records = append(records, googleGroupSyncRecord{Key: key, Data: data, Job: job})
+	}
+	if continuous {
+		if p.getConfiguration().GoogleGroupsSyncMode != "continuous" {
+			return 0
+		}
+		sort.Slice(records, func(i, j int) bool {
+			return googleContinuousSyncOrder(records[i]) < googleContinuousSyncOrder(records[j])
+		})
+	} else {
+		sort.SliceStable(records, func(i, j int) bool {
+			return records[i].Job.ChannelID == "" && records[j].Job.ChannelID != ""
+		})
+	}
+	if continuous {
+		if len(records) == 0 {
+			return 30 * time.Second
+		}
+		index := sort.Search(len(records), func(i int) bool {
+			return googleContinuousSyncOrder(records[i]) > state.Cursor
+		})
+		if index == len(records) {
+			index = 0
+		}
+		records = records[index : index+1]
+		state.Cursor = googleContinuousSyncOrder(records[0])
+		defer func() {
+			state.CompletedAt = time.Now().UnixNano()
+			data, marshalErr := json.Marshal(state)
+			if marshalErr != nil {
+				p.API.LogError("Encode continuous Google Group sync state failed", "error", marshalErr.Error())
+				wait = retryDelay
+				return
+			}
+			if appErr := p.API.KVSet(googleGroupContinuousStateKey, data); appErr != nil {
+				p.API.LogError("Save continuous Google Group sync state failed", "error", appErr.Error())
+				wait = retryDelay
+			}
+		}()
+	}
+	for _, record := range records {
+		if ctx.Err() != nil {
+			return retryDelay
+		}
+		if !continuous && p.getConfiguration().GoogleGroupsSyncMode == "continuous" {
+			return 0
+		}
+		key, data, job := record.Key, record.Data, record.Job
+		now := time.Now()
 		if now.UnixMilli() >= job.DeadlineAt {
 			if appErr := p.API.KVDelete(key); appErr != nil {
 				p.API.LogError("Expire Google Group sync failed", "group", job.GroupEmail, "error", appErr.Error())
@@ -1829,7 +2417,8 @@ func (p *Plugin) runGoogleGroupSyncJobs(ctx context.Context) {
 			}
 			continue
 		}
-		if job.LastSyncedAt > 0 && now.Sub(time.UnixMilli(job.LastSyncedAt)) < googleGroupSyncEvery {
+		nextSyncAt := googleGroupNextSyncAt(job, now)
+		if !continuous && job.LastSyncedAt > 0 && (nextSyncAt == 0 || now.UnixMilli() < nextSyncAt) {
 			continue
 		}
 		if !p.googleGroupTeamAdmin(job.CreatedBy, job.TeamID) {
@@ -1847,17 +2436,37 @@ func (p *Plugin) runGoogleGroupSyncJobs(ctx context.Context) {
 				continue
 			}
 		}
-		channel, appErr := p.API.GetChannel(job.ChannelID)
-		if appErr != nil {
-			p.API.LogError("Load channel for Google Group sync failed", "group", job.GroupEmail, "channel_id", job.ChannelID, "error", appErr.Error())
-			continue
-		}
-		if channel == nil || channel.DeleteAt != 0 || channel.TeamId != job.TeamID ||
-			(channel.Type != model.ChannelTypeOpen && channel.Type != model.ChannelTypePrivate) {
-			if appErr := p.API.KVDelete(key); appErr != nil {
-				p.API.LogError("Delete Google Group sync for inactive channel failed", "group", job.GroupEmail, "error", appErr.Error())
+		var channel *model.Channel
+		if job.ChannelID == "" {
+			if message := p.googleGroupTeamPermissionMessage(job.CreatedBy, job.TeamID, model.PermissionAddUserToTeam, "add"); message != "" {
+				p.API.LogError("Scheduled Google Group team sync creator lacks permission", "group", job.GroupEmail, "team_id", job.TeamID, "error", message)
+				continue
 			}
-			continue
+			team, appErr := p.API.GetTeam(job.TeamID)
+			if appErr != nil && appErr.StatusCode != http.StatusNotFound {
+				p.API.LogError("Load team for Google Group sync failed", "group", job.GroupEmail, "team_id", job.TeamID, "error", appErr.Error())
+				continue
+			}
+			if team == nil || team.DeleteAt != 0 {
+				if deleteErr := p.API.KVDelete(key); deleteErr != nil {
+					p.API.LogError("Delete Google Group sync for inactive team failed", "group", job.GroupEmail, "team_id", job.TeamID, "error", deleteErr.Error())
+				}
+				continue
+			}
+		} else {
+			var appErr *model.AppError
+			channel, appErr = p.API.GetChannel(job.ChannelID)
+			if appErr != nil {
+				p.API.LogError("Load channel for Google Group sync failed", "group", job.GroupEmail, "channel_id", job.ChannelID, "error", appErr.Error())
+				continue
+			}
+			if channel == nil || channel.DeleteAt != 0 || channel.TeamId != job.TeamID ||
+				(channel.Type != model.ChannelTypeOpen && channel.Type != model.ChannelTypePrivate) {
+				if deleteErr := p.API.KVDelete(key); deleteErr != nil {
+					p.API.LogError("Delete Google Group sync for inactive channel failed", "group", job.GroupEmail, "error", deleteErr.Error())
+				}
+				continue
+			}
 		}
 		snapshot, err := p.googleGroupSnapshot(job.GroupEmail, job.ActingEmail, true)
 		if err != nil {
@@ -1868,10 +2477,18 @@ func (p *Plugin) runGoogleGroupSyncJobs(ctx context.Context) {
 			p.API.LogError("Scheduled Google Group sync creator lacks permission for group size", "group", job.GroupEmail, "channel_id", job.ChannelID, "error", message)
 			continue
 		}
-		added, err := p.syncGoogleGroupMembers(snapshot, job)
-		if err != nil {
-			p.API.LogError("Scheduled Google Group sync completed with errors", "group", job.GroupEmail, "channel_id", job.ChannelID, "added", added, "error", err.Error())
-			continue
+		if job.ChannelID == "" {
+			added, syncErr := p.syncGoogleGroupTeamMembers(snapshot, job.TeamID)
+			if syncErr != nil {
+				p.API.LogError("Scheduled Google Group team sync completed with errors", "group", job.GroupEmail, "team_id", job.TeamID, "added", added, "error", syncErr.Error())
+				continue
+			}
+		} else {
+			added, syncErr := p.syncGoogleGroupMembers(snapshot, job)
+			if syncErr != nil {
+				p.API.LogError("Scheduled Google Group sync completed with errors", "group", job.GroupEmail, "channel_id", job.ChannelID, "added", added, "error", syncErr.Error())
+				continue
+			}
 		}
 		job.GroupName = googleGroupName(snapshot.Group)
 		job.LastSyncedAt = time.Now().UnixMilli()
@@ -1889,4 +2506,5 @@ func (p *Plugin) runGoogleGroupSyncJobs(ctx context.Context) {
 			p.API.LogError("Save Google Group sync status failed", "group", job.GroupEmail, "error", message)
 		}
 	}
+	return 0
 }

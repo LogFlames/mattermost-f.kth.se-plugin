@@ -1,8 +1,10 @@
 package main
 
 import (
+	"math"
 	"reflect"
 	"slices"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -59,6 +61,9 @@ type configuration struct {
 	GoogleGroupsSyncDomain                    string
 	GoogleGroupsSyncAlternateDomain           string
 	GoogleGroupsSyncAdminUsers                []string
+	GoogleGroupsUsergroupSyncs                []googleUsergroupSync
+	GoogleGroupsSyncMode                      string
+	GoogleGroupsSyncDelaySeconds              int
 	GoogleGroupChannelTeamAdminThreshold      int
 	GoogleGroupChannelSystemAdminThreshold    int
 
@@ -93,6 +98,10 @@ func (c *configuration) Clone() *configuration {
 	clone.InternationalStudents_DefaultChannels = slices.Clone(c.InternationalStudents_DefaultChannels)
 	clone.OIDCOnboarding_DefaultTeams = slices.Clone(c.OIDCOnboarding_DefaultTeams)
 	clone.GoogleGroupsSyncAdminUsers = slices.Clone(c.GoogleGroupsSyncAdminUsers)
+	clone.GoogleGroupsUsergroupSyncs = slices.Clone(c.GoogleGroupsUsergroupSyncs)
+	for i := range clone.GoogleGroupsUsergroupSyncs {
+		clone.GoogleGroupsUsergroupSyncs[i].ExcludedUsers = slices.Clone(c.GoogleGroupsUsergroupSyncs[i].ExcludedUsers)
+	}
 	clone.TranslatorBot_Custom_ChannelList = slices.Clone(c.TranslatorBot_Custom_ChannelList)
 	clone.TranslatorBot_Custom_ExcludedChannels = slices.Clone(c.TranslatorBot_Custom_ExcludedChannels)
 
@@ -138,6 +147,23 @@ func (p *Plugin) setConfiguration(configuration *configuration) {
 	}
 
 	p.configuration = configuration
+	if p.googleSyncWake != nil {
+		select {
+		case p.googleSyncWake <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (p *Plugin) wakeGoogleGroupSync() {
+	p.configurationLock.RLock()
+	defer p.configurationLock.RUnlock()
+	if p.googleSyncWake != nil {
+		select {
+		case p.googleSyncWake <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // OnConfigurationChange is invoked when configuration changes may have been made.
@@ -146,6 +172,8 @@ func (p *Plugin) OnConfigurationChange() error {
 		TeamJoinCategories_OnOffBool:           true,
 		GoogleGroupChannelTeamAdminThreshold:   30,
 		GoogleGroupChannelSystemAdminThreshold: 100,
+		GoogleGroupsSyncMode:                   "hourly",
+		GoogleGroupsSyncDelaySeconds:           10,
 	}
 
 	// Load the public configuration fields from the Mattermost server configuration.
@@ -156,6 +184,16 @@ func (p *Plugin) OnConfigurationChange() error {
 	if configuration.GoogleGroupChannelTeamAdminThreshold < 0 ||
 		configuration.GoogleGroupChannelSystemAdminThreshold < configuration.GoogleGroupChannelTeamAdminThreshold {
 		return errors.New("Google Groups Sync thresholds must be non-negative and the system admin threshold must not be less than the team admin threshold")
+	}
+	if err := validateGoogleUsergroupSyncs(configuration.GoogleGroupsUsergroupSyncs); err != nil {
+		return errors.Wrap(err, "invalid Google usergroup sync configuration")
+	}
+	if configuration.GoogleGroupsSyncMode != "hourly" && configuration.GoogleGroupsSyncMode != "continuous" {
+		return errors.New("Google Groups Sync mode must be hourly or continuous")
+	}
+	if configuration.GoogleGroupsSyncDelaySeconds <= 0 ||
+		int64(configuration.GoogleGroupsSyncDelaySeconds) > math.MaxInt64/int64(time.Second) {
+		return errors.New("Google Groups Sync delay must be a positive number of seconds")
 	}
 
 	p.setConfiguration(configuration)

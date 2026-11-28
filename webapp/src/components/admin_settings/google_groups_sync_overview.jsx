@@ -22,7 +22,7 @@ export default class GoogleGroupsSyncOverview extends React.PureComponent {
         this.client = new Client4();
         this.client.setUrl((props.config.ServiceSettings?.SiteURL || '').replace(/\/$/, ''));
         this.url = `${this.client.getUrl()}/plugins/${manifest.id}/google-groups/syncs`;
-        this.state = {syncs: [], busy: true, error: ''};
+        this.state = {syncs: [], cycle: '', busy: true, error: ''};
     }
 
     componentDidMount() {
@@ -37,11 +37,11 @@ export default class GoogleGroupsSyncOverview extends React.PureComponent {
         this.setState({busy: true, error: ''});
         try {
             const result = await this.client.doFetch(this.url, {method: 'get'});
-            if (!Array.isArray(result.syncs)) {
+            if (!Array.isArray(result.syncs) || typeof result.cycle !== 'string' || !result.cycle) {
                 throw new Error('Invalid Google Group sync response. Please retry.');
             }
             if (!this.unmounted) {
-                this.setState({syncs: result.syncs});
+                this.setState({syncs: result.syncs, cycle: result.cycle});
             }
         } catch (error) {
             if (!this.unmounted) {
@@ -61,6 +61,9 @@ export default class GoogleGroupsSyncOverview extends React.PureComponent {
         if (sync.deadline_at <= Date.now()) {
             return 'None (expired)';
         }
+        if (sync.sync_mode === 'continuous') {
+            return 'Pending in continuous queue';
+        }
         return sync.last_synced_at ? 'None before deadline' : 'Pending first sync';
     };
 
@@ -71,11 +74,12 @@ export default class GoogleGroupsSyncOverview extends React.PureComponent {
         >
             <strong>{sync.group_name || sync.group_email}</strong>
             {sync.group_name && <span>{` (${sync.group_email})`}</span>}
+            {/* <div>{sync.channel_id ? 'Channel sync' : 'Team sync'}</div> */}
             <div>{`Creator: ${sync.creator_name ? `@${sync.creator_name}` : `Unknown user (${sync.created_by || 'no ID'})`}`}</div>
             <div>{`Scheduled Google account: ${sync.acting_email || 'Unknown'}`}</div>
             <div>{`Deadline: ${formatUTC(sync.deadline_at)}${sync.deadline_at <= Date.now() ? ' · Expired, awaiting cleanup' : ''}`}</div>
-            <div>{sync.last_synced_at ? `Last synced: ${formatUTC(sync.last_synced_at)}` : 'First sync pending'}</div>
-            <div>{`Next sync: ${this.nextSyncLabel(sync)}`}</div>
+            {/* <div>{sync.last_synced_at ? `Last synced: ${formatUTC(sync.last_synced_at)}` : 'First sync pending'}</div> */}
+            {/* <div>{`Next sync: ${this.nextSyncLabel(sync)}`}</div> */}
         </li>
     );
 
@@ -102,6 +106,12 @@ export default class GoogleGroupsSyncOverview extends React.PureComponent {
             >
                 {team.name}
             </summary>
+            {team.syncs.length > 0 && (
+                <div style={styles.teamSyncs}>
+                    <strong>{'Team syncs'}</strong>
+                    <ul style={styles.list}>{team.syncs.sort((a, b) => a.group_email.localeCompare(b.group_email)).map(this.renderSync)}</ul>
+                </div>
+            )}
             {Array.from(team.channels.values()).sort((a, b) => a.name.localeCompare(b.name)).map(this.renderChannel)}
         </details>
     );
@@ -110,9 +120,13 @@ export default class GoogleGroupsSyncOverview extends React.PureComponent {
         const teams = new Map();
         for (const sync of this.state.syncs) {
             if (!teams.has(sync.team_id)) {
-                teams.set(sync.team_id, {id: sync.team_id, name: sync.team_name || `Unknown team (${sync.team_id || 'no ID'})`, channels: new Map()});
+                teams.set(sync.team_id, {id: sync.team_id, name: sync.team_name || `Unknown team (${sync.team_id || 'no ID'})`, syncs: [], channels: new Map()});
             }
             const team = teams.get(sync.team_id);
+            if (!sync.channel_id) {
+                team.syncs.push(sync);
+                continue;
+            }
             if (!team.channels.has(sync.channel_id)) {
                 team.channels.set(sync.channel_id, {
                     id: sync.channel_id,
@@ -143,8 +157,9 @@ export default class GoogleGroupsSyncOverview extends React.PureComponent {
                     </button>
                 </div>
                 <p className='help-text'>
-                    {'Read-only overview of configured syncs across teams. Use /google group sync commands to change them. Expired syncs are shown until they are cleaned up.'}
+                    {'Read-only overview of configured syncs across teams. Team syncs are listed before channel syncs. Use /google group sync commands to change them. Expired syncs are shown until they are cleaned up.'}
                 </p>
+                {!this.state.busy && !this.state.error && <p>{this.state.cycle}</p>}
                 {this.state.busy && <p role='status'>{'Loading Google Group syncs…'}</p>}
                 {this.state.error && (
                     <p
@@ -165,9 +180,10 @@ const styles = {
     heading: {display: 'flex', alignItems: 'center', justifyContent: 'space-between'},
     team: {border: '1px solid #ddd', borderRadius: 4, margin: '16px 0', overflowWrap: 'anywhere'},
     teamHeading: {display: 'block', margin: 0, padding: '12px 16px 12px 28px', background: 'rgba(0, 0, 0, .03)', fontWeight: 600, cursor: 'pointer'},
+    teamSyncs: {margin: '16px 16px 12px', paddingLeft: 12, borderLeft: '2px solid #ddd'},
     channel: {margin: '16px 16px 12px', paddingLeft: 12, borderLeft: '2px solid #ddd'},
     list: {listStyle: 'none', padding: 0, margin: '4px 0 0'},
-    sync: {padding: '8px 0'},
+    sync: {marginBottom: 8, padding: '8px 0 8px 12px', borderLeft: '2px solid #ddd'},
     meta: {opacity: 0.7},
     button: {minHeight: 44, flexShrink: 0},
     notice: {margin: '20px 0', padding: '14px 16px', border: '1px solid rgba(22, 109, 224, .3)', borderRadius: 4, background: 'rgba(22, 109, 224, .06)'},

@@ -25,6 +25,7 @@ type Plugin struct {
 
 	categoryCancel context.CancelFunc
 	categoryDone   chan struct{}
+	googleSyncWake chan struct{}
 
 	statsLock  sync.Mutex
 	statsStore *pluginapi.Client
@@ -154,7 +155,31 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	case "default_channel":
 		return p.defaultChannelCommand(args)
 	case "google":
+		if len(strings.Fields(args.Command)) > 3 {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				UserId:    p.pluginBot.UserId,
+				ChannelId: args.ChannelId,
+				Message:   fmt.Sprintf("You just sent:\n```text\n%s\n```", args.Command),
+				Type:      model.PostTypeEphemeral,
+			})
+		}
 		return p.googleGroupCommand(args)
+	case "ggroup":
+		expanded := *args
+		if len(strings.Fields(args.Command)) > 2 {
+			_ = p.API.SendEphemeralPost(args.UserId, &model.Post{
+				UserId:    p.pluginBot.UserId,
+				ChannelId: args.ChannelId,
+				Message:   fmt.Sprintf("You just sent:\n```text\n%s\n```", args.Command),
+				Type:      model.PostTypeEphemeral,
+			})
+		}
+		expanded.Command = "/google group " + strings.Join(strings.Fields(args.Command)[1:], " ")
+		response, err := p.googleGroupCommand(&expanded)
+		if response != nil && strings.HasPrefix(response.Text, "Usage: `/google group") {
+			response.Text = strings.Replace(response.Text, "/google group", "/ggroup", 1)
+		}
+		return response, err
 	case "keycloak":
 		return p.keycloakCommand(args)
 	case "team":
@@ -217,11 +242,20 @@ func (p *Plugin) OnActivate() error {
 	}); err != nil {
 		return err
 	}
+	const google_group_autocompldesc string = "Add/remove Google Groups to channels and teams"
 	if err := p.API.RegisterCommand(&model.Command{
 		Trigger:          "google",
 		AutoComplete:     true,
-		AutoCompleteHint: "group add|remove|sync|manage ...",
-		AutoCompleteDesc: "Manage Google Groups and channel memberships",
+		AutoCompleteHint: "group add|remove|team|sync|manage ...",
+		AutoCompleteDesc: google_group_autocompldesc,
+	}); err != nil {
+		return err
+	}
+	if err := p.API.RegisterCommand(&model.Command{
+		Trigger:          "ggroup",
+		AutoComplete:     true,
+		AutoCompleteHint: "add|remove|team|sync|manage ...",
+		AutoCompleteDesc: google_group_autocompldesc + " (alias)",
 	}); err != nil {
 		return err
 	}

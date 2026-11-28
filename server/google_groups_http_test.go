@@ -66,7 +66,7 @@ func TestGoogleSyncConsoleAuthorization(t *testing.T) {
 }
 
 func TestGoogleSyncConsoleReportsStoredSyncs(t *testing.T) {
-	lastSyncedAt := time.Now().UnixMilli()
+	lastSyncedAt := time.Now().Add(-time.Hour).UnixMilli()
 	job := googleGroupSync{
 		GroupEmail: "group@example.org", GroupName: "Example group", TeamID: "team", ChannelID: "channel",
 		CreatedBy: "creator", ActingEmail: "actor@example.org", DeadlineAt: lastSyncedAt + 2*googleGroupSyncEvery.Milliseconds(), LastSyncedAt: lastSyncedAt,
@@ -95,21 +95,22 @@ func TestGoogleSyncConsoleReportsStoredSyncs(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", w.Code, w.Body)
 	}
-	var result struct {
-		Syncs []googleGroupSyncConsoleEntry `json:"syncs"`
-	}
+	var result googleGroupSyncOverview
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
 	if len(result.Syncs) != 2 {
 		t.Fatalf("expected both stored syncs, including expired: %+v", result.Syncs)
 	}
+	if result.Cycle != "Sync cycle: 1 hour (hourly schedule)." {
+		t.Fatalf("unexpected hourly cycle: %q", result.Cycle)
+	}
 	for _, entry := range result.Syncs {
 		switch entry.GroupEmail {
 		case job.GroupEmail:
 			if entry.googleGroupSync != job || entry.TeamName != "Physics" || entry.ChannelName != "general" ||
 				entry.ChannelDisplay != "General" || !entry.ChannelDeleted || entry.CreatorName != "alice" ||
-				entry.NextSyncAt != lastSyncedAt+googleGroupSyncEvery.Milliseconds() {
+				entry.NextSyncAt != googleGroupNextSyncAt(job, time.Now()) {
 				t.Fatalf("incorrect sync details: %+v", entry)
 			}
 		case missing.GroupEmail:
@@ -119,6 +120,29 @@ func TestGoogleSyncConsoleReportsStoredSyncs(t *testing.T) {
 			}
 		default:
 			t.Fatalf("unexpected sync: %+v", entry)
+		}
+	}
+	p.setConfiguration(&configuration{GoogleGroupsSyncMode: "continuous", GoogleGroupsSyncDelaySeconds: 10})
+	w = googleSyncConsoleRequest(p, http.MethodGet, "system")
+	if w.Code != http.StatusOK {
+		t.Fatalf("continuous overview status %d: %s", w.Code, w.Body)
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Cycle, "10 seconds") {
+		t.Fatalf("continuous overview cycle: %q", result.Cycle)
+	}
+	overview, err := p.googleGroupSyncsForConsole()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(overview.Cycle, "10 seconds") {
+		t.Fatalf("cycle should exclude expired records: %q", overview.Cycle)
+	}
+	for _, entry := range overview.Syncs {
+		if entry.SyncMode != "continuous" || entry.NextSyncAt != 0 {
+			t.Fatalf("continuous sync reported an hourly next run: %+v", entry)
 		}
 	}
 	api.failList = true

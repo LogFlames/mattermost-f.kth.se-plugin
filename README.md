@@ -112,6 +112,31 @@ denies that read, the plugin checks direct-member access with Cloud Identity
 using the same account, then retries the Directory read using the configured
 admin email. Other errors are not retried this way.
 
+In **Google Groups Sync: usergroups**, configure an existing Mattermost
+`@usergroup`, a full Google group address ending in `@fysiksektionen.se`, and
+any excluded Mattermost users. Each usergroup may appear only once. These
+syncs use the configured admin email directly, include indirect Google group
+members, and run at the 23rd minute of each hour without an expiry date.
+Matching uses the same email rules as channel syncs. Members absent from the
+Google group and excluded users are removed from the usergroup; removing a
+configuration entry does not change existing membership. Errors are logged
+and retried at the next run. Mattermost 10.7 or later is required for
+usergroup membership changes.
+
+Team and channel syncs default to the hourly schedule. To cycle continuously
+through them instead, set **Google Groups Sync: team and channel sync mode**
+to Continuous and configure **Google Groups Sync: continuous delay in
+seconds** (default 10, minimum 1). The delay starts after each scheduled
+operation finishes, including failed attempts. Syncs are attempted in rotation,
+with team syncs ordered before channel syncs in each cycle. Configuration
+changes take effect without restarting the plugin. Initial and manual syncs
+remain immediate and are not subject to this delay. Usergroup syncs remain
+hourly in either mode. The sync list and admin overview show the minimum
+continuous cycle length, calculated from the current number of active team and
+channel syncs across all teams multiplied by the delay. Operation times and
+expired syncs awaiting cleanup can make a cycle longer. In continuous mode,
+the sync list also shows this interval rounded up to whole minutes.
+
 Cloud Identity's direct membership listing is used to check access, not to
 expand nested groups: its [transitive membership API](https://docs.cloud.google.com/identity/docs/reference/rest/v1/groups.memberships/searchTransitiveMemberships)
 requires permission to view all transitive memberships and a qualifying Google
@@ -119,7 +144,8 @@ Workspace or Cloud Identity edition. The plugin uses the resulting Directory
 membership list with the Mattermost API to change channel membership; it does
 not add users to Mattermost through Cloud Identity.
 
-In `/google group` commands, group names may omit the domain; the configured
+`/ggroup` is an alias for `/google group` in all commands below.
+In these commands, group names may omit the domain; the configured
 organization domain is appended (for example, `team` becomes
 `team@fysiksektionen.se` with the default domain). Full group addresses remain
 supported. **Google Groups Sync: alternate Mattermost email domain** defaults to
@@ -134,14 +160,27 @@ System or team admins can run these commands:
 - `/google group sync start <group-email> <YYYY-MM-DD>` previews the group and opens a
   confirmation dialog. On confirmation, active group members with a matching
   Mattermost account who already belong to the channel's team are added to the
-  channel. The sync runs hourly through 23:59:59 UTC on the deadline date.
+  channel. It syncs immediately, then on the configured schedule through
+  23:59:59 UTC on the deadline date.
   Team admins can choose a deadline up to one year from the current UTC date;
   only system admins can choose a later deadline.
+- `/google group sync start <group-email> <YYYY-MM-DD> --also-invite-to-team`
+  also creates a team sync.
+  The team invite runs before the channel sync so newly added team members can
+  also be added to the channel during that run.
 - `/google group sync stop <group-email>` confirms and stops future additions.
   Existing channel members are never removed by sync or by removing a sync.
-- `/google group sync list` shows active syncs configured for the current channel.
+- `/google group sync list` shows active syncs for the current team and channel.
 - `/google group sync now` previews and immediately runs all active syncs
-  for the current channel, without changing their hourly schedules or deadlines.
+  for the current channel, without changing their schedules or deadlines.
+- `/google group team add|remove <group-email>` confirms and adds or removes
+  matching group users from the current team once.
+  `/google group team sync start <group-email> <YYYY-MM-DD>` starts an
+  add-only team invite sync, and
+  `/google group team sync stop <group-email>` stops future invites. Team syncs
+  also run immediately when started, then on the configured schedule.
+  Both channel and team syncs stop at the deadline and never remove members
+  automatically.
 
 Channel sync includes users with direct or indirect (nested-group) memberships;
 only user members are added, never groups. Manual syncs use the requesting
@@ -150,18 +189,24 @@ syncs use the account recorded when the sync was created, including the admin
 account if it was needed for the initial read. Sync creation and every manual
 or scheduled run check the creator's own organization account for direct-member
 access. Scheduled syncs pause if the creator loses that access or the required
-admin permissions, or if a recorded account changes. Commands require membership
-in the target channel, and listing syncs requires access to every listed group.
-Sync reports identify the creator's Mattermost user ID and the Google account
-used for scheduled runs.
+admin permissions, or if a recorded account changes. Team commands require a
+team admin, the relevant Mattermost team membership permission, and membership
+in the active public or private channel used as the team context. Sync listing
+also requires access to every listed group.
+The sync list identifies starters by `@username`; sync confirmations and reports
+also identify the creator's Mattermost user ID and the Google account used for
+scheduled runs.
 System admins can view configured syncs across teams in the Google Workspace
-Integration settings. The read-only overview includes expired records awaiting
-cleanup; use the sync commands to change them.
+Integration settings. The read-only overview groups syncs by team, with team
+syncs above channel syncs, and includes expired records awaiting cleanup; use
+the sync commands to change them.
 
 The confirmation shows the group name and address, member count, first five
 members alphabetically by email, and channel name. It expires after five
-minutes, and the group membership is rechecked before applying it. Failed
-scheduled syncs are logged and retried on the next hourly run.
+minutes, and the group membership is rechecked before applying it. The
+required, preselected "Group view permission?" option allows the Mattermost
+mobile app to submit the dialog. Failed
+scheduled syncs are logged and retried on their next scheduled turn.
 
 `/google group add <group-email>` and `/google group remove <group-email>` add or remove
 matching direct and indirect Google Group users from the current channel once,

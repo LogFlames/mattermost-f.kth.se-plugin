@@ -431,14 +431,14 @@
                         "key": "GoogleGroupsSyncAdminEmail",
                         "display_name": "Google Groups Sync: admin email",
                         "type": "text",
-                        "help_text": "Google Workspace administrator to impersonate for channel operations by selected admin users. Never used for group management.",
+                        "help_text": "Google Workspace administrator to impersonate for usergroup syncs and for channel operations if the user can see the group's direct members. Never used for group management.",
                         "default": ""
                     },
                     {
                         "key": "GoogleGroupsSyncAdminUsers",
                         "display_name": "Google Groups Sync: admin delegation users",
                         "type": "custom",
-                        "help_text": "Mattermost users who automatically use the configured Google admin account for group channel operations. Group management always uses the caller's own account.",
+                        "help_text": "Mattermost users who don't need to see Google group members to perform channel operations. Group management always uses the caller's own account.",
                         "default": []
                     },
                     {
@@ -475,6 +475,31 @@
                         "type": "number",
                         "help_text": "Applies to /google group add, remove, sync add, sync remove, sync now, and scheduled syncs. Groups with more members require a system admin. Must be at least the team admin threshold.",
                         "default": 100
+                    },
+                    {
+                        "key": "GoogleGroupsSyncMode",
+                        "display_name": "Google Groups Sync: team and channel sync mode",
+                        "type": "radio",
+                        "help_text": "Hourly syncs run at the 23rd minute. Continuous syncs cycle through team and channel syncs with a delay between operations. Usergroup syncs remain hourly.",
+                        "options": [
+                            {"display_name": "Hourly", "value": "hourly"},
+                            {"display_name": "Continuous", "value": "continuous"}
+                        ],
+                        "default": "hourly"
+                    },
+                    {
+                        "key": "GoogleGroupsSyncDelaySeconds",
+                        "display_name": "Google Groups Sync: continuous delay in seconds",
+                        "type": "number",
+                        "help_text": "In continuous mode, wait this many seconds after each scheduled team or channel sync before starting another. Must be positive.",
+                        "default": 10
+                    },
+                    {
+                        "key": "GoogleGroupsUsergroupSyncs",
+                        "display_name": "Google Groups Sync: usergroups",
+                        "type": "custom",
+                        "help_text": "Sync usergroups hourly using the admin account. Members not in the Google group and excluded users are removed. Syncs do not expire.",
+                        "default": []
                     },
                     {
                         "key": "GoogleGroupsSyncOverview",
